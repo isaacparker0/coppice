@@ -800,6 +800,99 @@ The compiler is written in Rust. Parser is hand-written recursive descent.
 
 ---
 
+## Serialization and Validation
+
+Part of the standard library (`std/encoding`). Serialization is too fundamental to leave to ecosystem fragmentation.
+
+### Encoding/Decoding Known Types
+
+```
+import std/encoding/json
+
+message := json.decode[Message](raw_bytes)
+// Returns Message | DecodeError
+```
+
+```
+output := json.encode(message)
+// Returns string. Always succeeds for valid types.
+```
+
+The compiler generates encode/decode implementations from struct definitions. No derive macros, no decorators, no schema classes.
+
+### Validation of Untrusted Data
+
+Same function, stricter mode for API boundaries:
+
+```
+message := json.decode[Message](request.body, validate: true)
+// Rejects unknown fields, validates constraints
+// Returns Message | ValidationError with structured error details
+```
+
+### Type-Level Constraints
+
+Validation constraints are part of the type definition via `where` clauses:
+
+```
+public SignupRequest :: struct {
+    email: string where match("[^@]+@[^@]+")
+    age: u32 where 13 <= self <= 150
+    username: string where 3 <= self.length <= 20
+    password: string where self.length >= 8
+}
+```
+
+`where` clauses are checked at decode time when `validate: true`. Zero cost when not validating (internal data). Compiled into the type's witness table.
+
+```
+result := json.decode[SignupRequest](body, validate: true)
+match result {
+    req: SignupRequest => handle_signup(req)
+    e: ValidationError => {
+        // e.fields == [
+        //   { field: "email", message: "must match pattern [^@]+@[^@]+" },
+        //   { field: "age", message: "must be >= 13, got 5" },
+        // ]
+        return Response.bad_request(e.fields)
+    }
+}
+```
+
+### Multiple Formats
+
+Consistent interface across formats. Common formats ship in stdlib:
+
+```
+import std/encoding/json
+import std/encoding/toml
+import std/encoding/yaml
+
+json.decode[Config](data)
+toml.decode[Config](data)
+yaml.decode[Config](data)
+```
+
+Niche formats (MessagePack, CBOR, Avro) are third-party libraries implementing the same `Encoder`/`Decoder` interface.
+
+---
+
+## Self-Hosting
+
+The compiler is written in Rust. Self-hosting (rewriting the compiler in lang0) is a non-goal for the foreseeable future.
+
+Rust is an excellent language for writing compilers — enums for AST nodes, pattern matching, strong type system. lang0 targets backend services, not compiler internals. Using Rust for the compiler is the right tool for the job, not a compromise.
+
+Self-hosting becomes worth considering only when:
+- The language spec is stable (not changing weekly).
+- lang0 has proven itself on other large codebases.
+- The bootstrap chain can be maintained (CI builds version N from version N-1).
+- There's a credibility or contributor-onboarding reason to do it.
+
+TypeScript's compiler moving from TypeScript to Go is a useful reminder that dogfooding is a means, not an end.
+
+---
+
 ## Prior Art and Influences
 
 | Influence | What's borrowed |
