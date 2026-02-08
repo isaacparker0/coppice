@@ -1,0 +1,821 @@
+# Language Design Specification (Draft)
+
+## Design Goals
+
+Rust's safety guarantees and type-system expressiveness, with TypeScript's ergonomics and Go's compilation speed. One obvious way to do everything. The compiler is the linter, the formatter, and the style guide.
+
+**Target domain:** Backend services, application code, CLI tools. Not systems programming, not OS kernels, not embedded.
+
+**Core tradeoff:** Accept ~80-90% of LLVM -O3 peak performance in exchange for fast compilation, simple mental model, and zero annotation burden.
+
+---
+
+## Principles
+
+1. **Explicit over implicit.** Visibility uses `public`, not naming conventions. Mutation uses `mut`, not default. Sharing uses `shared`, not default.
+2. **One way to do things.** No syntax aliases, no alternative forms. If the community would eventually converge on a convention, make it a compiler rule.
+3. **The compiler is the linter.** No external formatters, no lint configs, no style guides. The compiler enforces everything and provides auto-fix.
+4. **Designed for hermetic builds.** The import system, module structure, and compilation model are designed to map directly to Bazel's dependency graph.
+5. **No annotation burden.** No lifetime annotations, no explicit borrow/move markers in common code. The compiler infers; the programmer writes clean code.
+
+---
+
+## Syntax
+
+### Variables
+
+```
+x := 42                // immutable binding
+mut counter := 0       // mutable binding
+x: i64 := 42           // explicit type annotation
+
+// No alternatives. No 'let', 'var', 'const', 'val'.
+```
+
+### Functions
+
+```
+public function authenticate(username: string, password: string) -> Session | AuthError {
+    user := find_user(username)?
+    if not password.verify(user.hash) {
+        return AuthError { message: "invalid credentials" }
+    }
+    return Session.new(user)
+}
+```
+
+- `function` keyword required.
+- Type after name, separated by `:`.
+- Return type after `->`.
+- `return` required. No implicit returns.
+
+### Closures
+
+```
+items.map(|x| x * 2)
+
+items.filter(|user| {
+    user.active && user.age > 18
+})
+```
+
+Same semantics as functions, shorter syntax for inline use.
+
+### Types
+
+```
+public User :: struct {
+    public name: string
+    public email: string
+    password_hash: string       // package-internal field
+}
+```
+
+### Methods
+
+```
+public function User.display_name(self) -> string {
+    return self.name
+}
+```
+
+Methods are scoped functions, not `impl` blocks.
+
+### Enums / Union Types
+
+```
+Shape :: Circle | Rect | Point
+
+Circle :: struct { radius: f64 }
+Rect :: struct { w: f64, h: f64 }
+Point :: struct {}
+```
+
+Union types are first-class. They compose at the use site without pre-declaring wrapper enums.
+
+```
+ID :: string | u64
+
+function describe(id: ID) -> string {
+    match id {
+        s: string => "name: {s}"
+        n: u64    => "id #{n}"
+    }
+}
+```
+
+### Generics
+
+Square brackets. No turbofish problem.
+
+```
+public function max[T: Ord](a: T, b: T) -> T {
+    if a > b { return a }
+    return b
+}
+
+Map[K: Hash + Eq, V] :: struct {
+    entries: List[Entry[K, V]]
+}
+```
+
+### Pattern Matching
+
+```
+function area(s: Shape) -> f64 {
+    match s {
+        c: Circle => PI * c.radius * c.radius
+        r: Rect   => r.w * r.h
+        Point     => 0.0
+    }
+}
+```
+
+Exhaustive matching enforced by the compiler.
+
+### Control Flow
+
+One loop construct:
+
+```
+for item in items { ... }       // iterate collection
+for i, item in items { ... }    // with index
+for condition { ... }           // conditional loop
+for { ... }                     // infinite loop
+
+// No 'while', 'loop', 'forEach', 'for...of', 'for...in'.
+```
+
+Control-flow narrowing:
+
+```
+function handle(user: User?) {
+    if user == nil { return }
+    // user is User (non-optional) from here — no unwrap needed
+    print(user.name)
+}
+
+function process(value: string | u64) {
+    if value is string {
+        // compiler knows value is string here
+        print(value.to_upper())
+    }
+}
+```
+
+### Strings
+
+One string type. One syntax. Double quotes only. Built-in interpolation.
+
+```
+name := "world"
+greeting := "hello, {name}"
+
+// No single quotes. No template literals. No raw strings.
+// No String vs &str. It's 'string'. Always.
+```
+
+---
+
+## Type System
+
+### Structural Typing
+
+Interfaces are structural. No explicit `implements` declaration. If a type has the required methods, it satisfies the interface.
+
+```
+Printable :: interface {
+    function to_string(self) -> string
+}
+
+// User satisfies Printable because it has to_string. No declaration needed.
+function User.to_string(self) -> string {
+    return self.name
+}
+
+function print_it(thing: Printable) {
+    print(thing.to_string())
+}
+```
+
+Semantic traits (Hash, Eq, Serialize) use explicit `derives` for opt-in.
+
+### Union Types
+
+```
+Result :: Success | Failure
+StringOrInt :: string | u64
+```
+
+Tagged unions under the hood. Composable at the use site.
+
+### Intersection Types
+
+```
+Timestamped :: interface {
+    created_at: Time
+    updated_at: Time
+}
+
+Authored :: interface {
+    author: string
+}
+
+function fetch_posts() -> List[Timestamped & Authored] { ... }
+```
+
+### Literal Types
+
+```
+Direction :: "north" | "south" | "east" | "west"
+
+function move(d: Direction) { ... }
+move("north")   // ok
+move("oops")    // compile error
+```
+
+### Nullability
+
+```
+function find_user(id: u64) -> User? {
+    ...
+}
+
+user := find_user(42) ?? return
+```
+
+`T?` is the optional type. Control-flow narrowing eliminates the need for explicit unwrapping in most code.
+
+### No Implicit Conversions
+
+```
+x: i32 := 42
+y: i64 := x            // compile error
+y: i64 := x.to_i64()   // explicit
+```
+
+---
+
+## Generics: Compilation Strategy
+
+Generics compile via **witness tables** (Swift model), not monomorphization.
+
+One function is compiled per generic definition. Type-specific operations dispatch through a witness table — a struct of function pointers describing how to copy, destroy, compare, and operate on the type.
+
+Small types (up to ~24 bytes) are stored inline in a fixed-size buffer with zero heap allocation. Large types spill to the heap.
+
+**Tradeoffs vs monomorphization:**
+- Compile time: dramatically faster (one copy per generic function, not N).
+- Runtime: ~5-20% slower for generic code due to indirect calls.
+- The compiler may opportunistically specialize hot generic functions as an optimization. This is optional, not required for correctness.
+
+Type system expressiveness is fully independent of the compilation strategy. Constraints, associated types, conditional conformance — all resolved at compile time with zero codegen cost.
+
+Selective monomorphization available via annotation for performance-critical code:
+
+```
+#[specialize]
+function dot_product[T: Numeric](a: List[T], b: List[T]) -> T { ... }
+```
+
+---
+
+## Memory Model
+
+### Values by Default
+
+All types are values. Assignment copies. No implicit aliasing.
+
+```
+p1 := Point { x: 1, y: 2 }
+p2 := p1    // copy — p1 and p2 are independent
+```
+
+The compiler optimizes this:
+- Read-only function parameters: passed by reference automatically.
+- Last use of a value: moved, not copied.
+- Actual copy only when semantically necessary (mutate + continued use).
+
+This means values-by-default has near-zero overhead in practice. Most "copies" are elided.
+
+### Immutable by Default
+
+```
+x := 42              // immutable
+mut y := 0           // mutable — explicit
+
+function transform(data: List[i32]) -> List[i32] {
+    // data.push(1)     ← compile error: data is immutable
+    return data.map(|x| x * 2)
+}
+
+function add_item(mut list: List[i32], item: i32) {
+    list.push(item)
+}
+```
+
+Mutation is visible at the call site:
+
+```
+mut items := [1, 2, 3]
+add_item(mut items, 4)    // 'mut' required — caller acknowledges mutation
+```
+
+### Shared References (When Needed)
+
+Explicit, reference-counted. For the rare case where multiple owners need the same data.
+
+```
+pool := shared ConnectionPool.new(size: 10)
+
+handler1 := Handler { pool: pool }
+handler2 := Handler { pool: pool }
+// Both reference the same pool. Reference-counted.
+```
+
+`shared` values use automatic reference counting (ARC) with deterministic cleanup. Cycle prevention via `weak` references.
+
+### No Borrow Checker
+
+Ownership is managed through values (stack-scoped, no aliasing) and ARC (for shared data). No lifetime annotations. No `'a`. No borrow checker fights.
+
+**Safety guarantees without a borrow checker:**
+
+| Property | Mechanism |
+|---|---|
+| No use-after-free | ARC for shared, scope-bound for values |
+| No data races | Immutable by default, `mut` is exclusive, `shared` requires sync |
+| No null dereference | `T?` with control-flow narrowing |
+| No unhandled errors | `T \| Error` union types |
+| Deterministic cleanup | ARC, not GC |
+| No aliasing bugs | Values by default |
+
+---
+
+## Error Handling
+
+Errors are values, expressed as union return types.
+
+```
+public function read_file(path: string) -> string | IOError {
+    data := fs.read(path)?      // propagate on error
+    return data.to_string()
+}
+```
+
+`?` propagates errors. Exhaustive `match` handles them.
+
+```
+match read_file("config.toml") {
+    content: string  => print(content)
+    e: IOError       => print("failed: {e}")
+}
+```
+
+No exceptions. No `throw`. No `try/catch`. Every error path is visible in the type signature.
+
+---
+
+## Package System
+
+### Package Definition
+
+A directory is a package if and only if it contains a `PACKAGE.lang` file. Without one, a subdirectory's files belong to the parent package.
+
+```
+platform/
+  auth/
+    PACKAGE.lang            # makes auth/ a package
+    token.lang              # part of auth
+    password.lang           # part of auth
+    crypto/
+      encrypt.lang          # NO PACKAGE.lang → part of auth, just organized in subdir
+      hash.lang
+    oauth/
+      PACKAGE.lang          # makes oauth/ its own package
+      google.lang
+```
+
+### PACKAGE.lang
+
+Contains only a doc comment and `public import` declarations. No code.
+
+```
+// platform/auth/PACKAGE.lang
+
+// Package auth provides authentication and authorization.
+
+public import token { Token, parse }
+public import password { hash, verify }
+```
+
+These relative imports re-export selected symbols as the package's public API. This is the only place `public import` and relative imports are allowed.
+
+### Imports
+
+Fully qualified. Always. No relative imports (except in PACKAGE.lang). No glob imports. No conditional imports.
+
+```
+import platform/auth
+import platform/auth/oauth
+import std/fmt
+
+// import ../auth          ← compile error
+// import platform/*       ← compile error
+```
+
+### Visibility
+
+Two levels:
+- `public` — visible to importers of this package (controlled by PACKAGE.lang).
+- No modifier — visible within the package (all files in the same package).
+
+```
+// auth/token.lang
+
+public Token :: struct {        // re-exportable via PACKAGE.lang
+    public user_id: i64         // visible on the struct externally
+    signature: string           // package-internal field
+}
+
+function validate(t: Token) -> bool {   // package-internal function
+    ...
+}
+```
+
+Test files (`_test.lang`) can access all package-internal symbols.
+
+### Intra-Package Access
+
+All files within a package (including files in subdirectories without `PACKAGE.lang`) can see each other's symbols freely. No `public` needed for intra-package use.
+
+```
+// auth/token.lang
+function validate(t: Token) -> bool { ... }
+
+// auth/password.lang
+function check(pw: string, t: Token) -> bool {
+    validate(t)    // fine — same package
+    ...
+}
+
+// auth/crypto/encrypt.lang (no PACKAGE.lang → part of auth)
+function encrypt(data: string) -> string { ... }
+
+// auth/token.lang
+function seal(t: Token) -> string {
+    encrypt(t.signature)    // fine — crypto/ files are part of auth package
+    ...
+}
+```
+
+---
+
+## Testing
+
+### Test Files
+
+Tests live in separate `_test.lang` files. Same directory as the source. The compiler rejects `test` blocks in non-test files.
+
+```
+auth/
+  token.lang
+  token_test.lang
+  password.lang
+  password_test.lang
+```
+
+Test files can access all package-internal symbols.
+
+### Syntax
+
+```
+// token_test.lang
+
+group Token.parse {
+    test "handles valid JWT" {
+        token := parse("abc.def.ghi")
+        assert token.header == "abc"
+    }
+
+    test "rejects malformed input" {
+        result := parse("garbage")
+        assert result is ParseError
+    }
+}
+
+group Token.validate {
+    test "accepts unexpired token" {
+        token := make_test_token(ttl: 3600)
+        assert token.validate() is OK
+    }
+}
+```
+
+- `test` blocks with string names.
+- `group` blocks for organization. One level of nesting only — the parser rejects nested groups.
+- `test` blocks can exist outside groups for small files.
+
+### Assertions
+
+One assertion primitive: `assert`. The compiler introspects the expression to produce detailed failure messages.
+
+```
+assert user.age > 18
+
+// Failure output:
+//   assert user.age > 18
+//          |        |
+//          15       18
+```
+
+No assertion libraries. No `assertEqual`, `expect().toBe()`. Just `assert`.
+
+### Fixtures
+
+Functions. No framework, no decorators, no dependency injection.
+
+```
+// testutil/auth.lang (with PACKAGE.lang exporting these)
+
+public function make_token(user_id: i64) -> Token {
+    return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)
+}
+```
+
+```
+// token_test.lang
+import testutil/auth
+
+test "token contains user id" {
+    token := auth.make_token(42)
+    assert token.user_id == 42
+}
+```
+
+Cleanup is handled by deterministic resource cleanup (ARC + destructors). No `teardown`, `afterEach`, or `yield`.
+
+### Test Output
+
+```
+$ yourlang test platform/auth/
+
+platform/auth/token_test.lang
+  Token.parse
+    ok   handles valid JWT (1ms)
+    ok   rejects malformed input (0ms)
+  Token.validate
+    ok   accepts unexpired token (2ms)
+    FAIL rejects expired token (1ms)
+
+  FAIL: "rejects expired token"
+    assert token.validate() is TokenExpired
+           |                |
+           OK               TokenExpired
+    at: token_test.lang:28
+
+3 passed, 1 failed
+```
+
+---
+
+## Compiler Strictness
+
+### Enforced Rules (Errors, Not Warnings)
+
+- Unused variables → error (use `_` to discard).
+- Unused imports → error.
+- Unused function parameters → error (use `_name` to acknowledge).
+- Unreachable code → error.
+- Non-exhaustive match → error.
+- No implicit type conversions.
+- Unformatted code → error (in strict mode).
+
+### Naming Conventions (Compiler-Enforced)
+
+- Types: `PascalCase`.
+- Functions and variables: `snake_case`.
+- Module-level constants: `SCREAMING_SNAKE_CASE`.
+- Acronyms follow casing rules: `HttpServer`, not `HTTPServer`.
+
+### One Way to Do Things
+
+No syntax alternatives. No feature overlaps.
+
+- One variable binding form: `:=` / `mut :=`.
+- One loop: `for`.
+- One string syntax: double quotes with `{}` interpolation.
+- One equality operator: `==` (structural).
+- One null value: `nil`.
+- One generic syntax: `[T]`.
+- One optional syntax: `T?`.
+- One error propagation: `?`.
+
+### What Doesn't Exist
+
+- No semicolons (grammar doesn't have them).
+- No exceptions / `throw` / `try-catch`.
+- No `null` AND `undefined` (one `nil`).
+- No operator overloading (or very limited).
+- No variadic arguments (pass a list).
+- No implicit returns.
+- No single-statement braceless `if`.
+- No macros that perform I/O or read files.
+- No build scripts.
+
+---
+
+## Toolchain
+
+Single binary. All capabilities built in.
+
+```
+yourlang build .        # compile (strict: rejects unformatted code)
+yourlang build --draft  # auto-fix then compile (development mode)
+yourlang check .        # type-check only, no codegen (fastest feedback)
+yourlang fix .          # auto-fix all fixable issues
+yourlang fmt .          # format only (subset of fix)
+yourlang test .         # run tests
+yourlang lsp            # language server
+yourlang doc .          # generate documentation
+```
+
+### Fix Mode
+
+`yourlang fix` auto-corrects everything with exactly one correct fix:
+
+- Formatting, import sorting, unused import removal, missing trailing commas, wrong naming convention (rename across file), unnecessary type annotations.
+
+It does NOT fix ambiguous issues: unused parameters, unreachable code, type errors, non-exhaustive matches.
+
+### Formatter
+
+Non-configurable. No options file. One canonical output for any valid program. Built into the compiler, not a separate tool.
+
+### Build Modes
+
+- `yourlang build .` — strict. Rejects unfixed code. Used in CI.
+- `yourlang build --draft .` — runs `fix` implicitly before compiling. Used during development.
+- `yourlang check .` — type-check only, no codegen. Used by LSP for real-time feedback. Target: <100ms incremental.
+
+---
+
+## Compilation
+
+### Backend
+
+Cranelift (Rust-native compiler backend). Fast compilation, good-enough output (~80-90% of LLVM -O3). Optional LLVM backend for release-optimized builds if ever needed.
+
+### Compilation Units
+
+File-level. Each `.lang` file compiles independently. Enables:
+- Granular caching (change one file, recompile one file).
+- Parallelism (files compile in parallel).
+- Fast incremental builds.
+
+### Deterministic Output
+
+- No timestamps in output.
+- No absolute paths in output (use exec-root-relative paths).
+- Deterministic iteration order in compiler internals.
+- No dependency on environment variables.
+
+Byte-identical output across machines given identical inputs.
+
+---
+
+## Build System Integration (Bazel)
+
+### Gazelle
+
+The source code contains enough information for the build graph to be mechanically derived.
+
+Gazelle plugin logic:
+1. Walk directory tree. A directory with `PACKAGE.lang` is a target.
+2. Collect all `.lang` files in the directory and subdirectories without their own `PACKAGE.lang` → `srcs`.
+3. Collect `_test.lang` files → separate `yourlang_test` target.
+4. Parse `import` statements → `deps`.
+5. Map `import platform/foo/bar` → `//platform/foo/bar`.
+
+No heuristics. No configuration file. No import resolution algorithm.
+
+### Target Mapping
+
+```
+# One directory (with PACKAGE.lang) = one yourlang_library target
+
+yourlang_library(
+    name = "auth",
+    srcs = [
+        "PACKAGE.lang",
+        "token.lang",
+        "password.lang",
+        "crypto/encrypt.lang",     # subdir without PACKAGE.lang
+        "crypto/hash.lang",
+    ],
+    deps = [
+        "//platform/auth/oauth",
+        "@yourlang_std//time",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+yourlang_test(
+    name = "auth_test",
+    srcs = [
+        "token_test.lang",
+        "password_test.lang",
+    ],
+    deps = [":auth"],
+)
+```
+
+### Hermeticity
+
+- Compiler is a single hermetic binary. No system dependencies.
+- No build scripts or build-time code execution.
+- No environment variable sniffing.
+- No macros that read files or perform I/O.
+- Fully qualified imports with no resolution ambiguity.
+- Remote caching works by default. Remote execution works by default.
+
+### Why the Language Design Helps Bazel
+
+- File-level compilation units → granular action caching.
+- Deterministic output → remote cache hits across machines.
+- No hidden dependencies → build graph is correct by construction.
+- `PACKAGE.lang` as manifest → Gazelle plugin is trivial (~200 lines).
+- No transitive header includes, no implicit prelude (or a fixed one) → `deps` is minimal and precise.
+
+---
+
+## Concurrency (Sketch)
+
+Structured concurrency. Immutable data shares freely. Mutable data moves. `shared` data requires explicit synchronization.
+
+```
+async {
+    a := spawn fetch("url1")
+    b := spawn fetch("url2")
+    return merge(a.await, b.await)
+}
+```
+
+`Send`/`Sync`-like constraints inferred by the compiler, not annotated by the programmer.
+
+Detailed concurrency design is deferred.
+
+---
+
+## Prelude (Fixed)
+
+Always available without import. Not configurable.
+
+```
+// Primitive types
+i8, i16, i32, i64
+u8, u16, u32, u64
+f32, f64
+bool
+string
+
+// Collections
+List, Map, Set
+
+// Built-ins
+assert, print, nil
+```
+
+Everything else requires an explicit import.
+
+---
+
+## Implementation Strategy
+
+1. **Phase 1: Transpile to Rust.** Validate language design. Iterate on syntax and type system. Parser + type checker emitting Rust code.
+2. **Phase 2: Cranelift backend.** Direct compilation once the language stabilizes. Fast compilation for development.
+3. **Phase 3 (optional): LLVM backend.** For release-optimized builds if peak performance is needed.
+
+The compiler is written in Rust. Parser is hand-written recursive descent.
+
+---
+
+## Prior Art and Influences
+
+| Influence | What's borrowed |
+|---|---|
+| **Rust** | Safety guarantees, `?` error propagation, exhaustive matching, `mut` |
+| **Go** | Compilation speed, `for` as only loop, package = directory, enforced formatting |
+| **TypeScript** | Structural typing, union/intersection types, control-flow narrowing, literal types |
+| **Swift** | Witness table generics, ARC memory model, value semantics |
+| **Kotlin** | `val`/`var` distinction (our `:=`/`mut :=`), null safety |
+
+---
+
+## Non-Goals
+
+- Systems programming (OS kernels, drivers, allocator control).
+- Zero-cost abstractions at all costs.
+- Backward compatibility with any existing language.
+- Gradual typing or dynamic escape hatches (`any`).
+- Macros or metaprogramming (at least initially).
