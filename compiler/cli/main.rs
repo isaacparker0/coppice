@@ -1,16 +1,28 @@
-use std::env;
 use std::fs;
 use std::process;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 || args[1] != "check" {
-        eprintln!("usage: lang0c check <file.lang>");
-        process::exit(2);
-    }
+use clap::{Parser, Subcommand};
 
-    let path = &args[2];
-    let src = match fs::read_to_string(path) {
+#[derive(Parser)]
+#[command(version)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    Check {
+        file: String,
+    },
+}
+
+fn main() {
+    let cli = Cli::parse();
+    let path = match cli.command {
+        Command::Check { file } => file,
+    };
+    let src = match fs::read_to_string(&path) {
         Ok(s) => s,
         Err(err) => {
             eprintln!("{path}: error: {err}");
@@ -25,14 +37,14 @@ fn main() {
                 println!("ok");
             } else {
                 for d in diags {
-                    print_diag(path, &src, &d.message, &d.span);
+                    print_diag(&path, &src, &d.message, &d.span);
                 }
                 process::exit(1);
             }
         }
         Err(diags) => {
             for d in diags {
-                print_diag(path, &src, &d.message, &d.span);
+                print_diag(&path, &src, &d.message, &d.span);
             }
             process::exit(1);
         }
