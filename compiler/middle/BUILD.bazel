@@ -1,15 +1,16 @@
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 rust_library(
-    name = "frontend",
+    name = "middle",
     srcs = [
-        "ast.rs",
-        "diagnostics.rs",
-        "lexer.rs",
         "lib.rs",
-        "parser.rs",
+        "typecheck.rs",
+        "types.rs",
     ],
     crate_root = "lib.rs",
     edition = "2024",
     visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/frontend",
+    ],
 )
