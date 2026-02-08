@@ -1,0 +1,7 @@
+load("@rules_rust//cargo:defs.bzl", "extract_cargo_lints")
+
+extract_cargo_lints(
+    name = "cargo_lints",
+    manifest = "//:Cargo.toml",
+    visibility = ["//visibility:public"],
+)

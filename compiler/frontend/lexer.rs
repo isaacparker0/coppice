@@ -207,8 +207,8 @@ impl<'a> Lexer<'a> {
         }
         let text = &self.src[start..self.idx];
         let value = text.parse::<i64>();
-        match value {
-            Ok(value) => Token {
+        if let Ok(value) = value {
+            Token {
                 kind: TokenKind::IntLiteral(value),
                 span: Span {
                     start,
@@ -216,26 +216,25 @@ impl<'a> Lexer<'a> {
                     line,
                     col,
                 },
-            },
-            Err(_) => {
-                self.diagnostics.push(Diagnostic::new(
-                    "integer literal out of range",
-                    Span {
-                        start,
-                        end: self.idx,
-                        line,
-                        col,
-                    },
-                ));
-                Token {
-                    kind: TokenKind::Error("integer literal out of range".to_string()),
-                    span: Span {
-                        start,
-                        end: self.idx,
-                        line,
-                        col,
-                    },
-                }
+            }
+        } else {
+            self.diagnostics.push(Diagnostic::new(
+                "integer literal out of range",
+                Span {
+                    start,
+                    end: self.idx,
+                    line,
+                    col,
+                },
+            ));
+            Token {
+                kind: TokenKind::Error("integer literal out of range".to_string()),
+                span: Span {
+                    start,
+                    end: self.idx,
+                    line,
+                    col,
+                },
             }
         }
     }
@@ -293,10 +292,7 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while self.idx < self.bytes.len() {
             match self.peek_byte() {
-                b' ' | b'\t' | b'\r' => {
-                    self.advance();
-                }
-                b'\n' => {
+                b' ' | b'\t' | b'\r' | b'\n' => {
                     self.advance();
                 }
                 b'/' => {

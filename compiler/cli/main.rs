@@ -13,14 +13,14 @@ fn main() {
     let src = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(err) => {
-            eprintln!("{}: error: {}", path, err);
+            eprintln!("{path}: error: {err}");
             process::exit(1);
         }
     };
 
-    match frontend::parse_file(&src) {
+    match compiler__frontend::parse_file(&src) {
         Ok(file) => {
-            let diags = middle::check_file(&file);
+            let diags = compiler__middle::check_file(&file);
             if diags.is_empty() {
                 println!("ok");
             } else {
@@ -39,14 +39,14 @@ fn main() {
     }
 }
 
-fn print_diag(path: &str, src: &str, message: &str, span: &frontend::Span) {
+fn print_diag(path: &str, src: &str, message: &str, span: &compiler__frontend::Span) {
     let line = span.line;
     let col = span.col;
     let line_text = src.lines().nth(line - 1).unwrap_or("");
-    eprintln!("{}:{}:{}: error: {}", path, line, col, message);
-    eprintln!("  {}", line_text);
+    eprintln!("{path}:{line}:{col}: error: {message}");
+    eprintln!("  {line_text}");
     if !line_text.is_empty() {
         let caret = " ".repeat(col.saturating_sub(1));
-        eprintln!("  {}^", caret);
+        eprintln!("  {caret}^");
     }
 }

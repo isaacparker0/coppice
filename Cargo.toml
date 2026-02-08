@@ -13,6 +13,10 @@ path = "placeholder.rs"
 [dependencies]
 clap = { version = "^4.5.57", features = ["derive"] }
 
+[lints.rust]
+# Our crate names use double underscore as path separator.
+non_snake_case = "allow"
+
 [lints.clippy]
 correctness = { level = "deny", priority = -1 }
 suspicious = { level = "warn", priority = -1 }

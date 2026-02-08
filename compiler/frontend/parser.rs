@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::ast::{BinOp, Block, Expr, File, Function, Param, Stmt, TypeName};
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 
@@ -68,18 +68,11 @@ impl Parser {
         if self.peek_is_symbol(Symbol::RParen) {
             return params;
         }
-        loop {
-            let (name, name_span) = match self.expect_ident() {
-                Some(v) => v,
-                None => break,
-            };
+        while let Some((name, name_span)) = self.expect_ident() {
             if self.expect_symbol(Symbol::Colon).is_none() {
                 break;
             }
-            let ty = match self.parse_type_name() {
-                Some(t) => t,
-                None => break,
-            };
+            let Some(ty) = self.parse_type_name() else { break };
             let span = Span {
                 start: name_span.start,
                 end: ty.span.end,
@@ -93,9 +86,7 @@ impl Parser {
             });
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
-                continue;
             }
-            break;
         }
         params
     }
@@ -153,9 +144,7 @@ impl Parser {
         };
 
         if let Some((name, name_span)) = self.expect_ident() {
-            if self.expect_symbol(Symbol::Assign).is_none() {
-                return None;
-            }
+            self.expect_symbol(Symbol::Assign)?;
             let expr = self.parse_expr()?;
             let span = Span {
                 start: name_span.start,
@@ -280,9 +269,7 @@ impl Parser {
             }),
             TokenKind::Symbol(Symbol::LParen) => {
                 let expr = self.parse_expr()?;
-                if self.expect_symbol(Symbol::RParen).is_none() {
-                    return None;
-                }
+                self.expect_symbol(Symbol::RParen)?;
                 Some(expr)
             }
             TokenKind::Error(message) => {
@@ -298,12 +285,11 @@ impl Parser {
 
     fn expect_ident(&mut self) -> Option<(String, Span)> {
         let tok = self.advance();
-        match tok.kind {
-            TokenKind::Ident(name) => Some((name, tok.span)),
-            _ => {
-                self.error("expected identifier", tok.span);
-                None
-            }
+        if let TokenKind::Ident(name) = tok.kind {
+            Some((name, tok.span))
+        } else {
+            self.error("expected identifier", tok.span);
+            None
         }
     }
 
@@ -312,7 +298,7 @@ impl Parser {
         match tok.kind {
             TokenKind::Keyword(k) if k == kw => Some(tok.span),
             _ => {
-                self.error(format!("expected keyword '{:?}'", kw), tok.span);
+                self.error(format!("expected keyword '{kw:?}'"), tok.span);
                 None
             }
         }
@@ -390,11 +376,11 @@ trait ExprSpan {
 impl ExprSpan for Expr {
     fn span(&self) -> Span {
         match self {
-            Expr::IntLiteral { span, .. } => span.clone(),
-            Expr::BoolLiteral { span, .. } => span.clone(),
-            Expr::StringLiteral { span, .. } => span.clone(),
-            Expr::Ident { span, .. } => span.clone(),
-            Expr::Binary { span, .. } => span.clone(),
+            Expr::IntLiteral { span, .. }
+            | Expr::BoolLiteral { span, .. }
+            | Expr::StringLiteral { span, .. }
+            | Expr::Ident { span, .. }
+            | Expr::Binary { span, .. } => span.clone(),
         }
     }
 }

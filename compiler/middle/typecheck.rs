@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use frontend::{BinOp, Diagnostic, Expr, File, Span, Stmt};
+use compiler__frontend::{BinOp, Diagnostic, Expr, File, Span, Stmt};
 
 use crate::types::{type_from_name, Type};
 
+#[must_use]
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     for func in &file.functions {
@@ -36,7 +37,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_function(&mut self, func: &frontend::Function) {
+    fn check_function(&mut self, func: &compiler__frontend::Function) {
         self.scopes.push(HashMap::new());
         self.saw_return = false;
 
@@ -73,7 +74,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_block(&mut self, block: &frontend::Block) {
+    fn check_block(&mut self, block: &compiler__frontend::Block) {
         self.scopes.push(HashMap::new());
         for stmt in &block.stmts {
             self.check_stmt(stmt);
@@ -157,10 +158,9 @@ impl<'a> Checker<'a> {
         let duplicate = self
             .scopes
             .last()
-            .map(|scope| scope.contains_key(&name))
-            .unwrap_or(false);
+            .is_some_and(|scope| scope.contains_key(&name));
         if duplicate {
-            self.error(format!("duplicate binding '{}'", name), span.clone());
+            self.error(format!("duplicate binding '{name}'"), span.clone());
         }
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(
@@ -181,7 +181,7 @@ impl<'a> Checker<'a> {
                 return info.ty.clone();
             }
         }
-        self.error(format!("unknown name '{}'", name), span.clone());
+        self.error(format!("unknown name '{name}'"), span.clone());
         Type::Unknown
     }
 
@@ -195,7 +195,7 @@ impl<'a> Checker<'a> {
                 unused.push((name.clone(), info.span.clone()));
             }
             for (name, span) in unused {
-                self.error(format!("unused variable '{}'", name), span);
+                self.error(format!("unused variable '{name}'"), span);
             }
         }
     }
@@ -212,11 +212,11 @@ trait ExprSpan {
 impl ExprSpan for Expr {
     fn span(&self) -> Span {
         match self {
-            Expr::IntLiteral { span, .. } => span.clone(),
-            Expr::BoolLiteral { span, .. } => span.clone(),
-            Expr::StringLiteral { span, .. } => span.clone(),
-            Expr::Ident { span, .. } => span.clone(),
-            Expr::Binary { span, .. } => span.clone(),
+            Expr::IntLiteral { span, .. }
+            | Expr::BoolLiteral { span, .. }
+            | Expr::StringLiteral { span, .. }
+            | Expr::Ident { span, .. }
+            | Expr::Binary { span, .. } => span.clone(),
         }
     }
 }

@@ -1,4 +1,4 @@
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
     name = "middle",
@@ -7,8 +7,6 @@ rust_library(
         "typecheck.rs",
         "types.rs",
     ],
-    crate_root = "lib.rs",
-    edition = "2024",
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/frontend",
