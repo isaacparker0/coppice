@@ -1,0 +1,4 @@
+common --enable_bzlmod
+
+common --incompatible_strict_action_env
+common --sandbox_default_allow_network=false

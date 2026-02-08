@@ -1,0 +1,38 @@
+module(name = "lang0")
+
+bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.4.1")
+
+register_toolchains(
+    "@toolchains_llvm_bootstrapped//toolchain:all",
+)
+
+bazel_dep(name = "rules_rust", version = "0.68.1")
+single_version_override(
+    module_name = "rules_rust",
+    patch_strip = 0,
+    patches = ["//patches:rules_rust.patch"],
+)
+
+bazel_dep(name = "rules_rs", version = "0.0.27")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.93.0"],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")
+
+crate = use_extension("@rules_rs//rs:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates",
+    cargo_lock = "//:Cargo.lock",
+    cargo_toml = "//:Cargo.toml",
+    platform_triples = [
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ],
+    validate_lockfile = True,
+)
+use_repo(crate, "crates")

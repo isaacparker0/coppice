@@ -1,0 +1,48 @@
+--- rust/private/rustc.bzl
++++ rust/private/rustc.bzl
+@@ -1353,8 +1353,8 @@
+
+     # Add flags for any 'rustc' lints that are specified.
+     #
+-    # Exclude lints if we're building in the exec configuration to prevent crates
+-    # used in build scripts from generating warnings.
++    # The upstream logic skipped lints in exec configuration, but lint_config
++    # should always be respected when set - it's the target's explicit intent.
+     lint_files = []
+-    if hasattr(ctx.attr, "lint_config") and ctx.attr.lint_config and not is_exec_configuration(ctx):
++    if hasattr(ctx.attr, "lint_config") and ctx.attr.lint_config:
+         rust_flags = rust_flags + ctx.attr.lint_config[LintsInfo].rustc_lint_flags
+         lint_files = lint_files + ctx.attr.lint_config[LintsInfo].rustc_lint_files
+
+--- rust/private/rust_analyzer.bzl
++++ rust/private/rust_analyzer.bzl
+@@ -254,10 +254,29 @@
+     if is_generated:
+         srcs = getattr(ctx.rule.files, "srcs", [])
+         src_map = {src.short_path: src for src in srcs if src.is_source}
++        # rules_rust adds execroot include_dirs even for copied sources, which
++        # creates duplicate roots and makes rust-analyzer watch bazel-out,
++        # triggering rust-analyzer flycheck cancels/restarts and resulting in
++        # stale diagnostics. Fix by only including execroot include_dirs for
++        # true generated sources.
+         if info.crate.root.short_path in src_map:
+             crate["root_module"] = _WORKSPACE_TEMPLATE + src_map[info.crate.root.short_path].path
++        else:
+             crate["source"]["include_dirs"].append(path_prefix + info.crate.root.dirname)
+ 
++    # Add the package directory to include_dirs so all crates in a package
++    # share the same source root.
++    #
++    # This works around a rust-analyzer limitation: relevant_crates() only
++    # returns crates whose root_file is in the same source root as the queried
++    # file, rather than also considering crates whose include_dirs cover the
++    # file. By ensuring all crates in a package have identical include_dirs,
++    # they merge into one source root, making relevant_crates() return all of
++    # them as candidates. The correct crate is then determined by module tree
++    # resolution.
++    if not is_external:
++        crate["source"]["include_dirs"].append(_WORKSPACE_TEMPLATE + ctx.label.package)
++
+     if info.build_info != None and info.build_info.out_dir != None:
+         out_dir_path = info.build_info.out_dir.path
+         crate["env"].update({"OUT_DIR": _EXEC_ROOT_TEMPLATE + out_dir_path})

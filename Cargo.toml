@@ -1,0 +1,27 @@
+# https://github.com/bazelbuild/rules_rust/blob/main/examples/all_crate_deps/Cargo.toml
+
+[package]
+name = "all_crate_deps"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+# Placeholder for Bazel-only setup; Cargo isn't used.
+path = "placeholder.rs" 
+
+[dependencies]
+clap = { version = "^4.5.57", features = ["derive"] }
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
