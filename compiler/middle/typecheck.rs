@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__frontend::{BinOp, Diagnostic, Expr, File, Span, Stmt};
 
-use crate::types::{type_from_name, Type};
+use crate::types::{Type, type_from_name};
 
 #[must_use]
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
