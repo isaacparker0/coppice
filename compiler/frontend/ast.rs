@@ -8,51 +8,51 @@ pub struct File {
 #[derive(Clone, Debug)]
 pub struct Function {
     pub name: String,
-    pub params: Vec<Param>,
+    pub parameters: Vec<Parameter>,
     pub return_type: TypeName,
     pub body: Block,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct Param {
+pub struct Parameter {
     pub name: String,
-    pub ty: TypeName,
+    pub type_name: TypeName,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub stmts: Vec<Stmt>,
+    pub statements: Vec<Statement>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum Stmt {
+pub enum Statement {
     Let {
         name: String,
         mutable: bool,
-        expr: Expr,
+        expression: Expression,
         span: Span,
     },
     Return {
-        expr: Expr,
+        expression: Expression,
         span: Span,
     },
     If {
-        condition: Expr,
+        condition: Expression,
         then_block: Block,
         span: Span,
     },
 }
 
 #[derive(Clone, Debug)]
-pub enum Expr {
-    IntLiteral {
+pub enum Expression {
+    IntegerLiteral {
         value: i64,
         span: Span,
     },
-    BoolLiteral {
+    BooleanLiteral {
         value: bool,
         span: Span,
     },
@@ -60,25 +60,25 @@ pub enum Expr {
         value: String,
         span: Span,
     },
-    Ident {
+    Identifier {
         name: String,
         span: Span,
     },
     Binary {
-        op: BinOp,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        operator: BinaryOperator,
+        left: Box<Expression>,
+        right: Box<Expression>,
         span: Span,
     },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinOp {
+pub enum BinaryOperator {
     Add,
-    Sub,
-    Mul,
-    Div,
-    EqEq,
+    Subtract,
+    Multiply,
+    Divide,
+    EqualEqual,
 }
 
 #[derive(Clone, Debug)]

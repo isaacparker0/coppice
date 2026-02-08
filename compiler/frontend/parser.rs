@@ -1,10 +1,12 @@
-use crate::ast::{BinOp, Block, Expr, File, Function, Param, Stmt, TypeName};
+use crate::ast::{
+    BinaryOperator, Block, Expression, File, Function, Parameter, Statement, TypeName,
+};
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 
 pub struct Parser {
     tokens: Vec<Token>,
-    pos: usize,
+    position: usize,
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -12,7 +14,7 @@ impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
-            pos: 0,
+            position: 0,
             diagnostics: Vec::new(),
         }
     }
@@ -25,8 +27,8 @@ impl Parser {
         let mut functions = Vec::new();
         while !self.at_eof() {
             if self.peek_is_keyword(Keyword::Function) {
-                if let Some(func) = self.parse_function() {
-                    functions.push(func);
+                if let Some(function) = self.parse_function() {
+                    functions.push(function);
                 } else {
                     self.synchronize();
                 }
@@ -41,93 +43,97 @@ impl Parser {
 
     fn parse_function(&mut self) -> Option<Function> {
         let start = self.expect_keyword(Keyword::Function)?;
-        let name = self.expect_ident()?;
-        self.expect_symbol(Symbol::LParen)?;
-        let params = self.parse_params();
-        self.expect_symbol(Symbol::RParen)?;
+        let name = self.expect_identifier()?;
+        self.expect_symbol(Symbol::LeftParen)?;
+        let parameters = self.parse_parameters();
+        self.expect_symbol(Symbol::RightParen)?;
         self.expect_symbol(Symbol::Arrow)?;
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
         Some(Function {
             name: name.0,
-            params,
+            parameters,
             return_type,
             body,
             span: Span {
                 start: start.start,
                 end: body_end,
                 line: start.line,
-                col: start.col,
+                column: start.column,
             },
         })
     }
 
-    fn parse_params(&mut self) -> Vec<Param> {
-        let mut params = Vec::new();
-        if self.peek_is_symbol(Symbol::RParen) {
-            return params;
+    fn parse_parameters(&mut self) -> Vec<Parameter> {
+        let mut parameters = Vec::new();
+        if self.peek_is_symbol(Symbol::RightParen) {
+            return parameters;
         }
-        while let Some((name, name_span)) = self.expect_ident() {
+        while let Some((name, name_span)) = self.expect_identifier() {
             if self.expect_symbol(Symbol::Colon).is_none() {
                 break;
             }
-            let Some(ty) = self.parse_type_name() else {
+            let Some(type_name) = self.parse_type_name() else {
                 break;
             };
             let span = Span {
                 start: name_span.start,
-                end: ty.span.end,
+                end: type_name.span.end,
                 line: name_span.line,
-                col: name_span.col,
+                column: name_span.column,
             };
-            params.push(Param { name, ty, span });
+            parameters.push(Parameter {
+                name,
+                type_name,
+                span,
+            });
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
             }
         }
-        params
+        parameters
     }
 
     fn parse_block(&mut self) -> Option<Block> {
-        let start = self.expect_symbol(Symbol::LBrace)?;
-        let mut stmts = Vec::new();
-        while !self.peek_is_symbol(Symbol::RBrace) && !self.at_eof() {
-            if let Some(stmt) = self.parse_stmt() {
-                stmts.push(stmt);
+        let start = self.expect_symbol(Symbol::LeftBrace)?;
+        let mut statements = Vec::new();
+        while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
+            if let Some(statement) = self.parse_statement() {
+                statements.push(statement);
             } else {
-                self.synchronize_stmt();
+                self.synchronize_statement();
             }
         }
-        let end = self.expect_symbol(Symbol::RBrace)?;
+        let end = self.expect_symbol(Symbol::RightBrace)?;
         Some(Block {
-            stmts,
+            statements,
             span: Span {
                 start: start.start,
                 end: end.end,
                 line: start.line,
-                col: start.col,
+                column: start.column,
             },
         })
     }
 
-    fn parse_stmt(&mut self) -> Option<Stmt> {
+    fn parse_statement(&mut self) -> Option<Statement> {
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
-            let expr = self.parse_expr()?;
-            return Some(Stmt::Return { expr, span });
+            let expression = self.parse_expression()?;
+            return Some(Statement::Return { expression, span });
         }
         if self.peek_is_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
-            let condition = self.parse_expr()?;
+            let condition = self.parse_expression()?;
             let then_block = self.parse_block()?;
             let span = Span {
                 start: start.start,
                 end: then_block.span.end,
                 line: start.line,
-                col: start.col,
+                column: start.column,
             };
-            return Some(Stmt::If {
+            return Some(Statement::If {
                 condition,
                 then_block,
                 span,
@@ -141,19 +147,19 @@ impl Parser {
             false
         };
 
-        if let Some((name, name_span)) = self.expect_ident() {
+        if let Some((name, name_span)) = self.expect_identifier() {
             self.expect_symbol(Symbol::Assign)?;
-            let expr = self.parse_expr()?;
+            let expression = self.parse_expression()?;
             let span = Span {
                 start: name_span.start,
-                end: expr.span().end,
+                end: expression.span().end,
                 line: name_span.line,
-                col: name_span.col,
+                column: name_span.column,
             };
-            return Some(Stmt::Let {
+            return Some(Statement::Let {
                 name,
                 mutable,
-                expr,
+                expression,
                 span,
             });
         }
@@ -161,180 +167,180 @@ impl Parser {
     }
 
     fn parse_type_name(&mut self) -> Option<TypeName> {
-        let (name, span) = self.expect_ident()?;
+        let (name, span) = self.expect_identifier()?;
         Some(TypeName { name, span })
     }
 
-    fn parse_expr(&mut self) -> Option<Expr> {
+    fn parse_expression(&mut self) -> Option<Expression> {
         self.parse_equality()
     }
 
-    fn parse_equality(&mut self) -> Option<Expr> {
-        let mut expr = self.parse_additive()?;
-        while self.peek_is_symbol(Symbol::EqEq) {
-            let op_span = self.advance().span.clone();
+    fn parse_equality(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_additive()?;
+        while self.peek_is_symbol(Symbol::EqualEqual) {
+            let operator_span = self.advance().span.clone();
             let right = self.parse_additive()?;
             let span = Span {
-                start: expr.span().start,
+                start: expression.span().start,
                 end: right.span().end,
-                line: op_span.line,
-                col: op_span.col,
+                line: operator_span.line,
+                column: operator_span.column,
             };
-            expr = Expr::Binary {
-                op: BinOp::EqEq,
-                left: Box::new(expr),
+            expression = Expression::Binary {
+                operator: BinaryOperator::EqualEqual,
+                left: Box::new(expression),
                 right: Box::new(right),
                 span,
             };
         }
-        Some(expr)
+        Some(expression)
     }
 
-    fn parse_additive(&mut self) -> Option<Expr> {
-        let mut expr = self.parse_multiplicative()?;
+    fn parse_additive(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_multiplicative()?;
         loop {
-            let op = if self.peek_is_symbol(Symbol::Plus) {
-                BinOp::Add
+            let operator = if self.peek_is_symbol(Symbol::Plus) {
+                BinaryOperator::Add
             } else if self.peek_is_symbol(Symbol::Minus) {
-                BinOp::Sub
+                BinaryOperator::Subtract
             } else {
                 break;
             };
-            let op_span = self.advance().span.clone();
+            let operator_span = self.advance().span.clone();
             let right = self.parse_multiplicative()?;
             let span = Span {
-                start: expr.span().start,
+                start: expression.span().start,
                 end: right.span().end,
-                line: op_span.line,
-                col: op_span.col,
+                line: operator_span.line,
+                column: operator_span.column,
             };
-            expr = Expr::Binary {
-                op,
-                left: Box::new(expr),
+            expression = Expression::Binary {
+                operator,
+                left: Box::new(expression),
                 right: Box::new(right),
                 span,
             };
         }
-        Some(expr)
+        Some(expression)
     }
 
-    fn parse_multiplicative(&mut self) -> Option<Expr> {
-        let mut expr = self.parse_primary()?;
+    fn parse_multiplicative(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_primary()?;
         loop {
-            let op = if self.peek_is_symbol(Symbol::Star) {
-                BinOp::Mul
+            let operator = if self.peek_is_symbol(Symbol::Star) {
+                BinaryOperator::Multiply
             } else if self.peek_is_symbol(Symbol::Slash) {
-                BinOp::Div
+                BinaryOperator::Divide
             } else {
                 break;
             };
-            let op_span = self.advance().span.clone();
+            let operator_span = self.advance().span.clone();
             let right = self.parse_primary()?;
             let span = Span {
-                start: expr.span().start,
+                start: expression.span().start,
                 end: right.span().end,
-                line: op_span.line,
-                col: op_span.col,
+                line: operator_span.line,
+                column: operator_span.column,
             };
-            expr = Expr::Binary {
-                op,
-                left: Box::new(expr),
+            expression = Expression::Binary {
+                operator,
+                left: Box::new(expression),
                 right: Box::new(right),
                 span,
             };
         }
-        Some(expr)
+        Some(expression)
     }
 
-    fn parse_primary(&mut self) -> Option<Expr> {
-        let tok = self.advance();
-        match tok.kind {
-            TokenKind::IntLiteral(value) => Some(Expr::IntLiteral {
+    fn parse_primary(&mut self) -> Option<Expression> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::IntegerLiteral(value) => Some(Expression::IntegerLiteral {
                 value,
-                span: tok.span,
+                span: token.span,
             }),
-            TokenKind::StringLiteral(value) => Some(Expr::StringLiteral {
+            TokenKind::StringLiteral(value) => Some(Expression::StringLiteral {
                 value,
-                span: tok.span,
+                span: token.span,
             }),
-            TokenKind::BoolLiteral(value) => Some(Expr::BoolLiteral {
+            TokenKind::BooleanLiteral(value) => Some(Expression::BooleanLiteral {
                 value,
-                span: tok.span,
+                span: token.span,
             }),
-            TokenKind::Ident(name) => Some(Expr::Ident {
+            TokenKind::Identifier(name) => Some(Expression::Identifier {
                 name,
-                span: tok.span,
+                span: token.span,
             }),
-            TokenKind::Symbol(Symbol::LParen) => {
-                let expr = self.parse_expr()?;
-                self.expect_symbol(Symbol::RParen)?;
-                Some(expr)
+            TokenKind::Symbol(Symbol::LeftParen) => {
+                let expression = self.parse_expression()?;
+                self.expect_symbol(Symbol::RightParen)?;
+                Some(expression)
             }
             TokenKind::Error(message) => {
-                self.error(message, tok.span);
+                self.error(message, token.span);
                 None
             }
             _ => {
-                self.error("expected expression", tok.span);
+                self.error("expected expression", token.span);
                 None
             }
         }
     }
 
-    fn expect_ident(&mut self) -> Option<(String, Span)> {
-        let tok = self.advance();
-        if let TokenKind::Ident(name) = tok.kind {
-            Some((name, tok.span))
+    fn expect_identifier(&mut self) -> Option<(String, Span)> {
+        let token = self.advance();
+        if let TokenKind::Identifier(name) = token.kind {
+            Some((name, token.span))
         } else {
-            self.error("expected identifier", tok.span);
+            self.error("expected identifier", token.span);
             None
         }
     }
 
-    fn expect_keyword(&mut self, kw: Keyword) -> Option<Span> {
-        let tok = self.advance();
-        match tok.kind {
-            TokenKind::Keyword(k) if k == kw => Some(tok.span),
+    fn expect_keyword(&mut self, keyword: Keyword) -> Option<Span> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::Keyword(found) if found == keyword => Some(token.span),
             _ => {
-                self.error(format!("expected keyword '{kw:?}'"), tok.span);
+                self.error(format!("expected keyword '{keyword:?}'"), token.span);
                 None
             }
         }
     }
 
-    fn expect_symbol(&mut self, sym: Symbol) -> Option<Span> {
-        let tok = self.advance();
-        match tok.kind {
-            TokenKind::Symbol(s) if s == sym => Some(tok.span),
+    fn expect_symbol(&mut self, symbol: Symbol) -> Option<Span> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::Symbol(found) if found == symbol => Some(token.span),
             _ => {
-                self.error("expected symbol", tok.span);
+                self.error("expected symbol", token.span);
                 None
             }
         }
     }
 
-    fn peek_is_keyword(&self, kw: Keyword) -> bool {
-        matches!(self.peek().kind, TokenKind::Keyword(k) if k == kw)
+    fn peek_is_keyword(&self, keyword: Keyword) -> bool {
+        matches!(self.peek().kind, TokenKind::Keyword(found) if found == keyword)
     }
 
-    fn peek_is_symbol(&self, sym: Symbol) -> bool {
-        matches!(self.peek().kind, TokenKind::Symbol(s) if s == sym)
+    fn peek_is_symbol(&self, symbol: Symbol) -> bool {
+        matches!(self.peek().kind, TokenKind::Symbol(found) if found == symbol)
     }
 
     fn at_eof(&self) -> bool {
-        matches!(self.peek().kind, TokenKind::Eof)
+        matches!(self.peek().kind, TokenKind::EndOfFile)
     }
 
     fn peek(&self) -> &Token {
-        &self.tokens[self.pos]
+        &self.tokens[self.position]
     }
 
     fn advance(&mut self) -> Token {
-        let tok = self.tokens[self.pos].clone();
-        if !matches!(tok.kind, TokenKind::Eof) {
-            self.pos += 1;
+        let token = self.tokens[self.position].clone();
+        if !matches!(token.kind, TokenKind::EndOfFile) {
+            self.position += 1;
         }
-        tok
+        token
     }
 
     fn peek_span(&self) -> Span {
@@ -354,9 +360,9 @@ impl Parser {
         }
     }
 
-    fn synchronize_stmt(&mut self) {
+    fn synchronize_statement(&mut self) {
         while !self.at_eof() {
-            if self.peek_is_symbol(Symbol::RBrace) {
+            if self.peek_is_symbol(Symbol::RightBrace) {
                 return;
             }
             if self.peek_is_keyword(Keyword::Return) || self.peek_is_keyword(Keyword::If) {
@@ -367,18 +373,18 @@ impl Parser {
     }
 }
 
-trait ExprSpan {
+trait ExpressionSpan {
     fn span(&self) -> Span;
 }
 
-impl ExprSpan for Expr {
+impl ExpressionSpan for Expression {
     fn span(&self) -> Span {
         match self {
-            Expr::IntLiteral { span, .. }
-            | Expr::BoolLiteral { span, .. }
-            | Expr::StringLiteral { span, .. }
-            | Expr::Ident { span, .. }
-            | Expr::Binary { span, .. } => span.clone(),
+            Expression::IntegerLiteral { span, .. }
+            | Expression::BooleanLiteral { span, .. }
+            | Expression::StringLiteral { span, .. }
+            | Expression::Identifier { span, .. }
+            | Expression::Binary { span, .. } => span.clone(),
         }
     }
 }

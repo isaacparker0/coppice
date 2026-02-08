@@ -1,117 +1,126 @@
 use std::collections::HashMap;
 
-use compiler__frontend::{BinOp, Diagnostic, Expr, File, Span, Stmt};
+use compiler__frontend::{BinaryOperator, Diagnostic, Expression, File, Span, Statement};
 
 use crate::types::{Type, type_from_name};
 
 #[must_use]
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
-    let mut diags = Vec::new();
-    for func in &file.functions {
-        let mut checker = Checker::new(&mut diags);
-        checker.check_function(func);
+    let mut diagnostics = Vec::new();
+    for function in &file.functions {
+        let mut checker = Checker::new(&mut diagnostics);
+        checker.check_function(function);
     }
-    diags
+    diagnostics
 }
 
-struct VarInfo {
-    ty: Type,
+struct VariableInfo {
+    value_type: Type,
     used: bool,
     span: Span,
 }
 
 struct Checker<'a> {
-    scopes: Vec<HashMap<String, VarInfo>>,
-    diags: &'a mut Vec<Diagnostic>,
-    current_return: Type,
+    scopes: Vec<HashMap<String, VariableInfo>>,
+    diagnostics: &'a mut Vec<Diagnostic>,
+    current_return_type: Type,
     saw_return: bool,
 }
 
 impl<'a> Checker<'a> {
-    fn new(diags: &'a mut Vec<Diagnostic>) -> Self {
+    fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
         Self {
             scopes: Vec::new(),
-            diags,
-            current_return: Type::Unknown,
+            diagnostics,
+            current_return_type: Type::Unknown,
             saw_return: false,
         }
     }
 
-    fn check_function(&mut self, func: &compiler__frontend::Function) {
+    fn check_function(&mut self, function: &compiler__frontend::Function) {
         self.scopes.push(HashMap::new());
         self.saw_return = false;
 
-        let return_ty = type_from_name(&func.return_type.name).unwrap_or(Type::Unknown);
-        if return_ty == Type::Unknown {
+        let return_type = type_from_name(&function.return_type.name).unwrap_or(Type::Unknown);
+        if return_type == Type::Unknown {
             self.error(
-                format!("unknown return type '{}'", func.return_type.name),
-                func.return_type.span.clone(),
+                format!("unknown return type '{}'", function.return_type.name),
+                function.return_type.span.clone(),
             );
         }
-        self.current_return = return_ty;
+        self.current_return_type = return_type;
 
-        for param in &func.params {
-            let ty = type_from_name(&param.ty.name).unwrap_or(Type::Unknown);
-            if ty == Type::Unknown {
+        for parameter in &function.parameters {
+            let value_type = type_from_name(&parameter.type_name.name).unwrap_or(Type::Unknown);
+            if value_type == Type::Unknown {
                 self.error(
-                    format!("unknown type '{}'", param.ty.name),
-                    param.ty.span.clone(),
+                    format!("unknown type '{}'", parameter.type_name.name),
+                    parameter.type_name.span.clone(),
                 );
             }
-            self.define_var(param.name.clone(), ty, param.span.clone());
+            self.define_variable(parameter.name.clone(), value_type, parameter.span.clone());
         }
 
-        self.check_block(&func.body);
+        self.check_block(&function.body);
 
         self.check_unused_in_current_scope();
         self.scopes.pop();
 
         if !self.saw_return {
-            self.error("missing return in function body", func.body.span.clone());
+            self.error(
+                "missing return in function body",
+                function.body.span.clone(),
+            );
         }
     }
 
     fn check_block(&mut self, block: &compiler__frontend::Block) {
         self.scopes.push(HashMap::new());
-        for stmt in &block.stmts {
-            self.check_stmt(stmt);
+        for statement in &block.statements {
+            self.check_statement(statement);
         }
         self.check_unused_in_current_scope();
         self.scopes.pop();
     }
 
-    fn check_stmt(&mut self, stmt: &Stmt) {
-        match stmt {
-            Stmt::Let {
-                name, expr, span, ..
+    fn check_statement(&mut self, statement: &Statement) {
+        match statement {
+            Statement::Let {
+                name,
+                expression,
+                span,
+                ..
             } => {
-                let ty = self.check_expr(expr);
-                self.define_var(name.clone(), ty, span.clone());
+                let value_type = self.check_expression(expression);
+                self.define_variable(name.clone(), value_type, span.clone());
             }
-            Stmt::Return { expr, span: _ } => {
-                let ty = self.check_expr(expr);
-                if self.current_return != Type::Unknown
-                    && ty != Type::Unknown
-                    && ty != self.current_return
+            Statement::Return {
+                expression,
+                span: _,
+            } => {
+                let value_type = self.check_expression(expression);
+                if self.current_return_type != Type::Unknown
+                    && value_type != Type::Unknown
+                    && value_type != self.current_return_type
                 {
                     self.error(
                         format!(
                             "return type mismatch: expected {}, got {}",
-                            self.current_return.name(),
-                            ty.name()
+                            self.current_return_type.name(),
+                            value_type.name()
                         ),
-                        expr.span(),
+                        expression.span(),
                     );
                 }
                 self.saw_return = true;
             }
-            Stmt::If {
+            Statement::If {
                 condition,
                 then_block,
                 ..
             } => {
-                let cond_ty = self.check_expr(condition);
-                if cond_ty != Type::Boolean && cond_ty != Type::Unknown {
+                let condition_type = self.check_expression(condition);
+                if condition_type != Type::Boolean && condition_type != Type::Unknown {
                     self.error("if condition must be boolean", condition.span());
                 }
                 self.check_block(then_block);
@@ -119,30 +128,36 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_expr(&mut self, expr: &Expr) -> Type {
-        match expr {
-            Expr::IntLiteral { .. } => Type::Int64,
-            Expr::BoolLiteral { .. } => Type::Boolean,
-            Expr::StringLiteral { .. } => Type::String,
-            Expr::Ident { name, span } => self.resolve_var(name, span),
-            Expr::Binary {
-                op,
+    fn check_expression(&mut self, expression: &Expression) -> Type {
+        match expression {
+            Expression::IntegerLiteral { .. } => Type::Integer64,
+            Expression::BooleanLiteral { .. } => Type::Boolean,
+            Expression::StringLiteral { .. } => Type::String,
+            Expression::Identifier { name, span } => self.resolve_variable(name, span),
+            Expression::Binary {
+                operator,
                 left,
                 right,
                 span: _,
             } => {
-                let l = self.check_expr(left);
-                let r = self.check_expr(right);
-                match op {
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                        if l != Type::Int64 || r != Type::Int64 {
+                let left_type = self.check_expression(left);
+                let right_type = self.check_expression(right);
+                match operator {
+                    BinaryOperator::Add
+                    | BinaryOperator::Subtract
+                    | BinaryOperator::Multiply
+                    | BinaryOperator::Divide => {
+                        if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("arithmetic operators require int64 operands", left.span());
                             return Type::Unknown;
                         }
-                        Type::Int64
+                        Type::Integer64
                     }
-                    BinOp::EqEq => {
-                        if l != r && l != Type::Unknown && r != Type::Unknown {
+                    BinaryOperator::EqualEqual => {
+                        if left_type != right_type
+                            && left_type != Type::Unknown
+                            && right_type != Type::Unknown
+                        {
                             self.error("== operands must have same type", left.span());
                             return Type::Unknown;
                         }
@@ -153,7 +168,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn define_var(&mut self, name: String, ty: Type, span: Span) {
+    fn define_variable(&mut self, name: String, value_type: Type, span: Span) {
         let duplicate = self
             .scopes
             .last()
@@ -164,8 +179,8 @@ impl<'a> Checker<'a> {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(
                 name,
-                VarInfo {
-                    ty,
+                VariableInfo {
+                    value_type,
                     used: false,
                     span,
                 },
@@ -173,11 +188,11 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn resolve_var(&mut self, name: &str, span: &Span) -> Type {
+    fn resolve_variable(&mut self, name: &str, span: &Span) -> Type {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(info) = scope.get_mut(name) {
                 info.used = true;
-                return info.ty.clone();
+                return info.value_type.clone();
             }
         }
         self.error(format!("unknown name '{name}'"), span.clone());
@@ -200,22 +215,22 @@ impl<'a> Checker<'a> {
     }
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
-        self.diags.push(Diagnostic::new(message, span));
+        self.diagnostics.push(Diagnostic::new(message, span));
     }
 }
 
-trait ExprSpan {
+trait ExpressionSpan {
     fn span(&self) -> Span;
 }
 
-impl ExprSpan for Expr {
+impl ExpressionSpan for Expression {
     fn span(&self) -> Span {
         match self {
-            Expr::IntLiteral { span, .. }
-            | Expr::BoolLiteral { span, .. }
-            | Expr::StringLiteral { span, .. }
-            | Expr::Ident { span, .. }
-            | Expr::Binary { span, .. } => span.clone(),
+            Expression::IntegerLiteral { span, .. }
+            | Expression::BooleanLiteral { span, .. }
+            | Expression::StringLiteral { span, .. }
+            | Expression::Identifier { span, .. }
+            | Expression::Binary { span, .. } => span.clone(),
         }
     }
 }

@@ -5,60 +5,58 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(version)]
-struct Cli {
+struct CommandLine {
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
-    Check {
-        file: String,
-    },
+    Check { file: String },
 }
 
 fn main() {
-    let cli = Cli::parse();
-    let path = match cli.command {
+    let command_line = CommandLine::parse();
+    let path = match command_line.command {
         Command::Check { file } => file,
     };
-    let src = match fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(err) => {
-            eprintln!("{path}: error: {err}");
+    let source = match fs::read_to_string(&path) {
+        Ok(source) => source,
+        Err(error) => {
+            eprintln!("{path}: error: {error}");
             process::exit(1);
         }
     };
 
-    match compiler__frontend::parse_file(&src) {
+    match compiler__frontend::parse_file(&source) {
         Ok(file) => {
-            let diags = compiler__middle::check_file(&file);
-            if diags.is_empty() {
+            let diagnostics = compiler__middle::check_file(&file);
+            if diagnostics.is_empty() {
                 println!("ok");
             } else {
-                for d in diags {
-                    print_diag(&path, &src, &d.message, &d.span);
+                for diagnostic in diagnostics {
+                    print_diagnostic(&path, &source, &diagnostic.message, &diagnostic.span);
                 }
                 process::exit(1);
             }
         }
-        Err(diags) => {
-            for d in diags {
-                print_diag(&path, &src, &d.message, &d.span);
+        Err(diagnostics) => {
+            for diagnostic in diagnostics {
+                print_diagnostic(&path, &source, &diagnostic.message, &diagnostic.span);
             }
             process::exit(1);
         }
     }
 }
 
-fn print_diag(path: &str, src: &str, message: &str, span: &compiler__frontend::Span) {
+fn print_diagnostic(path: &str, source: &str, message: &str, span: &compiler__frontend::Span) {
     let line = span.line;
-    let col = span.col;
-    let line_text = src.lines().nth(line - 1).unwrap_or("");
-    eprintln!("{path}:{line}:{col}: error: {message}");
+    let column = span.column;
+    let line_text = source.lines().nth(line - 1).unwrap_or("");
+    eprintln!("{path}:{line}:{column}: error: {message}");
     eprintln!("  {line_text}");
     if !line_text.is_empty() {
-        let caret = " ".repeat(col.saturating_sub(1));
+        let caret = " ".repeat(column.saturating_sub(1));
         eprintln!("  {caret}^");
     }
 }

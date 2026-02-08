@@ -3,7 +3,7 @@ pub struct Span {
     pub start: usize,
     pub end: usize,
     pub line: usize,
-    pub col: usize,
+    pub column: usize,
 }
 
 #[derive(Clone, Debug)]

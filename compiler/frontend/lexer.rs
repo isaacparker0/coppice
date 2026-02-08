@@ -10,10 +10,10 @@ pub enum Keyword {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Symbol {
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
     Comma,
     Colon,
     Plus,
@@ -22,18 +22,18 @@ pub enum Symbol {
     Slash,
     Assign,
     Arrow,
-    EqEq,
+    EqualEqual,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TokenKind {
-    Ident(String),
-    IntLiteral(i64),
+    Identifier(String),
+    IntegerLiteral(i64),
     StringLiteral(String),
-    BoolLiteral(bool),
+    BooleanLiteral(bool),
     Keyword(Keyword),
     Symbol(Symbol),
-    Eof,
+    EndOfFile,
     Error(String),
 }
 
@@ -44,33 +44,33 @@ pub struct Token {
 }
 
 pub struct Lexer<'a> {
-    src: &'a str,
+    source: &'a str,
     bytes: &'a [u8],
-    idx: usize,
+    index: usize,
     line: usize,
-    col: usize,
+    column: usize,
     diagnostics: Vec<Diagnostic>,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(src: &'a str) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Self {
-            src,
-            bytes: src.as_bytes(),
-            idx: 0,
+            source,
+            bytes: source.as_bytes(),
+            index: 0,
             line: 1,
-            col: 1,
+            column: 1,
             diagnostics: Vec::new(),
         }
     }
 
-    pub fn lex_all(&mut self) -> Vec<Token> {
+    pub fn lex_all_tokens(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         loop {
-            let tok = self.next_token();
-            let is_eof = tok.kind == TokenKind::Eof;
-            tokens.push(tok);
-            if is_eof {
+            let token = self.next_token();
+            let is_end_of_file = token.kind == TokenKind::EndOfFile;
+            tokens.push(token);
+            if is_end_of_file {
                 break;
             }
         }
@@ -83,96 +83,103 @@ impl<'a> Lexer<'a> {
 
     fn next_token(&mut self) -> Token {
         self.skip_whitespace();
-        let start = self.idx;
-        let (line, col) = (self.line, self.col);
+        let start = self.index;
+        let (line, column) = (self.line, self.column);
 
-        if self.idx >= self.bytes.len() {
+        if self.index >= self.bytes.len() {
             return Token {
-                kind: TokenKind::Eof,
+                kind: TokenKind::EndOfFile,
                 span: Span {
                     start,
                     end: start,
                     line,
-                    col,
+                    column,
                 },
             };
         }
 
-        let ch = self.peek_byte();
-        match ch {
-            b'(' => self.single(Symbol::LParen, 1, start, line, col),
-            b')' => self.single(Symbol::RParen, 1, start, line, col),
-            b'{' => self.single(Symbol::LBrace, 1, start, line, col),
-            b'}' => self.single(Symbol::RBrace, 1, start, line, col),
-            b',' => self.single(Symbol::Comma, 1, start, line, col),
+        let character = self.peek_byte();
+        match character {
+            b'(' => self.single(Symbol::LeftParen, 1, start, line, column),
+            b')' => self.single(Symbol::RightParen, 1, start, line, column),
+            b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
+            b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
+            b',' => self.single(Symbol::Comma, 1, start, line, column),
             b':' => {
                 if self.match_bytes(b":=") {
-                    self.single(Symbol::Assign, 2, start, line, col)
+                    self.single(Symbol::Assign, 2, start, line, column)
                 } else {
-                    self.single(Symbol::Colon, 1, start, line, col)
+                    self.single(Symbol::Colon, 1, start, line, column)
                 }
             }
             b'-' => {
                 if self.match_bytes(b"->") {
-                    self.single(Symbol::Arrow, 2, start, line, col)
+                    self.single(Symbol::Arrow, 2, start, line, column)
                 } else {
-                    self.single(Symbol::Minus, 1, start, line, col)
+                    self.single(Symbol::Minus, 1, start, line, column)
                 }
             }
-            b'+' => self.single(Symbol::Plus, 1, start, line, col),
-            b'*' => self.single(Symbol::Star, 1, start, line, col),
-            b'/' => self.single(Symbol::Slash, 1, start, line, col),
+            b'+' => self.single(Symbol::Plus, 1, start, line, column),
+            b'*' => self.single(Symbol::Star, 1, start, line, column),
+            b'/' => self.single(Symbol::Slash, 1, start, line, column),
             b'=' => {
                 if self.match_bytes(b"==") {
-                    self.single(Symbol::EqEq, 2, start, line, col)
+                    self.single(Symbol::EqualEqual, 2, start, line, column)
                 } else {
                     self.advance();
-                    self.error_token("unexpected '='; use '==' for equality", start, line, col)
+                    self.error_token("unexpected '='; use '==' for equality", start, line, column)
                 }
             }
-            b'"' => self.lex_string(start, line, col),
-            b'0'..=b'9' => self.lex_int(start, line, col),
-            b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.lex_ident(start, line, col),
+            b'"' => self.lex_string(start, line, column),
+            b'0'..=b'9' => self.lex_integer(start, line, column),
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.lex_identifier(start, line, column),
             _ => {
-                let msg = format!("unexpected character '{}'", self.peek_char());
+                let message = format!("unexpected character '{}'", self.peek_char());
                 self.advance();
-                self.error_token(msg, start, line, col)
+                self.error_token(message, start, line, column)
             }
         }
     }
 
-    fn single(&mut self, sym: Symbol, len: usize, start: usize, line: usize, col: usize) -> Token {
-        self.advance_by(len);
+    fn single(
+        &mut self,
+        symbol: Symbol,
+        length: usize,
+        start: usize,
+        line: usize,
+        column: usize,
+    ) -> Token {
+        self.advance_by(length);
         Token {
-            kind: TokenKind::Symbol(sym),
+            kind: TokenKind::Symbol(symbol),
             span: Span {
                 start,
-                end: start + len,
+                end: start + length,
                 line,
-                col,
+                column,
             },
         }
     }
 
-    fn lex_string(&mut self, start: usize, line: usize, col: usize) -> Token {
+    fn lex_string(&mut self, start: usize, line: usize, column: usize) -> Token {
         self.advance();
-        let content_start = self.idx;
-        while self.idx < self.bytes.len() {
-            let b = self.peek_byte();
-            if b == b'"' {
-                let content = &self.src[content_start..self.idx];
+        let content_start = self.index;
+        while self.index < self.bytes.len() {
+            let byte = self.peek_byte();
+            if byte == b'"' {
+                let content = &self.source[content_start..self.index];
                 self.advance();
                 return Token {
                     kind: TokenKind::StringLiteral(content.to_string()),
                     span: Span {
                         start,
-                        end: self.idx,
+                        end: self.index,
                         line,
-                        col,
+                        column,
                     },
                 };
             }
-            if b == b'\n' {
+            if byte == b'\n' {
                 break;
             }
             self.advance();
@@ -182,39 +189,39 @@ impl<'a> Lexer<'a> {
             "unterminated string literal",
             Span {
                 start,
-                end: self.idx,
+                end: self.index,
                 line,
-                col,
+                column,
             },
         ));
         Token {
             kind: TokenKind::Error("unterminated string literal".to_string()),
             span: Span {
                 start,
-                end: self.idx,
+                end: self.index,
                 line,
-                col,
+                column,
             },
         }
     }
 
-    fn lex_int(&mut self, start: usize, line: usize, col: usize) -> Token {
-        while self.idx < self.bytes.len() {
+    fn lex_integer(&mut self, start: usize, line: usize, column: usize) -> Token {
+        while self.index < self.bytes.len() {
             match self.peek_byte() {
                 b'0'..=b'9' => self.advance(),
                 _ => break,
             }
         }
-        let text = &self.src[start..self.idx];
+        let text = &self.source[start..self.index];
         let value = text.parse::<i64>();
         if let Ok(value) = value {
             Token {
-                kind: TokenKind::IntLiteral(value),
+                kind: TokenKind::IntegerLiteral(value),
                 span: Span {
                     start,
-                    end: self.idx,
+                    end: self.index,
                     line,
-                    col,
+                    column,
                 },
             }
         } else {
@@ -222,47 +229,47 @@ impl<'a> Lexer<'a> {
                 "integer literal out of range",
                 Span {
                     start,
-                    end: self.idx,
+                    end: self.index,
                     line,
-                    col,
+                    column,
                 },
             ));
             Token {
                 kind: TokenKind::Error("integer literal out of range".to_string()),
                 span: Span {
                     start,
-                    end: self.idx,
+                    end: self.index,
                     line,
-                    col,
+                    column,
                 },
             }
         }
     }
 
-    fn lex_ident(&mut self, start: usize, line: usize, col: usize) -> Token {
-        while self.idx < self.bytes.len() {
+    fn lex_identifier(&mut self, start: usize, line: usize, column: usize) -> Token {
+        while self.index < self.bytes.len() {
             match self.peek_byte() {
                 b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => self.advance(),
                 _ => break,
             }
         }
-        let text = &self.src[start..self.idx];
+        let text = &self.source[start..self.index];
         let kind = match text {
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
             "mut" => TokenKind::Keyword(Keyword::Mut),
-            "true" => TokenKind::BoolLiteral(true),
-            "false" => TokenKind::BoolLiteral(false),
-            _ => TokenKind::Ident(text.to_string()),
+            "true" => TokenKind::BooleanLiteral(true),
+            "false" => TokenKind::BooleanLiteral(false),
+            _ => TokenKind::Identifier(text.to_string()),
         };
         Token {
             kind,
             span: Span {
                 start,
-                end: self.idx,
+                end: self.index,
                 line,
-                col,
+                column,
             },
         }
     }
@@ -272,31 +279,31 @@ impl<'a> Lexer<'a> {
         message: impl Into<String>,
         start: usize,
         line: usize,
-        col: usize,
+        column: usize,
     ) -> Token {
         let message = message.into();
         self.diagnostics.push(Diagnostic::new(
             message.clone(),
             Span {
                 start,
-                end: self.idx,
+                end: self.index,
                 line,
-                col,
+                column,
             },
         ));
         Token {
             kind: TokenKind::Error(message),
             span: Span {
                 start,
-                end: self.idx,
+                end: self.index,
                 line,
-                col,
+                column,
             },
         }
     }
 
     fn skip_whitespace(&mut self) {
-        while self.idx < self.bytes.len() {
+        while self.index < self.bytes.len() {
             match self.peek_byte() {
                 b' ' | b'\t' | b'\r' | b'\n' => {
                     self.advance();
@@ -304,7 +311,7 @@ impl<'a> Lexer<'a> {
                 b'/' => {
                     if self.match_bytes(b"//") {
                         self.advance_by(2);
-                        while self.idx < self.bytes.len() && self.peek_byte() != b'\n' {
+                        while self.index < self.bytes.len() && self.peek_byte() != b'\n' {
                             self.advance();
                         }
                     } else {
@@ -317,14 +324,14 @@ impl<'a> Lexer<'a> {
     }
 
     fn advance(&mut self) {
-        if self.idx < self.bytes.len() {
-            if self.bytes[self.idx] == b'\n' {
+        if self.index < self.bytes.len() {
+            if self.bytes[self.index] == b'\n' {
                 self.line += 1;
-                self.col = 1;
+                self.column = 1;
             } else {
-                self.col += 1;
+                self.column += 1;
             }
-            self.idx += 1;
+            self.index += 1;
         }
     }
 
@@ -335,14 +342,14 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek_byte(&self) -> u8 {
-        self.bytes[self.idx]
+        self.bytes[self.index]
     }
 
     fn peek_char(&self) -> char {
-        self.bytes[self.idx] as char
+        self.bytes[self.index] as char
     }
 
-    fn match_bytes(&self, s: &[u8]) -> bool {
-        self.bytes.get(self.idx..self.idx + s.len()) == Some(s)
+    fn match_bytes(&self, bytes: &[u8]) -> bool {
+        self.bytes.get(self.index..self.index + bytes.len()) == Some(bytes)
     }
 }
