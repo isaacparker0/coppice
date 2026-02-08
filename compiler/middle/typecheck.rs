@@ -67,10 +67,7 @@ impl<'a> Checker<'a> {
         self.scopes.pop();
 
         if !self.saw_return {
-            self.error(
-                "missing return in function body",
-                func.body.span.clone(),
-            );
+            self.error("missing return in function body", func.body.span.clone());
         }
     }
 
@@ -86,17 +83,17 @@ impl<'a> Checker<'a> {
     fn check_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::Let {
-                name,
-                expr,
-                span,
-                ..
+                name, expr, span, ..
             } => {
                 let ty = self.check_expr(expr);
                 self.define_var(name.clone(), ty, span.clone());
             }
             Stmt::Return { expr, span: _ } => {
                 let ty = self.check_expr(expr);
-                if self.current_return != Type::Unknown && ty != Type::Unknown && ty != self.current_return {
+                if self.current_return != Type::Unknown
+                    && ty != Type::Unknown
+                    && ty != self.current_return
+                {
                     self.error(
                         format!(
                             "return type mismatch: expected {}, got {}",
@@ -128,16 +125,18 @@ impl<'a> Checker<'a> {
             Expr::BoolLiteral { .. } => Type::Boolean,
             Expr::StringLiteral { .. } => Type::String,
             Expr::Ident { name, span } => self.resolve_var(name, span),
-            Expr::Binary { op, left, right, span: _ } => {
+            Expr::Binary {
+                op,
+                left,
+                right,
+                span: _,
+            } => {
                 let l = self.check_expr(left);
                 let r = self.check_expr(right);
                 match op {
                     BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
                         if l != Type::Int64 || r != Type::Int64 {
-                            self.error(
-                                "arithmetic operators require int64 operands",
-                                left.span(),
-                            );
+                            self.error("arithmetic operators require int64 operands", left.span());
                             return Type::Unknown;
                         }
                         Type::Int64

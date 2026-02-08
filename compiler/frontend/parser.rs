@@ -72,18 +72,16 @@ impl Parser {
             if self.expect_symbol(Symbol::Colon).is_none() {
                 break;
             }
-            let Some(ty) = self.parse_type_name() else { break };
+            let Some(ty) = self.parse_type_name() else {
+                break;
+            };
             let span = Span {
                 start: name_span.start,
                 end: ty.span.end,
                 line: name_span.line,
                 col: name_span.col,
             };
-            params.push(Param {
-                name,
-                ty,
-                span,
-            });
+            params.push(Param { name, ty, span });
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
             }

@@ -267,7 +267,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn error_token(&mut self, message: impl Into<String>, start: usize, line: usize, col: usize) -> Token {
+    fn error_token(
+        &mut self,
+        message: impl Into<String>,
+        start: usize,
+        line: usize,
+        col: usize,
+    ) -> Token {
         let message = message.into();
         self.diagnostics.push(Diagnostic::new(
             message.clone(),

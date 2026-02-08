@@ -1,7 +1,15 @@
+load("@aspect_rules_lint//format:defs.bzl", "format_multirun")
 load("@rules_rust//cargo:defs.bzl", "extract_cargo_lints")
 
 extract_cargo_lints(
     name = "cargo_lints",
     manifest = "//:Cargo.toml",
+    visibility = ["//visibility:public"],
+)
+
+format_multirun(
+    name = "format",
+    rust = "@rules_rust//rust/toolchain:current_rustfmt_toolchain",
+    starlark = "@buildifier_prebuilt//:buildifier",
     visibility = ["//visibility:public"],
 )

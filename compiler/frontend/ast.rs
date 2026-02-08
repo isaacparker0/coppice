@@ -48,10 +48,22 @@ pub enum Stmt {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    IntLiteral { value: i64, span: Span },
-    BoolLiteral { value: bool, span: Span },
-    StringLiteral { value: String, span: Span },
-    Ident { name: String, span: Span },
+    IntLiteral {
+        value: i64,
+        span: Span,
+    },
+    BoolLiteral {
+        value: bool,
+        span: Span,
+    },
+    StringLiteral {
+        value: String,
+        span: Span,
+    },
+    Ident {
+        name: String,
+        span: Span,
+    },
     Binary {
         op: BinOp,
         left: Box<Expr>,

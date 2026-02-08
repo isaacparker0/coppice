@@ -8,3 +8,4 @@ common --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 common --output_groups=+clippy_checks
 
 common:strict --@rules_rust//rust/settings:clippy_flags=-D,warnings
+common:strict --@rules_rust//rust/settings:rustc_flags=-D,warnings

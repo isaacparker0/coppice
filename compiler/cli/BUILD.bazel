@@ -3,9 +3,9 @@ load("//tools/bazel/macros:rust.bzl", "rust_binary")
 rust_binary(
     name = "main",
     srcs = ["main.rs"],
+    visibility = ["//visibility:public"],
     deps = [
         "//compiler/frontend",
         "//compiler/middle",
     ],
-    visibility = ["//visibility:public"],
 )
