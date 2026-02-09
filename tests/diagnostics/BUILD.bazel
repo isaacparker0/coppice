@@ -1,0 +1,10 @@
+load("//tools/bazel/macros:rust.bzl", "rust_test")
+
+rust_test(
+    name = "diagnostics_test",
+    srcs = ["diagnostics_test.rs"],
+    data = [
+        "//compiler/cli:main",
+    ] + glob(["**"]),
+    deps = ["@rules_rust//tools/runfiles"],
+)

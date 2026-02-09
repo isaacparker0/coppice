@@ -71,13 +71,12 @@ impl Parser {
             return parameters;
         }
         loop {
-            match self.parse_parameter() {
-                Some(parameter) => parameters.push(parameter),
-                None => {
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
-                    if self.peek_is_symbol(Symbol::RightParen) {
-                        break;
-                    }
+            if let Some(parameter) = self.parse_parameter() {
+                parameters.push(parameter);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
+                if self.peek_is_symbol(Symbol::RightParen) {
+                    break;
                 }
             }
 
