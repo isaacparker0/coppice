@@ -1,0 +1,7 @@
+# exit: 1
+input/main.lang0:2:7: error: unexpected '='; use '==' for equality
+      x = 1
+        ^
+input/main.lang0:2:7: error: expected symbol
+      x = 1
+        ^

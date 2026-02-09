@@ -1,0 +1,5 @@
+function foo() -> int64 {
+    x := 1
+    x := 2
+    return x
+}

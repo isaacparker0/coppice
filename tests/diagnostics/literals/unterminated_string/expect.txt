@@ -1,0 +1,7 @@
+# exit: 1
+input/main.lang0:2:10: error: unterminated string literal
+      x := "abc
+           ^
+input/main.lang0:2:10: error: unterminated string literal
+      x := "abc
+           ^
