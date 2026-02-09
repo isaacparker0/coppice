@@ -1,5 +1,6 @@
 use crate::ast::{
-    BinaryOperator, Block, Expression, File, Function, Parameter, Statement, TypeName,
+    BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
+    Statement, TypeName,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -24,24 +25,34 @@ impl Parser {
     }
 
     pub fn parse_file(&mut self) -> File {
-        let mut functions = Vec::new();
+        let mut constant_declarations = Vec::new();
+        let mut function_declarations = Vec::new();
         while !self.at_eof() {
             if self.peek_is_keyword(Keyword::Function) {
                 if let Some(function) = self.parse_function() {
-                    functions.push(function);
+                    function_declarations.push(function);
+                } else {
+                    self.synchronize();
+                }
+            } else if self.peek_is_identifier() {
+                if let Some(constant) = self.parse_constant_declaration() {
+                    constant_declarations.push(constant);
                 } else {
                     self.synchronize();
                 }
             } else {
                 let span = self.peek_span();
-                self.error("expected 'function'", span);
+                self.error("expected declaration", span);
                 self.synchronize();
             }
         }
-        File { functions }
+        File {
+            constant_declarations,
+            function_declarations,
+        }
     }
 
-    fn parse_function(&mut self) -> Option<Function> {
+    fn parse_function(&mut self) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let name = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParen)?;
@@ -51,7 +62,7 @@ impl Parser {
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
-        Some(Function {
+        Some(FunctionDeclaration {
             name: name.0,
             parameters,
             return_type,
@@ -62,6 +73,23 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             },
+        })
+    }
+
+    fn parse_constant_declaration(&mut self) -> Option<ConstantDeclaration> {
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::Assign)?;
+        let expression = self.parse_expression()?;
+        let span = Span {
+            start: name_span.start,
+            end: expression.span().end,
+            line: name_span.line,
+            column: name_span.column,
+        };
+        Some(ConstantDeclaration {
+            name,
+            expression,
+            span,
         })
     }
 
@@ -337,6 +365,10 @@ impl Parser {
         matches!(self.peek().kind, TokenKind::Keyword(found) if found == keyword)
     }
 
+    fn peek_is_identifier(&self) -> bool {
+        matches!(self.peek().kind, TokenKind::Identifier(_))
+    }
+
     fn peek_is_symbol(&self, symbol: Symbol) -> bool {
         matches!(self.peek().kind, TokenKind::Symbol(found) if found == symbol)
     }
@@ -367,7 +399,7 @@ impl Parser {
 
     fn synchronize(&mut self) {
         while !self.at_eof() {
-            if self.peek_is_keyword(Keyword::Function) {
+            if self.peek_is_keyword(Keyword::Function) || self.peek_is_identifier() {
                 return;
             }
             self.advance();

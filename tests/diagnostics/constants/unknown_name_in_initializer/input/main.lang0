@@ -1,0 +1,5 @@
+BROKEN := MISSING
+
+function foo() -> int64 {
+    return 1
+}

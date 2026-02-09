@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
-use compiler__frontend::{BinaryOperator, Diagnostic, Expression, File, Span, Statement};
+use compiler__frontend::{
+    BinaryOperator, ConstantDeclaration, Diagnostic, Expression, File, Span, Statement,
+};
 
 use crate::types::{Type, type_from_name};
 
 #[must_use]
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    for function in &file.functions {
-        let mut checker = Checker::new(&mut diagnostics);
+    let mut checker = Checker::new(&mut diagnostics);
+    checker.check_constant_declarations(&file.constant_declarations);
+    for function in &file.function_declarations {
         checker.check_function(function);
     }
     diagnostics
@@ -20,7 +23,12 @@ struct VariableInfo {
     span: Span,
 }
 
+struct ConstantInfo {
+    value_type: Type,
+}
+
 struct Checker<'a> {
+    constants: HashMap<String, ConstantInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
@@ -30,6 +38,7 @@ struct Checker<'a> {
 impl<'a> Checker<'a> {
     fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
         Self {
+            constants: HashMap::new(),
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
@@ -37,7 +46,22 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_function(&mut self, function: &compiler__frontend::Function) {
+    fn check_constant_declarations(&mut self, constants: &[ConstantDeclaration]) {
+        for constant in constants {
+            let value_type = self.check_expression(&constant.expression);
+            if self.constants.contains_key(&constant.name) {
+                self.error(
+                    format!("duplicate constant '{name}'", name = constant.name),
+                    constant.span.clone(),
+                );
+                continue;
+            }
+            self.constants
+                .insert(constant.name.clone(), ConstantInfo { value_type });
+        }
+    }
+
+    fn check_function(&mut self, function: &compiler__frontend::FunctionDeclaration) {
         self.scopes.push(HashMap::new());
         self.saw_return = false;
 
@@ -194,6 +218,9 @@ impl<'a> Checker<'a> {
                 info.used = true;
                 return info.value_type.clone();
             }
+        }
+        if let Some(info) = self.constants.get(name) {
+            return info.value_type.clone();
         }
         self.error(format!("unknown name '{name}'"), span.clone());
         Type::Unknown

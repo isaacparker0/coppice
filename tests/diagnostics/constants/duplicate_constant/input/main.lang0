@@ -1,0 +1,6 @@
+FOO := 1
+FOO := 2
+
+function foo() -> int64 {
+    return FOO
+}

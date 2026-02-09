@@ -2,11 +2,19 @@ use crate::diagnostics::Span;
 
 #[derive(Clone, Debug)]
 pub struct File {
-    pub functions: Vec<Function>,
+    pub constant_declarations: Vec<ConstantDeclaration>,
+    pub function_declarations: Vec<FunctionDeclaration>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Function {
+pub struct ConstantDeclaration {
+    pub name: String,
+    pub expression: Expression,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct FunctionDeclaration {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub return_type: TypeName,
