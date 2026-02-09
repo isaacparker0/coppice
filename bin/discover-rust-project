@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# Wrapper script for Rust analyzer project discovery:
+# - https://bazelbuild.github.io/rules_rust/rust_analyzer.html#project-auto-discovery
+
+set -uo pipefail
+
+# Suppress stderr - rust-analyzer treats any stderr output as an error.
+exec 2>/dev/null
+
+# Pass through the argument from rust-analyzer (JSON-encoded file path).
+# Exclude lint aspects so discovery works even with compile errors.
+# See: https://github.com/bazelbuild/rules_rust/issues/1372
+bazel run @rules_rust//tools/rust_analyzer:discover_bazel_rust_project -- \
+	--bazel_arg=--output_groups=-clippy_checks,-rust_linter \
+	${1:+"$1"}
