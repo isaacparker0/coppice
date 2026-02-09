@@ -1,0 +1,4 @@
+function keep() -> int64 {
+    x := 1
+    return x
+}
