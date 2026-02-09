@@ -72,6 +72,11 @@ pub enum Expression {
         name: String,
         span: Span,
     },
+    Call {
+        callee: Box<Expression>,
+        arguments: Vec<Expression>,
+        span: Span,
+    },
     Binary {
         operator: BinaryOperator,
         left: Box<Expression>,

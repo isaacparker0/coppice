@@ -10,6 +10,7 @@ use crate::types::{Type, type_from_name};
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut checker = Checker::new(&mut diagnostics);
+    checker.collect_function_signatures(&file.function_declarations);
     checker.check_constant_declarations(&file.constant_declarations);
     for function in &file.function_declarations {
         checker.check_function(function);
@@ -27,8 +28,14 @@ struct ConstantInfo {
     value_type: Type,
 }
 
+struct FunctionInfo {
+    parameter_types: Vec<Type>,
+    return_type: Type,
+}
+
 struct Checker<'a> {
     constants: HashMap<String, ConstantInfo>,
+    functions: HashMap<String, FunctionInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
@@ -39,10 +46,54 @@ impl<'a> Checker<'a> {
     fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
         Self {
             constants: HashMap::new(),
+            functions: HashMap::new(),
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
             saw_return: false,
+        }
+    }
+
+    fn collect_function_signatures(
+        &mut self,
+        functions: &[compiler__frontend::FunctionDeclaration],
+    ) {
+        for function in functions {
+            if self.functions.contains_key(&function.name) {
+                self.error(
+                    format!("duplicate function '{}'", function.name),
+                    function.span.clone(),
+                );
+                continue;
+            }
+
+            let return_type = type_from_name(&function.return_type.name).unwrap_or(Type::Unknown);
+            if return_type == Type::Unknown {
+                self.error(
+                    format!("unknown return type '{}'", function.return_type.name),
+                    function.return_type.span.clone(),
+                );
+            }
+
+            let mut parameter_types = Vec::new();
+            for parameter in &function.parameters {
+                let value_type = type_from_name(&parameter.type_name.name).unwrap_or(Type::Unknown);
+                if value_type == Type::Unknown {
+                    self.error(
+                        format!("unknown type '{}'", parameter.type_name.name),
+                        parameter.type_name.span.clone(),
+                    );
+                }
+                parameter_types.push(value_type);
+            }
+
+            self.functions.insert(
+                function.name.clone(),
+                FunctionInfo {
+                    parameter_types,
+                    return_type,
+                },
+            );
         }
     }
 
@@ -65,23 +116,19 @@ impl<'a> Checker<'a> {
         self.scopes.push(HashMap::new());
         self.saw_return = false;
 
-        let return_type = type_from_name(&function.return_type.name).unwrap_or(Type::Unknown);
-        if return_type == Type::Unknown {
-            self.error(
-                format!("unknown return type '{}'", function.return_type.name),
-                function.return_type.span.clone(),
-            );
-        }
+        let (parameter_types, return_type) = if let Some(info) = self.functions.get(&function.name)
+        {
+            (info.parameter_types.clone(), info.return_type.clone())
+        } else {
+            (
+                Vec::new(),
+                type_from_name(&function.return_type.name).unwrap_or(Type::Unknown),
+            )
+        };
         self.current_return_type = return_type;
 
-        for parameter in &function.parameters {
-            let value_type = type_from_name(&parameter.type_name.name).unwrap_or(Type::Unknown);
-            if value_type == Type::Unknown {
-                self.error(
-                    format!("unknown type '{}'", parameter.type_name.name),
-                    parameter.type_name.span.clone(),
-                );
-            }
+        for (index, parameter) in function.parameters.iter().enumerate() {
+            let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
             self.define_variable(parameter.name.clone(), value_type, parameter.span.clone());
         }
 
@@ -158,6 +205,69 @@ impl<'a> Checker<'a> {
             Expression::BooleanLiteral { .. } => Type::Boolean,
             Expression::StringLiteral { .. } => Type::String,
             Expression::Identifier { name, span } => self.resolve_variable(name, span),
+            Expression::Call {
+                callee,
+                arguments,
+                span,
+            } => {
+                let (function_name, name_span) =
+                    if let Expression::Identifier { name, span } = callee.as_ref() {
+                        (name.as_str(), span.clone())
+                    } else {
+                        self.error("invalid call target", callee.span());
+                        for argument in arguments {
+                            self.check_expression(argument);
+                        }
+                        return Type::Unknown;
+                    };
+
+                let (parameter_types, return_type) =
+                    if let Some(info) = self.functions.get(function_name) {
+                        (info.parameter_types.clone(), info.return_type.clone())
+                    } else {
+                        self.error(
+                            format!("unknown function '{function_name}'"),
+                            name_span.clone(),
+                        );
+                        for argument in arguments {
+                            self.check_expression(argument);
+                        }
+                        return Type::Unknown;
+                    };
+
+                if arguments.len() != parameter_types.len() {
+                    self.error(
+                        format!(
+                            "expected {} arguments, got {}",
+                            parameter_types.len(),
+                            arguments.len()
+                        ),
+                        span.clone(),
+                    );
+                }
+
+                for (index, argument) in arguments.iter().enumerate() {
+                    let argument_type = self.check_expression(argument);
+                    if let Some(expected_type) = parameter_types.get(index)
+                        && *expected_type != Type::Unknown
+                        && argument_type != Type::Unknown
+                        && argument_type != *expected_type
+                    {
+                        self.error(
+                            format!(
+                                "argument {} to '{}' must be {}, got {}",
+                                index + 1,
+                                function_name,
+                                expected_type.name(),
+                                argument_type.name()
+                            ),
+                            argument.span(),
+                        );
+                    }
+                }
+
+                return_type
+            }
             Expression::Binary {
                 operator,
                 left,
@@ -257,6 +367,7 @@ impl ExpressionSpan for Expression {
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }
+            | Expression::Call { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }
     }

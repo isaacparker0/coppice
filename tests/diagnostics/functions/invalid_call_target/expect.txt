@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:13: error: invalid call target
+      return (1)(2)
+              ^

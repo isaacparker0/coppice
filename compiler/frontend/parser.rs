@@ -267,7 +267,7 @@ impl Parser {
     }
 
     fn parse_multiplicative(&mut self) -> Option<Expression> {
-        let mut expression = self.parse_primary()?;
+        let mut expression = self.parse_postfix()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Star) {
                 BinaryOperator::Multiply
@@ -277,7 +277,7 @@ impl Parser {
                 break;
             };
             let operator_span = self.advance().span.clone();
-            let right = self.parse_primary()?;
+            let right = self.parse_postfix()?;
             let span = Span {
                 start: expression.span().start,
                 end: right.span().end,
@@ -292,6 +292,57 @@ impl Parser {
             };
         }
         Some(expression)
+    }
+
+    fn parse_postfix(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_primary()?;
+        loop {
+            if !self.peek_is_symbol(Symbol::LeftParen) {
+                break;
+            }
+            let left_paren = self.expect_symbol(Symbol::LeftParen)?;
+            let arguments = self.parse_arguments();
+            let right_paren = self.expect_symbol(Symbol::RightParen)?;
+            let span = Span {
+                start: expression.span().start,
+                end: right_paren.end,
+                line: left_paren.line,
+                column: left_paren.column,
+            };
+            expression = Expression::Call {
+                callee: Box::new(expression),
+                arguments,
+                span,
+            };
+        }
+        Some(expression)
+    }
+
+    fn parse_arguments(&mut self) -> Vec<Expression> {
+        let mut arguments = Vec::new();
+        if self.peek_is_symbol(Symbol::RightParen) {
+            return arguments;
+        }
+        loop {
+            if let Some(argument) = self.parse_expression() {
+                arguments.push(argument);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
+                if self.peek_is_symbol(Symbol::RightParen) {
+                    break;
+                }
+            }
+
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                if self.peek_is_symbol(Symbol::RightParen) {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        arguments
     }
 
     fn parse_primary(&mut self) -> Option<Expression> {
@@ -439,6 +490,7 @@ impl ExpressionSpan for Expression {
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }
+            | Expression::Call { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }
     }

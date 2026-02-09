@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:12: error: unknown function 'missing'
+      return missing(1)
+             ^

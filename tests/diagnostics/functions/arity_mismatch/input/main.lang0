@@ -3,6 +3,5 @@ function add(a: int64, b: int64) -> int64 {
 }
 
 function main() -> int64 {
-    result := add(1, 2)
-    return result
+    return add(1)
 }

@@ -1,5 +1,3 @@
-# https://github.com/bazelbuild/rules_rust/blob/main/examples/all_crate_deps/Cargo.toml
-
 [package]
 name = "all_crate_deps"
 version = "0.0.0"
