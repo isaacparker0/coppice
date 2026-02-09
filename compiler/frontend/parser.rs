@@ -70,29 +70,44 @@ impl Parser {
         if self.peek_is_symbol(Symbol::RightParen) {
             return parameters;
         }
-        while let Some((name, name_span)) = self.expect_identifier() {
-            if self.expect_symbol(Symbol::Colon).is_none() {
-                break;
+        loop {
+            match self.parse_parameter() {
+                Some(parameter) => parameters.push(parameter),
+                None => {
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
+                    if self.peek_is_symbol(Symbol::RightParen) {
+                        break;
+                    }
+                }
             }
-            let Some(type_name) = self.parse_type_name() else {
-                break;
-            };
-            let span = Span {
-                start: name_span.start,
-                end: type_name.span.end,
-                line: name_span.line,
-                column: name_span.column,
-            };
-            parameters.push(Parameter {
-                name,
-                type_name,
-                span,
-            });
+
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
+                if self.peek_is_symbol(Symbol::RightParen) {
+                    break;
+                }
+                continue;
             }
+            break;
         }
         parameters
+    }
+
+    fn parse_parameter(&mut self) -> Option<Parameter> {
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::Colon)?;
+        let type_name = self.parse_type_name()?;
+        let span = Span {
+            start: name_span.start,
+            end: type_name.span.end,
+            line: name_span.line,
+            column: name_span.column,
+        };
+        Some(Parameter {
+            name,
+            type_name,
+            span,
+        })
     }
 
     fn parse_block(&mut self) -> Option<Block> {
@@ -354,6 +369,15 @@ impl Parser {
     fn synchronize(&mut self) {
         while !self.at_eof() {
             if self.peek_is_keyword(Keyword::Function) {
+                return;
+            }
+            self.advance();
+        }
+    }
+
+    fn synchronize_list_item(&mut self, separator: Symbol, end: Symbol) {
+        while !self.at_eof() {
+            if self.peek_is_symbol(separator) || self.peek_is_symbol(end) {
                 return;
             }
             self.advance();

@@ -594,7 +594,7 @@ platform/auth/token_test.lang
 ### Naming Conventions (Compiler-Enforced)
 
 - Types: `PascalCase`.
-- Functions and variables: `snake_case`.
+- Functions and variables: `camelCase`.
 - Module-level constants: `SCREAMING_SNAKE_CASE`.
 - Acronyms follow casing rules: `HttpServer`, not `HTTPServer`.
 
