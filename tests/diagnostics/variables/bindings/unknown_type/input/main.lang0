@@ -1,0 +1,4 @@
+function nope() -> int64 {
+    x: foo := 1
+    return x
+}

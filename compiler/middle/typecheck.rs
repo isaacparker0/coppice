@@ -158,11 +158,30 @@ impl<'a> Checker<'a> {
         match statement {
             Statement::Let {
                 name,
+                type_name,
                 expression,
                 span,
                 ..
             } => {
                 let value_type = self.check_expression(expression);
+                if let Some(type_name) = type_name {
+                    let annotated_type = type_from_name(&type_name.name).unwrap_or(Type::Unknown);
+                    if annotated_type == Type::Unknown {
+                        self.error(
+                            format!("unknown type '{}'", type_name.name),
+                            type_name.span.clone(),
+                        );
+                    } else if value_type != Type::Unknown && value_type != annotated_type {
+                        self.error(
+                            format!(
+                                "type mismatch: expected {}, got {}",
+                                annotated_type.name(),
+                                value_type.name()
+                            ),
+                            expression.span(),
+                        );
+                    }
+                }
                 self.define_variable(name.clone(), value_type, span.clone());
             }
             Statement::Return {

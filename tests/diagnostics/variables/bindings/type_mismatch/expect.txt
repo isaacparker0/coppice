@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:19: error: type mismatch: expected boolean, got int64
+      x: boolean := 1
+                    ^

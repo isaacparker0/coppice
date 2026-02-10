@@ -40,6 +40,7 @@ pub enum Statement {
     Let {
         name: String,
         mutable: bool,
+        type_name: Option<TypeName>,
         expression: Expression,
         span: Span,
     },

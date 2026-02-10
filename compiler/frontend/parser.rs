@@ -200,6 +200,12 @@ impl Parser {
         };
 
         if let Some((name, name_span)) = self.expect_identifier() {
+            let type_name = if self.peek_is_symbol(Symbol::Colon) {
+                self.advance();
+                Some(self.parse_type_name()?)
+            } else {
+                None
+            };
             self.expect_symbol(Symbol::Assign)?;
             let expression = self.parse_expression()?;
             let span = Span {
@@ -211,6 +217,7 @@ impl Parser {
             return Some(Statement::Let {
                 name,
                 mutable,
+                type_name,
                 expression,
                 span,
             });

@@ -1,0 +1,4 @@
+function nope() -> int64 {
+    x: boolean := 1
+    return x
+}

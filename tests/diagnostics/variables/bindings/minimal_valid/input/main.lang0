@@ -1,4 +1,4 @@
 function keep() -> int64 {
-    mut x := 1
+    mut x: int64 := 1
     return x
 }
