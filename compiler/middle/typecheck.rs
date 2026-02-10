@@ -452,6 +452,13 @@ impl<'a> Checker<'a> {
                         }
                         Type::Boolean
                     }
+                    UnaryOperator::Negate => {
+                        if value_type != Type::Integer64 && value_type != Type::Unknown {
+                            self.error("unary minus requires int64 operand", expression.span());
+                            return Type::Unknown;
+                        }
+                        Type::Integer64
+                    }
                 }
             }
         }

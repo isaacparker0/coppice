@@ -144,6 +144,7 @@ pub enum BinaryOperator {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UnaryOperator {
     Not,
+    Negate,
 }
 
 #[derive(Clone, Debug)]

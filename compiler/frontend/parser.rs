@@ -563,6 +563,21 @@ impl Parser {
                 span,
             });
         }
+        if self.peek_is_symbol(Symbol::Minus) {
+            let operator_span = self.advance().span.clone();
+            let expression = self.parse_unary()?;
+            let span = Span {
+                start: operator_span.start,
+                end: expression.span().end,
+                line: operator_span.line,
+                column: operator_span.column,
+            };
+            return Some(Expression::Unary {
+                operator: UnaryOperator::Negate,
+                expression: Box::new(expression),
+                span,
+            });
+        }
         self.parse_postfix()
     }
 
