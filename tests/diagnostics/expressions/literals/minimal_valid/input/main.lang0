@@ -1,0 +1,11 @@
+function flag() -> boolean {
+    return true
+}
+
+function value() -> int64 {
+    return 42
+}
+
+function greet() -> string {
+    return "ok"
+}
