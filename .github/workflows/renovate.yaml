@@ -26,6 +26,7 @@ jobs:
                   LOG_LEVEL: debug
                   RENOVATE_REPOSITORIES: ${{ github.repository }}
                   RENOVATE_BASE_BRANCH: ${{ github.ref_name }}
+                  RENOVATE_ONBOARDING: "false"
                   RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
                   RENOVATE_ALLOWED_COMMANDS: .*
                   RENOVATE_CONFIG_VALIDATION_ERROR: true
