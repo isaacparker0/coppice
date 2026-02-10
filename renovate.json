@@ -18,6 +18,7 @@
         "bazelisk",
         "bazel-module",
         "cargo",
+        "custom.regex",
         "github-actions"
     ],
     "packageRules": [
