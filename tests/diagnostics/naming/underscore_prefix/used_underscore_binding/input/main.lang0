@@ -1,0 +1,4 @@
+function demo() -> int64 {
+    _value := 1
+    return _value
+}
