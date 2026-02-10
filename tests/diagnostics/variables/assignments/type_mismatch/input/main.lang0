@@ -1,0 +1,5 @@
+function nope() -> int64 {
+    mut x := 1
+    x = true
+    return x
+}

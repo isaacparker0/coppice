@@ -6,6 +6,5 @@ common --sandbox_default_allow_network=false
 common --aspects=//tools/bazel/aspects:wrapper_check.bzl%wrapper_check_aspect
 common --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 common --output_groups=+clippy_checks
-
-common:strict --@rules_rust//rust/settings:clippy_flags=-D,warnings
-common:strict --@rules_rust//rust/settings:extra_rustc_flags=-D,warnings
+common --@rules_rust//rust/settings:clippy_flags=-D,warnings
+common --@rules_rust//rust/settings:extra_rustc_flags=-D,warnings

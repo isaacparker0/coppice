@@ -22,6 +22,7 @@ pub fn check_file(file: &File) -> Vec<Diagnostic> {
 struct VariableInfo {
     value_type: Type,
     used: bool,
+    mutable: bool,
     span: Span,
 }
 
@@ -124,7 +125,12 @@ impl<'a> Checker<'a> {
 
         for (index, parameter) in function.parameters.iter().enumerate() {
             let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
-            self.define_variable(parameter.name.clone(), value_type, parameter.span.clone());
+            self.define_variable(
+                parameter.name.clone(),
+                value_type,
+                false,
+                parameter.span.clone(),
+            );
         }
 
         let body_returns = self.check_block(&function.body);
@@ -158,6 +164,7 @@ impl<'a> Checker<'a> {
         match statement {
             Statement::Let {
                 name,
+                mutable,
                 type_name,
                 expression,
                 span,
@@ -182,7 +189,44 @@ impl<'a> Checker<'a> {
                         );
                     }
                 }
-                self.define_variable(name.clone(), value_type, span.clone());
+                self.define_variable(name.clone(), value_type, *mutable, span.clone());
+                false
+            }
+            Statement::Assign {
+                name,
+                name_span,
+                expression,
+                ..
+            } => {
+                let value_type = self.check_expression(expression);
+                if let Some((is_mutable, variable_type)) = self.lookup_variable_for_assignment(name)
+                {
+                    if !is_mutable {
+                        self.error(
+                            format!("cannot assign to immutable binding '{name}'"),
+                            name_span.clone(),
+                        );
+                    } else if variable_type != Type::Unknown
+                        && value_type != Type::Unknown
+                        && variable_type != value_type
+                    {
+                        self.error(
+                            format!(
+                                "assignment type mismatch: expected {}, got {}",
+                                variable_type.name(),
+                                value_type.name()
+                            ),
+                            expression.span(),
+                        );
+                    }
+                } else if self.constants.contains_key(name) {
+                    self.error(
+                        format!("cannot assign to constant '{name}'"),
+                        name_span.clone(),
+                    );
+                } else {
+                    self.error(format!("unknown name '{name}'"), name_span.clone());
+                }
                 false
             }
             Statement::Return {
@@ -327,7 +371,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn define_variable(&mut self, name: String, value_type: Type, span: Span) {
+    fn define_variable(&mut self, name: String, value_type: Type, mutable: bool, span: Span) {
         let duplicate = self
             .scopes
             .last()
@@ -341,6 +385,7 @@ impl<'a> Checker<'a> {
                 VariableInfo {
                     value_type,
                     used: false,
+                    mutable,
                     span,
                 },
             );
@@ -359,6 +404,16 @@ impl<'a> Checker<'a> {
         }
         self.error(format!("unknown name '{name}'"), span.clone());
         Type::Unknown
+    }
+
+    fn lookup_variable_for_assignment(&mut self, name: &str) -> Option<(bool, Type)> {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(info) = scope.get_mut(name) {
+                info.used = true;
+                return Some((info.mutable, info.value_type.clone()));
+            }
+        }
+        None
     }
 
     fn check_unused_in_current_scope(&mut self) {

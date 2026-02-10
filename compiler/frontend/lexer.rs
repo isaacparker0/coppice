@@ -24,6 +24,7 @@ pub enum Symbol {
     Assign,
     Arrow,
     EqualEqual,
+    Equal,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -127,8 +128,7 @@ impl<'a> Lexer<'a> {
                 if self.match_bytes(b"==") {
                     self.single(Symbol::EqualEqual, 2, start, line, column)
                 } else {
-                    self.advance();
-                    self.error_token("unexpected '='; use '==' for equality", start, line, column)
+                    self.single(Symbol::Equal, 1, start, line, column)
                 }
             }
             b'"' => self.lex_string(start, line, column),

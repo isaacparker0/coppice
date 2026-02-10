@@ -1,0 +1,6 @@
+ANSWER := 1
+
+function nope() -> int64 {
+    ANSWER = 2
+    return ANSWER
+}

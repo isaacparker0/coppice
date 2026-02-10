@@ -44,6 +44,12 @@ pub enum Statement {
         expression: Expression,
         span: Span,
     },
+    Assign {
+        name: String,
+        name_span: Span,
+        expression: Expression,
+        span: Span,
+    },
     Return {
         expression: Expression,
         span: Span,
