@@ -169,15 +169,25 @@ impl Parser {
             let start = self.expect_keyword(Keyword::If)?;
             let condition = self.parse_expression()?;
             let then_block = self.parse_block()?;
+            let else_block = if self.peek_is_keyword(Keyword::Else) {
+                self.advance();
+                Some(self.parse_block()?)
+            } else {
+                None
+            };
+            let end_span = else_block
+                .as_ref()
+                .map_or_else(|| then_block.span.clone(), |block| block.span.clone());
             let span = Span {
                 start: start.start,
-                end: then_block.span.end,
+                end: end_span.end,
                 line: start.line,
                 column: start.column,
             };
             return Some(Statement::If {
                 condition,
                 then_block,
+                else_block,
                 span,
             });
         }

@@ -5,6 +5,7 @@ pub enum Keyword {
     Function,
     Return,
     If,
+    Else,
     Mut,
 }
 
@@ -258,6 +259,7 @@ impl<'a> Lexer<'a> {
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
+            "else" => TokenKind::Keyword(Keyword::Else),
             "mut" => TokenKind::Keyword(Keyword::Mut),
             "true" => TokenKind::BooleanLiteral(true),
             "false" => TokenKind::BooleanLiteral(false),

@@ -188,6 +188,7 @@ impl<'a> Checker<'a> {
             Statement::If {
                 condition,
                 then_block,
+                else_block,
                 ..
             } => {
                 let condition_type = self.check_expression(condition);
@@ -195,6 +196,9 @@ impl<'a> Checker<'a> {
                     self.error("if condition must be boolean", condition.span());
                 }
                 self.check_block(then_block);
+                if let Some(else_block) = else_block {
+                    self.check_block(else_block);
+                }
             }
         }
     }

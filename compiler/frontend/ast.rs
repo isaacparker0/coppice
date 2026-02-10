@@ -50,6 +50,7 @@ pub enum Statement {
     If {
         condition: Expression,
         then_block: Block,
+        else_block: Option<Block>,
         span: Span,
     },
 }
