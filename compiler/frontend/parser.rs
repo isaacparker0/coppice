@@ -392,6 +392,12 @@ impl Parser {
     fn parse_equality(&mut self) -> Option<Expression> {
         let mut expression = self.parse_comparison()?;
         loop {
+            if self.peek_is_symbol(Symbol::Equal) {
+                let operator_span = self.advance().span.clone();
+                self.error("unexpected '=' in expression", operator_span);
+                let _ = self.parse_comparison();
+                continue;
+            }
             let operator = if self.peek_is_symbol(Symbol::EqualEqual) {
                 BinaryOperator::EqualEqual
             } else if self.peek_is_symbol(Symbol::BangEqual) {

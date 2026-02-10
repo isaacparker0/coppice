@@ -1,0 +1,3 @@
+function main() -> boolean {
+    return 1 = 2
+}
