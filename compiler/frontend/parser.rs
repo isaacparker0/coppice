@@ -1,6 +1,6 @@
 use crate::ast::{
     BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
-    Statement, TypeName,
+    Statement, StructField, TypeDeclaration, TypeName,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -25,12 +25,19 @@ impl Parser {
     }
 
     pub fn parse_file(&mut self) -> File {
+        let mut type_declarations = Vec::new();
         let mut constant_declarations = Vec::new();
         let mut function_declarations = Vec::new();
         while !self.at_eof() {
             if self.peek_is_keyword(Keyword::Function) {
                 if let Some(function) = self.parse_function() {
                     function_declarations.push(function);
+                } else {
+                    self.synchronize();
+                }
+            } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
+                if let Some(type_declaration) = self.parse_type_declaration() {
+                    type_declarations.push(type_declaration);
                 } else {
                     self.synchronize();
                 }
@@ -47,9 +54,71 @@ impl Parser {
             }
         }
         File {
+            type_declarations,
             constant_declarations,
             function_declarations,
         }
+    }
+
+    fn parse_type_declaration(&mut self) -> Option<TypeDeclaration> {
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::DoubleColon)?;
+        self.expect_keyword(Keyword::Struct)?;
+        let start = name_span.clone();
+        self.expect_symbol(Symbol::LeftBrace)?;
+        let fields = self.parse_struct_fields();
+        let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+        let span = Span {
+            start: start.start,
+            end: right_brace.end,
+            line: start.line,
+            column: start.column,
+        };
+        Some(TypeDeclaration { name, fields, span })
+    }
+
+    fn parse_struct_fields(&mut self) -> Vec<StructField> {
+        let mut fields = Vec::new();
+        if self.peek_is_symbol(Symbol::RightBrace) {
+            return fields;
+        }
+        loop {
+            if let Some(field) = self.parse_struct_field() {
+                fields.push(field);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+            }
+
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        fields
+    }
+
+    fn parse_struct_field(&mut self) -> Option<StructField> {
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::Colon)?;
+        let type_name = self.parse_type_name()?;
+        let span = Span {
+            start: name_span.start,
+            end: type_name.span.end,
+            line: name_span.line,
+            column: name_span.column,
+        };
+        Some(StructField {
+            name,
+            type_name,
+            span,
+        })
     }
 
     fn parse_function(&mut self) -> Option<FunctionDeclaration> {
@@ -481,12 +550,27 @@ impl Parser {
         matches!(self.peek().kind, TokenKind::Symbol(found) if found == symbol)
     }
 
+    fn peek_second_is_symbol(&self, symbol: Symbol) -> bool {
+        matches!(self.peek_n(1).kind, TokenKind::Symbol(found) if found == symbol)
+    }
+
     fn at_eof(&self) -> bool {
         matches!(self.peek().kind, TokenKind::EndOfFile)
     }
 
     fn peek(&self) -> &Token {
         &self.tokens[self.position]
+    }
+
+    fn peek_n(&self, n: usize) -> &Token {
+        let index = self.position + n;
+        if index < self.tokens.len() {
+            &self.tokens[index]
+        } else {
+            self.tokens
+                .last()
+                .expect("token stream must include EOF token")
+        }
     }
 
     fn advance(&mut self) -> Token {

@@ -3,15 +3,17 @@ pub enum Type {
     Integer64,
     Boolean,
     String,
+    Named(String),
     Unknown,
 }
 
 impl Type {
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         match self {
             Type::Integer64 => "int64",
             Type::Boolean => "boolean",
             Type::String => "string",
+            Type::Named(name) => name.as_str(),
             Type::Unknown => "<unknown>",
         }
     }

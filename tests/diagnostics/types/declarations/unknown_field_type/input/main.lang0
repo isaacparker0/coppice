@@ -1,0 +1,3 @@
+User :: struct {
+    id: foo,
+}

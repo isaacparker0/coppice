@@ -7,6 +7,7 @@ pub enum Keyword {
     If,
     Else,
     Mut,
+    Struct,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +18,7 @@ pub enum Symbol {
     RightBrace,
     Comma,
     Colon,
+    DoubleColon,
     Plus,
     Minus,
     Star,
@@ -108,7 +110,9 @@ impl<'a> Lexer<'a> {
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
             b':' => {
-                if self.match_bytes(b":=") {
+                if self.match_bytes(b"::") {
+                    self.single(Symbol::DoubleColon, 2, start, line, column)
+                } else if self.match_bytes(b":=") {
                     self.single(Symbol::Assign, 2, start, line, column)
                 } else {
                     self.single(Symbol::Colon, 1, start, line, column)
@@ -261,6 +265,7 @@ impl<'a> Lexer<'a> {
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
             "mut" => TokenKind::Keyword(Keyword::Mut),
+            "struct" => TokenKind::Keyword(Keyword::Struct),
             "true" => TokenKind::BooleanLiteral(true),
             "false" => TokenKind::BooleanLiteral(false),
             _ => TokenKind::Identifier(text.to_string()),

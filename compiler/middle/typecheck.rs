@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use compiler__frontend::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
-    Span, Statement,
+    Span, Statement, TypeDeclaration,
 };
 
 use crate::types::{Type, type_from_name};
@@ -11,6 +11,7 @@ use crate::types::{Type, type_from_name};
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut checker = Checker::new(&mut diagnostics);
+    checker.collect_type_declarations(&file.type_declarations);
     checker.collect_function_signatures(&file.function_declarations);
     checker.check_constant_declarations(&file.constant_declarations);
     for function in &file.function_declarations {
@@ -30,6 +31,10 @@ struct ConstantInfo {
     value_type: Type,
 }
 
+struct TypeInfo {
+    fields: Vec<(String, Type)>,
+}
+
 struct FunctionInfo {
     parameter_types: Vec<Type>,
     return_type: Type,
@@ -37,6 +42,7 @@ struct FunctionInfo {
 
 struct Checker<'a> {
     constants: HashMap<String, ConstantInfo>,
+    types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
@@ -47,10 +53,50 @@ impl<'a> Checker<'a> {
     fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
         Self {
             constants: HashMap::new(),
+            types: HashMap::new(),
             functions: HashMap::new(),
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
+        }
+    }
+
+    fn collect_type_declarations(&mut self, types: &[TypeDeclaration]) {
+        for type_declaration in types {
+            if self.types.contains_key(&type_declaration.name) {
+                self.error(
+                    format!("duplicate type '{}'", type_declaration.name),
+                    type_declaration.span.clone(),
+                );
+                continue;
+            }
+            self.types.insert(
+                type_declaration.name.clone(),
+                TypeInfo { fields: Vec::new() },
+            );
+        }
+
+        for type_declaration in types {
+            let mut fields = Vec::new();
+            let mut seen = HashSet::new();
+            for field in &type_declaration.fields {
+                if !seen.insert(field.name.clone()) {
+                    self.error(
+                        format!(
+                            "duplicate field '{}' in '{}'",
+                            field.name, type_declaration.name
+                        ),
+                        field.span.clone(),
+                    );
+                    continue;
+                }
+                let field_type =
+                    self.resolve_type_name(&field.type_name.name, &field.type_name.span);
+                fields.push((field.name.clone(), field_type));
+            }
+            if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                info.fields = fields;
+            }
         }
     }
 
@@ -64,23 +110,13 @@ impl<'a> Checker<'a> {
                 continue;
             }
 
-            let return_type = type_from_name(&function.return_type.name).unwrap_or(Type::Unknown);
-            if return_type == Type::Unknown {
-                self.error(
-                    format!("unknown return type '{}'", function.return_type.name),
-                    function.return_type.span.clone(),
-                );
-            }
+            let return_type =
+                self.resolve_type_name(&function.return_type.name, &function.return_type.span);
 
             let mut parameter_types = Vec::new();
             for parameter in &function.parameters {
-                let value_type = type_from_name(&parameter.type_name.name).unwrap_or(Type::Unknown);
-                if value_type == Type::Unknown {
-                    self.error(
-                        format!("unknown type '{}'", parameter.type_name.name),
-                        parameter.type_name.span.clone(),
-                    );
-                }
+                let value_type =
+                    self.resolve_type_name(&parameter.type_name.name, &parameter.type_name.span);
                 parameter_types.push(value_type);
             }
 
@@ -118,7 +154,7 @@ impl<'a> Checker<'a> {
         } else {
             (
                 Vec::new(),
-                type_from_name(&function.return_type.name).unwrap_or(Type::Unknown),
+                self.resolve_type_name(&function.return_type.name, &function.return_type.span),
             )
         };
         self.current_return_type = return_type;
@@ -172,13 +208,11 @@ impl<'a> Checker<'a> {
             } => {
                 let value_type = self.check_expression(expression);
                 if let Some(type_name) = type_name {
-                    let annotated_type = type_from_name(&type_name.name).unwrap_or(Type::Unknown);
-                    if annotated_type == Type::Unknown {
-                        self.error(
-                            format!("unknown type '{}'", type_name.name),
-                            type_name.span.clone(),
-                        );
-                    } else if value_type != Type::Unknown && value_type != annotated_type {
+                    let annotated_type = self.resolve_type_name(&type_name.name, &type_name.span);
+                    if annotated_type != Type::Unknown
+                        && value_type != Type::Unknown
+                        && value_type != annotated_type
+                    {
                         self.error(
                             format!(
                                 "type mismatch: expected {}, got {}",
@@ -433,6 +467,17 @@ impl<'a> Checker<'a> {
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(Diagnostic::new(message, span));
+    }
+
+    fn resolve_type_name(&mut self, name: &str, span: &Span) -> Type {
+        if let Some(builtin) = type_from_name(name) {
+            return builtin;
+        }
+        if self.types.contains_key(name) {
+            return Type::Named(name.to_string());
+        }
+        self.error(format!("unknown type '{name}'"), span.clone());
+        Type::Unknown
     }
 }
 
