@@ -1,0 +1,41 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["config:recommended", "customManagers:githubActionsVersions"],
+    "automerge": false,
+    "dependencyDashboard": false,
+    "enabled": true,
+    "lockFileMaintenance": { "enabled": false },
+    "prConcurrentLimit": 0,
+    "prHourlyLimit": 0,
+    "rangeStrategy": "bump",
+    "rebaseWhen": "conflicted",
+    "recreateWhen": "always",
+    "reviewers": [],
+    "semanticCommits": "disabled",
+    "separateMajorMinor": true,
+    "timezone": "America/New_York",
+    "enabledManagers": [
+        "bazelisk",
+        "bazel-module",
+        "cargo",
+        "github-actions"
+    ],
+    "packageRules": [
+        {
+            "matchManagers": ["bazelisk", "bazel-module"],
+            "postUpgradeTasks": {
+                "commands": ["bazel mod deps --lockfile_mode=update"],
+                "fileFilters": ["MODULE.bazel.lock"],
+                "executionMode": "branch"
+            }
+        },
+        {
+            "matchManagers": ["cargo"],
+            "postUpgradeTasks": {
+                "commands": ["bazel mod deps --lockfile_mode=update"],
+                "fileFilters": ["MODULE.bazel.lock"],
+                "executionMode": "branch"
+            }
+        }
+    ]
+}
