@@ -409,12 +409,22 @@ impl<'a> Checker<'a> {
                         }
                         Type::Integer64
                     }
-                    BinaryOperator::EqualEqual => {
+                    BinaryOperator::EqualEqual | BinaryOperator::NotEqual => {
                         if left_type != right_type
                             && left_type != Type::Unknown
                             && right_type != Type::Unknown
                         {
-                            self.error("== operands must have same type", left.span());
+                            self.error("equality operators require same type", left.span());
+                            return Type::Unknown;
+                        }
+                        Type::Boolean
+                    }
+                    BinaryOperator::LessThan
+                    | BinaryOperator::LessThanOrEqual
+                    | BinaryOperator::GreaterThan
+                    | BinaryOperator::GreaterThanOrEqual => {
+                        if left_type != Type::Integer64 || right_type != Type::Integer64 {
+                            self.error("comparison operators require int64 operands", left.span());
                             return Type::Unknown;
                         }
                         Type::Boolean

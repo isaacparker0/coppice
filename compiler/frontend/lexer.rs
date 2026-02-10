@@ -39,6 +39,10 @@ pub enum Symbol {
     Colon,
     DoubleColon,
     Dot,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
     Plus,
     Minus,
     Star,
@@ -46,6 +50,7 @@ pub enum Symbol {
     Assign,
     Arrow,
     EqualEqual,
+    BangEqual,
     Equal,
 }
 
@@ -130,6 +135,20 @@ impl<'a> Lexer<'a> {
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
             b'.' => self.single(Symbol::Dot, 1, start, line, column),
+            b'<' => {
+                if self.match_bytes(b"<=") {
+                    self.single(Symbol::LessEqual, 2, start, line, column)
+                } else {
+                    self.single(Symbol::Less, 1, start, line, column)
+                }
+            }
+            b'>' => {
+                if self.match_bytes(b">=") {
+                    self.single(Symbol::GreaterEqual, 2, start, line, column)
+                } else {
+                    self.single(Symbol::Greater, 1, start, line, column)
+                }
+            }
             b':' => {
                 if self.match_bytes(b"::") {
                     self.single(Symbol::DoubleColon, 2, start, line, column)
@@ -149,6 +168,15 @@ impl<'a> Lexer<'a> {
             b'+' => self.single(Symbol::Plus, 1, start, line, column),
             b'*' => self.single(Symbol::Star, 1, start, line, column),
             b'/' => self.single(Symbol::Slash, 1, start, line, column),
+            b'!' => {
+                if self.match_bytes(b"!=") {
+                    self.single(Symbol::BangEqual, 2, start, line, column)
+                } else {
+                    let message = format!("unexpected character '{}'", self.peek_char());
+                    self.advance();
+                    self.error_token(message, start, line, column)
+                }
+            }
             b'=' => {
                 if self.match_bytes(b"==") {
                     self.single(Symbol::EqualEqual, 2, start, line, column)

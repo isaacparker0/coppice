@@ -390,8 +390,47 @@ impl Parser {
     }
 
     fn parse_equality(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_comparison()?;
+        loop {
+            let operator = if self.peek_is_symbol(Symbol::EqualEqual) {
+                BinaryOperator::EqualEqual
+            } else if self.peek_is_symbol(Symbol::BangEqual) {
+                BinaryOperator::NotEqual
+            } else {
+                break;
+            };
+            let operator_span = self.advance().span.clone();
+            let right = self.parse_comparison()?;
+            let span = Span {
+                start: expression.span().start,
+                end: right.span().end,
+                line: operator_span.line,
+                column: operator_span.column,
+            };
+            expression = Expression::Binary {
+                operator,
+                left: Box::new(expression),
+                right: Box::new(right),
+                span,
+            };
+        }
+        Some(expression)
+    }
+
+    fn parse_comparison(&mut self) -> Option<Expression> {
         let mut expression = self.parse_additive()?;
-        while self.peek_is_symbol(Symbol::EqualEqual) {
+        loop {
+            let operator = if self.peek_is_symbol(Symbol::Less) {
+                BinaryOperator::LessThan
+            } else if self.peek_is_symbol(Symbol::LessEqual) {
+                BinaryOperator::LessThanOrEqual
+            } else if self.peek_is_symbol(Symbol::Greater) {
+                BinaryOperator::GreaterThan
+            } else if self.peek_is_symbol(Symbol::GreaterEqual) {
+                BinaryOperator::GreaterThanOrEqual
+            } else {
+                break;
+            };
             let operator_span = self.advance().span.clone();
             let right = self.parse_additive()?;
             let span = Span {
@@ -401,7 +440,7 @@ impl Parser {
                 column: operator_span.column,
             };
             expression = Expression::Binary {
-                operator: BinaryOperator::EqualEqual,
+                operator,
                 left: Box::new(expression),
                 right: Box::new(right),
                 span,
