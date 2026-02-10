@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:16: error: not operator requires boolean operand
+      return not 1
+                 ^

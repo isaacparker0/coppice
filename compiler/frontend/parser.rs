@@ -1,6 +1,6 @@
 use crate::ast::{
     BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
-    Statement, StructField, StructLiteralField, TypeDeclaration, TypeName,
+    Statement, StructField, StructLiteralField, TypeDeclaration, TypeName, UnaryOperator,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -344,7 +344,49 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Option<Expression> {
-        self.parse_equality()
+        self.parse_or()
+    }
+
+    fn parse_or(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_and()?;
+        while self.peek_is_keyword(Keyword::Or) {
+            let operator_span = self.advance().span.clone();
+            let right = self.parse_and()?;
+            let span = Span {
+                start: expression.span().start,
+                end: right.span().end,
+                line: operator_span.line,
+                column: operator_span.column,
+            };
+            expression = Expression::Binary {
+                operator: BinaryOperator::Or,
+                left: Box::new(expression),
+                right: Box::new(right),
+                span,
+            };
+        }
+        Some(expression)
+    }
+
+    fn parse_and(&mut self) -> Option<Expression> {
+        let mut expression = self.parse_equality()?;
+        while self.peek_is_keyword(Keyword::And) {
+            let operator_span = self.advance().span.clone();
+            let right = self.parse_equality()?;
+            let span = Span {
+                start: expression.span().start,
+                end: right.span().end,
+                line: operator_span.line,
+                column: operator_span.column,
+            };
+            expression = Expression::Binary {
+                operator: BinaryOperator::And,
+                left: Box::new(expression),
+                right: Box::new(right),
+                span,
+            };
+        }
+        Some(expression)
     }
 
     fn parse_equality(&mut self) -> Option<Expression> {
@@ -397,7 +439,7 @@ impl Parser {
     }
 
     fn parse_multiplicative(&mut self) -> Option<Expression> {
-        let mut expression = self.parse_postfix()?;
+        let mut expression = self.parse_unary()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Star) {
                 BinaryOperator::Multiply
@@ -464,6 +506,25 @@ impl Parser {
             break;
         }
         Some(expression)
+    }
+
+    fn parse_unary(&mut self) -> Option<Expression> {
+        if self.peek_is_keyword(Keyword::Not) {
+            let operator_span = self.advance().span.clone();
+            let expression = self.parse_unary()?;
+            let span = Span {
+                start: operator_span.start,
+                end: expression.span().end,
+                line: operator_span.line,
+                column: operator_span.column,
+            };
+            return Some(Expression::Unary {
+                operator: UnaryOperator::Not,
+                expression: Box::new(expression),
+                span,
+            });
+        }
+        self.parse_postfix()
     }
 
     fn parse_arguments(&mut self) -> Vec<Expression> {
@@ -745,6 +806,7 @@ impl ExpressionSpan for Expression {
             | Expression::StructLiteral { span, .. }
             | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
+            | Expression::Unary { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }
     }

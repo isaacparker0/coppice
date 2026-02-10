@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use compiler__frontend::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
-    Span, Statement, StructLiteralField, TypeDeclaration, TypeName,
+    Span, Statement, StructLiteralField, TypeDeclaration, TypeName, UnaryOperator,
 };
 
 use crate::types::{Type, type_from_name};
@@ -419,6 +419,29 @@ impl<'a> Checker<'a> {
                         }
                         Type::Boolean
                     }
+                    BinaryOperator::And | BinaryOperator::Or => {
+                        if left_type != Type::Boolean || right_type != Type::Boolean {
+                            self.error("boolean operators require boolean operands", left.span());
+                            return Type::Unknown;
+                        }
+                        Type::Boolean
+                    }
+                }
+            }
+            Expression::Unary {
+                operator,
+                expression,
+                ..
+            } => {
+                let value_type = self.check_expression(expression);
+                match operator {
+                    UnaryOperator::Not => {
+                        if value_type != Type::Boolean && value_type != Type::Unknown {
+                            self.error("not operator requires boolean operand", expression.span());
+                            return Type::Unknown;
+                        }
+                        Type::Boolean
+                    }
                 }
             }
         }
@@ -739,6 +762,7 @@ impl ExpressionSpan for Expression {
             | Expression::StructLiteral { span, .. }
             | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
+            | Expression::Unary { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }
     }

@@ -112,6 +112,11 @@ pub enum Expression {
         arguments: Vec<Expression>,
         span: Span,
     },
+    Unary {
+        operator: UnaryOperator,
+        expression: Box<Expression>,
+        span: Span,
+    },
     Binary {
         operator: BinaryOperator,
         left: Box<Expression>,
@@ -127,6 +132,13 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     EqualEqual,
+    And,
+    Or,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnaryOperator {
+    Not,
 }
 
 #[derive(Clone, Debug)]
