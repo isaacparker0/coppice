@@ -429,10 +429,7 @@ impl Parser {
                 self.expect_symbol(Symbol::RightParen)?;
                 Some(expression)
             }
-            TokenKind::Error(message) => {
-                self.error(message, token.span);
-                None
-            }
+            TokenKind::Error(_message) => None,
             _ => {
                 self.error("expected expression", token.span);
                 None
