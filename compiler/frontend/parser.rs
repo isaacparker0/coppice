@@ -1,6 +1,6 @@
 use crate::ast::{
     BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
-    Statement, StructField, TypeDeclaration, TypeName,
+    Statement, StructField, StructLiteralField, TypeDeclaration, TypeName,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -427,23 +427,41 @@ impl Parser {
     fn parse_postfix(&mut self) -> Option<Expression> {
         let mut expression = self.parse_primary()?;
         loop {
-            if !self.peek_is_symbol(Symbol::LeftParen) {
-                break;
+            if self.peek_is_symbol(Symbol::LeftParen) {
+                let left_paren = self.expect_symbol(Symbol::LeftParen)?;
+                let arguments = self.parse_arguments();
+                let right_paren = self.expect_symbol(Symbol::RightParen)?;
+                let span = Span {
+                    start: expression.span().start,
+                    end: right_paren.end,
+                    line: left_paren.line,
+                    column: left_paren.column,
+                };
+                expression = Expression::Call {
+                    callee: Box::new(expression),
+                    arguments,
+                    span,
+                };
+                continue;
             }
-            let left_paren = self.expect_symbol(Symbol::LeftParen)?;
-            let arguments = self.parse_arguments();
-            let right_paren = self.expect_symbol(Symbol::RightParen)?;
-            let span = Span {
-                start: expression.span().start,
-                end: right_paren.end,
-                line: left_paren.line,
-                column: left_paren.column,
-            };
-            expression = Expression::Call {
-                callee: Box::new(expression),
-                arguments,
-                span,
-            };
+            if self.peek_is_symbol(Symbol::Dot) {
+                let dot = self.expect_symbol(Symbol::Dot)?;
+                let (field, field_span) = self.expect_identifier()?;
+                let span = Span {
+                    start: expression.span().start,
+                    end: field_span.end,
+                    line: dot.line,
+                    column: dot.column,
+                };
+                expression = Expression::FieldAccess {
+                    target: Box::new(expression),
+                    field,
+                    field_span,
+                    span,
+                };
+                continue;
+            }
+            break;
         }
         Some(expression)
     }
@@ -490,10 +508,24 @@ impl Parser {
                 value,
                 span: token.span,
             }),
-            TokenKind::Identifier(name) => Some(Expression::Identifier {
-                name,
-                span: token.span,
-            }),
+            TokenKind::Identifier(name) => {
+                if self.peek_is_symbol(Symbol::LeftBrace)
+                    && name
+                        .chars()
+                        .next()
+                        .is_some_and(|ch| ch.is_ascii_uppercase())
+                {
+                    let type_name = TypeName {
+                        name,
+                        span: token.span,
+                    };
+                    return self.parse_struct_literal(type_name);
+                }
+                Some(Expression::Identifier {
+                    name,
+                    span: token.span,
+                })
+            }
             TokenKind::Symbol(Symbol::LeftParen) => {
                 let expression = self.parse_expression()?;
                 self.expect_symbol(Symbol::RightParen)?;
@@ -505,6 +537,68 @@ impl Parser {
                 None
             }
         }
+    }
+
+    fn parse_struct_literal(&mut self, type_name: TypeName) -> Option<Expression> {
+        let left_brace = self.expect_symbol(Symbol::LeftBrace)?;
+        let fields = self.parse_struct_literal_fields();
+        let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+        let span = Span {
+            start: type_name.span.start,
+            end: right_brace.end,
+            line: left_brace.line,
+            column: left_brace.column,
+        };
+        Some(Expression::StructLiteral {
+            type_name,
+            fields,
+            span,
+        })
+    }
+
+    fn parse_struct_literal_fields(&mut self) -> Vec<StructLiteralField> {
+        let mut fields = Vec::new();
+        if self.peek_is_symbol(Symbol::RightBrace) {
+            return fields;
+        }
+        loop {
+            if let Some(field) = self.parse_struct_literal_field() {
+                fields.push(field);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+            }
+
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        fields
+    }
+
+    fn parse_struct_literal_field(&mut self) -> Option<StructLiteralField> {
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::Colon)?;
+        let value = self.parse_expression()?;
+        let span = Span {
+            start: name_span.start,
+            end: value.span().end,
+            line: name_span.line,
+            column: name_span.column,
+        };
+        Some(StructLiteralField {
+            name,
+            name_span,
+            value,
+            span,
+        })
     }
 
     fn expect_identifier(&mut self) -> Option<(String, Span)> {
@@ -637,7 +731,6 @@ impl Parser {
         }
     }
 }
-
 trait ExpressionSpan {
     fn span(&self) -> Span;
 }
@@ -649,6 +742,8 @@ impl ExpressionSpan for Expression {
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }
+            | Expression::StructLiteral { span, .. }
+            | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }

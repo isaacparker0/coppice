@@ -32,6 +32,7 @@ pub enum Symbol {
     Comma,
     Colon,
     DoubleColon,
+    Dot,
     Plus,
     Minus,
     Star,
@@ -122,6 +123,7 @@ impl<'a> Lexer<'a> {
             b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
+            b'.' => self.single(Symbol::Dot, 1, start, line, column),
             b':' => {
                 if self.match_bytes(b"::") {
                     self.single(Symbol::DoubleColon, 2, start, line, column)

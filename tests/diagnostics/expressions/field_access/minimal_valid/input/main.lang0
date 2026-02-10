@@ -1,0 +1,6 @@
+Point :: struct { x: int64, y: int64 }
+
+function main() -> int64 {
+    p := Point { x: 1, y: 2 }
+    return p.x
+}

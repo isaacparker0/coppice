@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use compiler__frontend::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
-    Span, Statement, TypeDeclaration,
+    Span, Statement, StructLiteralField, TypeDeclaration, TypeName,
 };
 
 use crate::types::{Type, type_from_name};
@@ -313,6 +313,20 @@ impl<'a> Checker<'a> {
             Expression::BooleanLiteral { .. } => Type::Boolean,
             Expression::StringLiteral { .. } => Type::String,
             Expression::Identifier { name, span } => self.resolve_variable(name, span),
+            Expression::StructLiteral {
+                type_name,
+                fields,
+                span: _,
+            } => self.check_struct_literal(type_name, fields),
+            Expression::FieldAccess {
+                target,
+                field,
+                field_span,
+                ..
+            } => {
+                let target_type = self.check_expression(target);
+                self.resolve_field_access_type(&target_type, field, field_span)
+            }
             Expression::Call {
                 callee,
                 arguments,
@@ -408,6 +422,107 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    fn check_struct_literal(
+        &mut self,
+        type_name: &TypeName,
+        fields: &[StructLiteralField],
+    ) -> Type {
+        let struct_type = self.resolve_type_name(&type_name.name, &type_name.span);
+        let Some(field_defs) = self
+            .types
+            .get(&type_name.name)
+            .map(|info| info.fields.clone())
+        else {
+            for field in fields {
+                self.check_expression(&field.value);
+            }
+            return struct_type;
+        };
+
+        let mut seen = HashSet::new();
+        for field in fields {
+            if !seen.insert(field.name.as_str()) {
+                self.error(
+                    format!(
+                        "duplicate field '{}' in {} literal",
+                        field.name, type_name.name
+                    ),
+                    field.name_span.clone(),
+                );
+                self.check_expression(&field.value);
+                continue;
+            }
+
+            let Some((_, field_type)) = field_defs.iter().find(|(name, _)| name == &field.name)
+            else {
+                self.error(
+                    format!("unknown field '{}' on {}", field.name, type_name.name),
+                    field.name_span.clone(),
+                );
+                self.check_expression(&field.value);
+                continue;
+            };
+
+            let value_type = self.check_expression(&field.value);
+            if *field_type != Type::Unknown
+                && value_type != Type::Unknown
+                && value_type != *field_type
+            {
+                self.error(
+                    format!(
+                        "field '{}' must be {}, got {}",
+                        field.name,
+                        field_type.name(),
+                        value_type.name()
+                    ),
+                    field.value.span(),
+                );
+            }
+        }
+
+        for (field_name, _) in &field_defs {
+            if !seen.contains(field_name.as_str()) {
+                self.error(
+                    format!(
+                        "missing field '{}' in {} literal",
+                        field_name, type_name.name
+                    ),
+                    type_name.span.clone(),
+                );
+            }
+        }
+
+        struct_type
+    }
+
+    fn resolve_field_access_type(&mut self, target_type: &Type, field: &str, span: &Span) -> Type {
+        let Type::Named(type_name) = target_type else {
+            if *target_type != Type::Unknown {
+                self.error(
+                    format!(
+                        "cannot access field '{}' on non-struct type {}",
+                        field,
+                        target_type.name()
+                    ),
+                    span.clone(),
+                );
+            }
+            return Type::Unknown;
+        };
+
+        let Some(info) = self.types.get(type_name) else {
+            return Type::Unknown;
+        };
+        if let Some((_, field_type)) = info.fields.iter().find(|(name, _)| name == field) {
+            return field_type.clone();
+        }
+        self.error(
+            format!("unknown field '{field}' on {type_name}"),
+            span.clone(),
+        );
+        Type::Unknown
     }
 
     fn define_variable(&mut self, name: String, value_type: Type, mutable: bool, span: Span) {
@@ -621,6 +736,8 @@ impl ExpressionSpan for Expression {
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }
+            | Expression::StructLiteral { span, .. }
+            | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
             | Expression::Binary { span, .. } => span.clone(),
         }

@@ -96,6 +96,17 @@ pub enum Expression {
         name: String,
         span: Span,
     },
+    StructLiteral {
+        type_name: TypeName,
+        fields: Vec<StructLiteralField>,
+        span: Span,
+    },
+    FieldAccess {
+        target: Box<Expression>,
+        field: String,
+        field_span: Span,
+        span: Span,
+    },
     Call {
         callee: Box<Expression>,
         arguments: Vec<Expression>,
@@ -121,5 +132,13 @@ pub enum BinaryOperator {
 #[derive(Clone, Debug)]
 pub struct TypeName {
     pub name: String,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct StructLiteralField {
+    pub name: String,
+    pub name_span: Span,
+    pub value: Expression,
     pub span: Span,
 }
