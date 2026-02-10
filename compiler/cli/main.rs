@@ -3,6 +3,8 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
+use compiler__frontend::{Span, parse_file};
+
 #[derive(Parser)]
 #[command(version)]
 struct CommandLine {
@@ -28,7 +30,7 @@ fn main() {
         }
     };
 
-    match compiler__frontend::parse_file(&source) {
+    match parse_file(&source) {
         Ok(file) => {
             let diagnostics = compiler__middle::check_file(&file);
             if diagnostics.is_empty() {
@@ -49,7 +51,7 @@ fn main() {
     }
 }
 
-fn print_diagnostic(path: &str, source: &str, message: &str, span: &compiler__frontend::Span) {
+fn print_diagnostic(path: &str, source: &str, message: &str, span: &Span) {
     let line = span.line;
     let column = span.column;
     let line_text = source.lines().nth(line - 1).unwrap_or("");

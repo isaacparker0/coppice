@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use compiler__frontend::{
-    BinaryOperator, ConstantDeclaration, Diagnostic, Expression, File, Span, Statement,
+    BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
+    Span, Statement,
 };
 
 use crate::types::{Type, type_from_name};
@@ -39,7 +40,6 @@ struct Checker<'a> {
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
-    saw_return: bool,
 }
 
 impl<'a> Checker<'a> {
@@ -50,14 +50,10 @@ impl<'a> Checker<'a> {
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
-            saw_return: false,
         }
     }
 
-    fn collect_function_signatures(
-        &mut self,
-        functions: &[compiler__frontend::FunctionDeclaration],
-    ) {
+    fn collect_function_signatures(&mut self, functions: &[FunctionDeclaration]) {
         for function in functions {
             if self.functions.contains_key(&function.name) {
                 self.error(
@@ -112,9 +108,8 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_function(&mut self, function: &compiler__frontend::FunctionDeclaration) {
+    fn check_function(&mut self, function: &FunctionDeclaration) {
         self.scopes.push(HashMap::new());
-        self.saw_return = false;
 
         let (parameter_types, return_type) = if let Some(info) = self.functions.get(&function.name)
         {
@@ -132,12 +127,12 @@ impl<'a> Checker<'a> {
             self.define_variable(parameter.name.clone(), value_type, parameter.span.clone());
         }
 
-        self.check_block(&function.body);
+        let body_returns = self.check_block(&function.body);
 
         self.check_unused_in_current_scope();
         self.scopes.pop();
 
-        if !self.saw_return {
+        if !body_returns {
             self.error(
                 "missing return in function body",
                 function.body.span.clone(),
@@ -145,16 +140,21 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn check_block(&mut self, block: &compiler__frontend::Block) {
+    fn check_block(&mut self, block: &Block) -> bool {
         self.scopes.push(HashMap::new());
+        let mut falls_through = true;
         for statement in &block.statements {
-            self.check_statement(statement);
+            let statement_returns = self.check_statement(statement);
+            if falls_through && statement_returns {
+                falls_through = false;
+            }
         }
         self.check_unused_in_current_scope();
         self.scopes.pop();
+        !falls_through
     }
 
-    fn check_statement(&mut self, statement: &Statement) {
+    fn check_statement(&mut self, statement: &Statement) -> bool {
         match statement {
             Statement::Let {
                 name,
@@ -183,6 +183,7 @@ impl<'a> Checker<'a> {
                     }
                 }
                 self.define_variable(name.clone(), value_type, span.clone());
+                false
             }
             Statement::Return {
                 expression,
@@ -202,7 +203,7 @@ impl<'a> Checker<'a> {
                         expression.span(),
                     );
                 }
-                self.saw_return = true;
+                true
             }
             Statement::If {
                 condition,
@@ -214,10 +215,11 @@ impl<'a> Checker<'a> {
                 if condition_type != Type::Boolean && condition_type != Type::Unknown {
                     self.error("if condition must be boolean", condition.span());
                 }
-                self.check_block(then_block);
-                if let Some(else_block) = else_block {
-                    self.check_block(else_block);
-                }
+                let then_returns = self.check_block(then_block);
+                let else_returns = else_block
+                    .as_ref()
+                    .is_some_and(|block| self.check_block(block));
+                then_returns && else_returns
             }
         }
     }

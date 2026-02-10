@@ -1,0 +1,5 @@
+function maybe(x: boolean) -> int64 {
+    if x {
+        return 1
+    }
+}
