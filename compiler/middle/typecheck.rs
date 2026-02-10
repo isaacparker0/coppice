@@ -63,6 +63,7 @@ impl<'a> Checker<'a> {
 
     fn collect_type_declarations(&mut self, types: &[TypeDeclaration]) {
         for type_declaration in types {
+            self.check_type_name(&type_declaration.name, &type_declaration.span);
             if self.types.contains_key(&type_declaration.name) {
                 self.error(
                     format!("duplicate type '{}'", type_declaration.name),
@@ -102,10 +103,11 @@ impl<'a> Checker<'a> {
 
     fn collect_function_signatures(&mut self, functions: &[FunctionDeclaration]) {
         for function in functions {
+            self.check_function_name(&function.name, &function.name_span);
             if self.functions.contains_key(&function.name) {
                 self.error(
                     format!("duplicate function '{}'", function.name),
-                    function.span.clone(),
+                    function.name_span.clone(),
                 );
                 continue;
             }
@@ -132,6 +134,7 @@ impl<'a> Checker<'a> {
 
     fn check_constant_declarations(&mut self, constants: &[ConstantDeclaration]) {
         for constant in constants {
+            self.check_constant_name(&constant.name, &constant.span);
             let value_type = self.check_expression(&constant.expression);
             if self.constants.contains_key(&constant.name) {
                 self.error(
@@ -160,6 +163,7 @@ impl<'a> Checker<'a> {
         self.current_return_type = return_type;
 
         for (index, parameter) in function.parameters.iter().enumerate() {
+            self.check_parameter_name(&parameter.name, &parameter.span);
             let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
             self.define_variable(
                 parameter.name.clone(),
@@ -206,6 +210,7 @@ impl<'a> Checker<'a> {
                 span,
                 ..
             } => {
+                self.check_variable_name(name, span);
                 let value_type = self.check_expression(expression);
                 if let Some(type_name) = type_name {
                     let annotated_type = self.resolve_type_name(&type_name.name, &type_name.span);
@@ -469,6 +474,36 @@ impl<'a> Checker<'a> {
         self.diagnostics.push(Diagnostic::new(message, span));
     }
 
+    fn check_type_name(&mut self, name: &str, span: &Span) {
+        if !is_pascal_case(name) {
+            self.error("type name must be PascalCase", span.clone());
+        }
+    }
+
+    fn check_function_name(&mut self, name: &str, span: &Span) {
+        if !is_camel_case(name) {
+            self.error("function name must be camelCase", span.clone());
+        }
+    }
+
+    fn check_constant_name(&mut self, name: &str, span: &Span) {
+        if !is_upper_snake_case(name) {
+            self.error("constant name must be UPPER_SNAKE_CASE", span.clone());
+        }
+    }
+
+    fn check_variable_name(&mut self, name: &str, span: &Span) {
+        if !is_camel_case_with_optional_leading_underscore(name) {
+            self.error("variable name must be camelCase", span.clone());
+        }
+    }
+
+    fn check_parameter_name(&mut self, name: &str, span: &Span) {
+        if !is_camel_case_with_optional_leading_underscore(name) {
+            self.error("parameter name must be camelCase", span.clone());
+        }
+    }
+
     fn resolve_type_name(&mut self, name: &str, span: &Span) -> Type {
         if let Some(builtin) = type_from_name(name) {
             return builtin;
@@ -479,6 +514,86 @@ impl<'a> Checker<'a> {
         self.error(format!("unknown type '{name}'"), span.clone());
         Type::Unknown
     }
+}
+
+fn is_pascal_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    if !is_alnum_no_underscore(first) {
+        return false;
+    }
+    let mut previous_upper = true;
+    for ch in chars {
+        if !is_alnum_no_underscore(ch) {
+            return false;
+        }
+        let is_upper = ch.is_ascii_uppercase();
+        if previous_upper && is_upper {
+            return false;
+        }
+        previous_upper = is_upper;
+    }
+    true
+}
+
+fn is_camel_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() {
+        return false;
+    }
+    if !is_alnum_no_underscore(first) {
+        return false;
+    }
+    let mut previous_upper = false;
+    for ch in chars {
+        if !is_alnum_no_underscore(ch) {
+            return false;
+        }
+        let is_upper = ch.is_ascii_uppercase();
+        if previous_upper && is_upper {
+            return false;
+        }
+        previous_upper = is_upper;
+    }
+    true
+}
+
+fn is_upper_snake_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_uppercase() {
+        return false;
+    }
+    for ch in chars {
+        if !(ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_') {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_camel_case_with_optional_leading_underscore(name: &str) -> bool {
+    if let Some(rest) = name.strip_prefix('_') {
+        if rest.is_empty() {
+            return true;
+        }
+        return is_camel_case(rest);
+    }
+    is_camel_case(name)
+}
+
+fn is_alnum_no_underscore(ch: char) -> bool {
+    ch.is_ascii_alphanumeric()
 }
 
 trait ExpressionSpan {

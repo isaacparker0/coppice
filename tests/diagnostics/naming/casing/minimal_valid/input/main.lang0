@@ -1,0 +1,12 @@
+UserProfile :: struct {
+    id: int64,
+    displayName: string,
+}
+
+API_VERSION := "v1"
+
+function getUser(userId: int64) -> int64 {
+    mut requestCount := 0
+    requestCount = requestCount + 1
+    return userId
+}

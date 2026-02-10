@@ -10,6 +10,19 @@ pub enum Keyword {
     Struct,
 }
 
+impl Keyword {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Keyword::Function => "function",
+            Keyword::Return => "return",
+            Keyword::If => "if",
+            Keyword::Else => "else",
+            Keyword::Mut => "mut",
+            Keyword::Struct => "struct",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Symbol {
     LeftParen,

@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:1:15: error: parameter name must be camelCase
+  function demo(BadParam: int64) -> int64 {
+                ^

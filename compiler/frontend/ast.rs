@@ -31,6 +31,7 @@ pub struct ConstantDeclaration {
 #[derive(Clone, Debug)]
 pub struct FunctionDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub parameters: Vec<Parameter>,
     pub return_type: TypeName,
     pub body: Block,

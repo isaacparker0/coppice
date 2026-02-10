@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:1:1: error: type name must be PascalCase
+  userProfile :: struct {
+  ^

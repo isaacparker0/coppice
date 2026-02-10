@@ -1,0 +1,4 @@
+function demo() -> int64 {
+    BadVar := 1
+    return BadVar
+}

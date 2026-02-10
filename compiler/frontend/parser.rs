@@ -123,7 +123,7 @@ impl Parser {
 
     fn parse_function(&mut self) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
-        let name = self.expect_identifier()?;
+        let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParen)?;
         let parameters = self.parse_parameters();
         self.expect_symbol(Symbol::RightParen)?;
@@ -132,7 +132,8 @@ impl Parser {
         let body = self.parse_block()?;
         let body_end = body.span.end;
         Some(FunctionDeclaration {
-            name: name.0,
+            name,
+            name_span,
             parameters,
             return_type,
             body,
@@ -508,11 +509,22 @@ impl Parser {
 
     fn expect_identifier(&mut self) -> Option<(String, Span)> {
         let token = self.advance();
-        if let TokenKind::Identifier(name) = token.kind {
-            Some((name, token.span))
-        } else {
-            self.error("expected identifier", token.span);
-            None
+        match token.kind {
+            TokenKind::Identifier(name) => Some((name, token.span)),
+            TokenKind::Keyword(keyword) => {
+                self.error(
+                    format!(
+                        "reserved keyword '{}' cannot be used as an identifier",
+                        keyword.as_str()
+                    ),
+                    token.span,
+                );
+                None
+            }
+            _ => {
+                self.error("expected identifier", token.span);
+                None
+            }
         }
     }
 
@@ -591,7 +603,13 @@ impl Parser {
 
     fn synchronize(&mut self) {
         while !self.at_eof() {
-            if self.peek_is_keyword(Keyword::Function) || self.peek_is_identifier() {
+            if self.peek_is_keyword(Keyword::Function) {
+                return;
+            }
+            if self.peek_is_identifier()
+                && (self.peek_second_is_symbol(Symbol::Assign)
+                    || self.peek_second_is_symbol(Symbol::DoubleColon))
+            {
                 return;
             }
             self.advance();
