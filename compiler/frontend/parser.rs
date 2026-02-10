@@ -1,6 +1,7 @@
 use crate::ast::{
     BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
     Statement, StructField, StructLiteralField, TypeDeclaration, TypeName, UnaryOperator,
+    Visibility,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -29,20 +30,47 @@ impl Parser {
         let mut constant_declarations = Vec::new();
         let mut function_declarations = Vec::new();
         while !self.at_eof() {
-            if self.peek_is_keyword(Keyword::Function) {
-                if let Some(function) = self.parse_function() {
+            if self.peek_is_keyword(Keyword::Public) {
+                let visibility = self.parse_visibility();
+                if self.peek_is_keyword(Keyword::Function) {
+                    if let Some(function) = self.parse_function(visibility) {
+                        function_declarations.push(function);
+                    } else {
+                        self.synchronize();
+                    }
+                } else if self.peek_is_identifier()
+                    && self.peek_second_is_symbol(Symbol::DoubleColon)
+                {
+                    if let Some(type_declaration) = self.parse_type_declaration(visibility) {
+                        type_declarations.push(type_declaration);
+                    } else {
+                        self.synchronize();
+                    }
+                } else if self.peek_is_identifier() {
+                    if let Some(constant) = self.parse_constant_declaration(visibility) {
+                        constant_declarations.push(constant);
+                    } else {
+                        self.synchronize();
+                    }
+                } else {
+                    let span = self.peek_span();
+                    self.error("expected declaration after 'public'", span);
+                    self.synchronize();
+                }
+            } else if self.peek_is_keyword(Keyword::Function) {
+                if let Some(function) = self.parse_function(Visibility::Private) {
                     function_declarations.push(function);
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
-                if let Some(type_declaration) = self.parse_type_declaration() {
+                if let Some(type_declaration) = self.parse_type_declaration(Visibility::Private) {
                     type_declarations.push(type_declaration);
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_identifier() {
-                if let Some(constant) = self.parse_constant_declaration() {
+                if let Some(constant) = self.parse_constant_declaration(Visibility::Private) {
                     constant_declarations.push(constant);
                 } else {
                     self.synchronize();
@@ -60,7 +88,7 @@ impl Parser {
         }
     }
 
-    fn parse_type_declaration(&mut self) -> Option<TypeDeclaration> {
+    fn parse_type_declaration(&mut self, visibility: Visibility) -> Option<TypeDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::DoubleColon)?;
         self.expect_keyword(Keyword::Struct)?;
@@ -74,7 +102,12 @@ impl Parser {
             line: start.line,
             column: start.column,
         };
-        Some(TypeDeclaration { name, fields, span })
+        Some(TypeDeclaration {
+            name,
+            fields,
+            visibility,
+            span,
+        })
     }
 
     fn parse_struct_fields(&mut self) -> Vec<StructField> {
@@ -105,6 +138,7 @@ impl Parser {
     }
 
     fn parse_struct_field(&mut self) -> Option<StructField> {
+        let visibility = self.parse_visibility();
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -117,11 +151,12 @@ impl Parser {
         Some(StructField {
             name,
             type_name,
+            visibility,
             span,
         })
     }
 
-    fn parse_function(&mut self) -> Option<FunctionDeclaration> {
+    fn parse_function(&mut self, visibility: Visibility) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParen)?;
@@ -137,6 +172,7 @@ impl Parser {
             parameters,
             return_type,
             body,
+            visibility,
             span: Span {
                 start: start.start,
                 end: body_end,
@@ -146,7 +182,10 @@ impl Parser {
         })
     }
 
-    fn parse_constant_declaration(&mut self) -> Option<ConstantDeclaration> {
+    fn parse_constant_declaration(
+        &mut self,
+        visibility: Visibility,
+    ) -> Option<ConstantDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Assign)?;
         let expression = self.parse_expression()?;
@@ -159,6 +198,7 @@ impl Parser {
         Some(ConstantDeclaration {
             name,
             expression,
+            visibility,
             span,
         })
     }
@@ -762,6 +802,15 @@ impl Parser {
                 self.error("expected symbol", token.span);
                 None
             }
+        }
+    }
+
+    fn parse_visibility(&mut self) -> Visibility {
+        if self.peek_is_keyword(Keyword::Public) {
+            self.advance();
+            Visibility::Public
+        } else {
+            Visibility::Private
         }
     }
 

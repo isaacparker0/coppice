@@ -7,10 +7,17 @@ pub struct File {
     pub function_declarations: Vec<FunctionDeclaration>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visibility {
+    Private,
+    Public,
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeDeclaration {
     pub name: String,
     pub fields: Vec<StructField>,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -18,6 +25,7 @@ pub struct TypeDeclaration {
 pub struct StructField {
     pub name: String,
     pub type_name: TypeName,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -25,6 +33,7 @@ pub struct StructField {
 pub struct ConstantDeclaration {
     pub name: String,
     pub expression: Expression,
+    pub visibility: Visibility,
     pub span: Span,
 }
 
@@ -35,6 +44,7 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<Parameter>,
     pub return_type: TypeName,
     pub body: Block,
+    pub visibility: Visibility,
     pub span: Span,
 }
 

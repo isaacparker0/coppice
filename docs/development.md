@@ -6,6 +6,9 @@ Run all commands from workspace root.
 
 ```bash
 bazel build //...
+```
+
+```bash
 bazel test //...
 ```
 

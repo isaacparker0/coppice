@@ -1,0 +1,10 @@
+public User :: struct {
+    public name: string,
+    id: int64,
+}
+
+public NAME := 1
+
+public function getId(user: User) -> int64 {
+    return user.id
+}
