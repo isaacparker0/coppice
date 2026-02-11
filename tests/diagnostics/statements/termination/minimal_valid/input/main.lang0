@@ -1,0 +1,19 @@
+User :: struct {
+    name: string
+}
+
+function demo() -> int64 {
+    base := 10
+    tax := 2
+    total := base
+        + tax
+    ok := true
+    if ok
+        and true {
+    }
+    user := User { name: "a" }
+    if user
+        .name == "a" {
+    }
+    return total
+}

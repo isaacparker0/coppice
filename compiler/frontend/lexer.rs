@@ -64,6 +64,10 @@ pub enum TokenKind {
     BooleanLiteral(bool),
     Keyword(Keyword),
     Symbol(Symbol),
+    /// Raw `\n` from the source. These are removed during normalization.
+    Newline,
+    /// Semantic statement terminator inserted during newline normalization.
+    StatementTerminator,
     EndOfFile,
     Error(String),
 }
@@ -105,7 +109,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        tokens
+        normalize_newlines_to_statement_terminators(tokens)
     }
 
     pub fn into_diagnostics(self) -> Vec<Diagnostic> {
@@ -131,6 +135,18 @@ impl<'a> Lexer<'a> {
 
         let character = self.peek_byte();
         match character {
+            b'\n' => {
+                self.advance();
+                Token {
+                    kind: TokenKind::Newline,
+                    span: Span {
+                        start,
+                        end: start + 1,
+                        line,
+                        column,
+                    },
+                }
+            }
             b'(' => self.single(Symbol::LeftParen, 1, start, line, column),
             b')' => self.single(Symbol::RightParen, 1, start, line, column),
             b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
@@ -367,7 +383,7 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while self.index < self.bytes.len() {
             match self.peek_byte() {
-                b' ' | b'\t' | b'\r' | b'\n' => {
+                b' ' | b'\t' | b'\r' => {
                     self.advance();
                 }
                 b'/' => {
@@ -414,4 +430,75 @@ impl<'a> Lexer<'a> {
     fn match_bytes(&self, bytes: &[u8]) -> bool {
         self.bytes.get(self.index..self.index + bytes.len()) == Some(bytes)
     }
+}
+
+fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token> {
+    let mut output = Vec::with_capacity(tokens.len());
+    let mut saw_newline = false;
+    let mut parenthesis_depth = 0usize;
+    let mut previous_significant_token: Option<Token> = None;
+
+    for token in tokens {
+        if matches!(token.kind, TokenKind::Newline) {
+            saw_newline = true;
+            continue;
+        }
+
+        if saw_newline {
+            if parenthesis_depth == 0
+                && let Some(prev_token) = previous_significant_token.as_ref()
+                && is_statement_terminator_trigger(&prev_token.kind)
+                && is_statement_start(&token.kind)
+            {
+                let span = prev_token.span.clone();
+                output.push(Token {
+                    kind: TokenKind::StatementTerminator,
+                    span,
+                });
+            }
+            saw_newline = false;
+        }
+
+        update_parenthesis_depth(&token.kind, &mut parenthesis_depth);
+        if !matches!(
+            token.kind,
+            TokenKind::StatementTerminator | TokenKind::EndOfFile
+        ) {
+            previous_significant_token = Some(token.clone());
+        }
+        output.push(token);
+    }
+
+    output
+}
+
+fn update_parenthesis_depth(kind: &TokenKind, parenthesis_depth: &mut usize) {
+    match kind {
+        TokenKind::Symbol(Symbol::LeftParen) => {
+            *parenthesis_depth = parenthesis_depth.saturating_add(1);
+        }
+        TokenKind::Symbol(Symbol::RightParen) => {
+            *parenthesis_depth = parenthesis_depth.saturating_sub(1);
+        }
+        _ => {}
+    }
+}
+
+fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier(_)
+            | TokenKind::IntegerLiteral(_)
+            | TokenKind::StringLiteral(_)
+            | TokenKind::BooleanLiteral(_)
+            | TokenKind::Symbol(Symbol::RightParen | Symbol::RightBrace)
+            | TokenKind::Keyword(Keyword::Return)
+    )
+}
+
+fn is_statement_start(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier(_) | TokenKind::Keyword(Keyword::Return | Keyword::If | Keyword::Mut)
+    )
 }

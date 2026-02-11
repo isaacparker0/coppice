@@ -30,6 +30,7 @@ impl Parser {
         let mut constant_declarations = Vec::new();
         let mut function_declarations = Vec::new();
         while !self.at_eof() {
+            self.skip_statement_terminators();
             if self.peek_is_keyword(Keyword::Public) {
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Function) {
@@ -112,10 +113,12 @@ impl Parser {
 
     fn parse_struct_fields(&mut self) -> Vec<StructField> {
         let mut fields = Vec::new();
+        self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
             return fields;
         }
         loop {
+            self.skip_statement_terminators();
             if let Some(field) = self.parse_struct_field() {
                 fields.push(field);
             } else {
@@ -125,8 +128,10 @@ impl Parser {
                 }
             }
 
+            self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
+                self.skip_statement_terminators();
                 if self.peek_is_symbol(Symbol::RightBrace) {
                     break;
                 }
@@ -205,10 +210,12 @@ impl Parser {
 
     fn parse_parameters(&mut self) -> Vec<Parameter> {
         let mut parameters = Vec::new();
+        self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParen) {
             return parameters;
         }
         loop {
+            self.skip_statement_terminators();
             if let Some(parameter) = self.parse_parameter() {
                 parameters.push(parameter);
             } else {
@@ -218,8 +225,10 @@ impl Parser {
                 }
             }
 
+            self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
+                self.skip_statement_terminators();
                 if self.peek_is_symbol(Symbol::RightParen) {
                     break;
                 }
@@ -250,12 +259,14 @@ impl Parser {
     fn parse_block(&mut self) -> Option<Block> {
         let start = self.expect_symbol(Symbol::LeftBrace)?;
         let mut statements = Vec::new();
+        self.skip_statement_terminators();
         while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
             if let Some(statement) = self.parse_statement() {
                 statements.push(statement);
             } else {
                 self.synchronize_statement();
             }
+            self.skip_statement_terminators();
         }
         let end = self.expect_symbol(Symbol::RightBrace)?;
         Some(Block {
@@ -389,7 +400,10 @@ impl Parser {
 
     fn parse_or(&mut self) -> Option<Expression> {
         let mut expression = self.parse_and()?;
-        while self.peek_is_keyword(Keyword::Or) {
+        loop {
+            if !self.peek_is_keyword(Keyword::Or) {
+                break;
+            }
             let operator_span = self.advance().span.clone();
             let right = self.parse_and()?;
             let span = Span {
@@ -410,7 +424,10 @@ impl Parser {
 
     fn parse_and(&mut self) -> Option<Expression> {
         let mut expression = self.parse_equality()?;
-        while self.peek_is_keyword(Keyword::And) {
+        loop {
+            if !self.peek_is_keyword(Keyword::And) {
+                break;
+            }
             let operator_span = self.advance().span.clone();
             let right = self.parse_equality()?;
             let span = Span {
@@ -555,14 +572,14 @@ impl Parser {
         let mut expression = self.parse_primary()?;
         loop {
             if self.peek_is_symbol(Symbol::LeftParen) {
-                let left_paren = self.expect_symbol(Symbol::LeftParen)?;
+                let left_parenthesis = self.expect_symbol(Symbol::LeftParen)?;
                 let arguments = self.parse_arguments();
-                let right_paren = self.expect_symbol(Symbol::RightParen)?;
+                let right_parenthesis = self.expect_symbol(Symbol::RightParen)?;
                 let span = Span {
                     start: expression.span().start,
-                    end: right_paren.end,
-                    line: left_paren.line,
-                    column: left_paren.column,
+                    end: right_parenthesis.end,
+                    line: left_parenthesis.line,
+                    column: left_parenthesis.column,
                 };
                 expression = Expression::Call {
                     callee: Box::new(expression),
@@ -629,10 +646,12 @@ impl Parser {
 
     fn parse_arguments(&mut self) -> Vec<Expression> {
         let mut arguments = Vec::new();
+        self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParen) {
             return arguments;
         }
         loop {
+            self.skip_statement_terminators();
             if let Some(argument) = self.parse_expression() {
                 arguments.push(argument);
             } else {
@@ -642,8 +661,10 @@ impl Parser {
                 }
             }
 
+            self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
+                self.skip_statement_terminators();
                 if self.peek_is_symbol(Symbol::RightParen) {
                     break;
                 }
@@ -719,10 +740,12 @@ impl Parser {
 
     fn parse_struct_literal_fields(&mut self) -> Vec<StructLiteralField> {
         let mut fields = Vec::new();
+        self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
             return fields;
         }
         loop {
+            self.skip_statement_terminators();
             if let Some(field) = self.parse_struct_literal_field() {
                 fields.push(field);
             } else {
@@ -732,8 +755,10 @@ impl Parser {
                 }
             }
 
+            self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
+                self.skip_statement_terminators();
                 if self.peek_is_symbol(Symbol::RightBrace) {
                     break;
                 }
@@ -857,6 +882,12 @@ impl Parser {
         token
     }
 
+    fn skip_statement_terminators(&mut self) {
+        while matches!(self.peek().kind, TokenKind::StatementTerminator) {
+            self.advance();
+        }
+    }
+
     fn peek_span(&self) -> Span {
         self.peek().span.clone()
     }
@@ -882,6 +913,7 @@ impl Parser {
 
     fn synchronize_list_item(&mut self, separator: Symbol, end: Symbol) {
         while !self.at_eof() {
+            self.skip_statement_terminators();
             if self.peek_is_symbol(separator) || self.peek_is_symbol(end) {
                 return;
             }
@@ -895,6 +927,10 @@ impl Parser {
                 return;
             }
             if self.peek_is_keyword(Keyword::Return) || self.peek_is_keyword(Keyword::If) {
+                return;
+            }
+            if matches!(self.peek().kind, TokenKind::StatementTerminator) {
+                self.advance();
                 return;
             }
             self.advance();

@@ -4,17 +4,17 @@
 
 No semicolons. Newline-based statement termination via lexer insertion.
 
-**Rule:** The lexer inserts a `Newline` token after a line's final token if that token is a trigger — AND the first token on the next line is an **identifier** or **statement keyword**. Otherwise, the expression continues.
+**Rule:** The lexer inserts a statement terminator after a line's final token if that token is a trigger — AND the first token on the next line is an **identifier** or **statement keyword**. Otherwise, the expression continues.
 
 Trigger tokens (last token on line):
 - Identifiers
-- Literals (integer, float, string, boolean)
-- `)`, `]`, `}`
-- Keywords: `return`, `break`, `continue`
+- Literals (integer, string, boolean)
+- `)`, `}`
+- Keywords: `return`
 
 Statement-starting tokens (first token on next line):
 - Identifiers (`x`, `foo`, `user`)
-- Statement keywords (`return`, `if`, `for`, `mut`, `match`, `break`, `continue`)
+- Statement keywords (`return`, `if`, `mut`)
 
 If the next line starts with anything else (`.`, `+`, `-`, `*`, `(`, `[`, `and`, `or`, any operator), the expression continues. No newline is inserted.
 
@@ -55,7 +55,7 @@ if user.active
 }
 ```
 
-Inside balanced delimiters — newlines are always ignored (no insertion):
+Inside parentheses — newlines are always ignored (no insertion):
 ```
 result := some_function(
     arg1,
