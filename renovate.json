@@ -51,6 +51,9 @@
         },
         {
             "matchManagers": ["custom.regex"],
+            // Renovate doesn't support naming of custom regex managers, so we
+            // use `matchFileNames` to select this specific custom manager.
+            // https://github.com/renovatebot/renovate/issues/21760
             "matchFileNames": ["multitool.lock.json"],
             "postUpgradeTasks": {
                 "commands": [".github/update_multitool_checksums.sh {{{depName}}}"],
