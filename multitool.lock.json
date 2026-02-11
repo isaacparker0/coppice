@@ -9,14 +9,6 @@
                 "file": "typos",
                 "os": "macos",
                 "cpu": "arm64"
-            },
-            {
-                "kind": "archive",
-                "url": "https://github.com/crate-ci/typos/releases/download/v1.43.2/typos-v1.43.2-x86_64-unknown-linux-musl.tar.gz",
-                "sha256": "b29faf57594da04340c7825b587038f8800c6471ac12a1302c38fc9b95f711b9",
-                "file": "typos",
-                "os": "linux",
-                "cpu": "x86_64"
             }
         ]
     }
