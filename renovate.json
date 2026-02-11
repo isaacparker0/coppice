@@ -21,6 +21,17 @@
         "custom.regex",
         "github-actions"
     ],
+    "customManagers": [
+        {
+            "customType": "regex",
+            "fileMatch": ["multitool\\.lock\\.json$"],
+            "matchStrings": [
+                "\"url\":\\s*\"https://github\\.com/(?<depName>[^/]+/[^/]+)/releases/download/v?(?<currentValue>\\d+\\.\\d+\\.\\d+[^/]*)/[^\"]+"
+            ],
+            "datasourceTemplate": "github-releases",
+            "versioningTemplate": "semver"
+        }
+    ],
     "packageRules": [
         {
             "matchManagers": ["bazelisk", "bazel-module"],
@@ -36,6 +47,15 @@
                 "commands": ["bazel mod deps --lockfile_mode=update"],
                 "fileFilters": ["MODULE.bazel.lock"],
                 "executionMode": "branch"
+            }
+        },
+        {
+            "matchManagers": ["custom.regex"],
+            "matchFileNames": ["multitool.lock.json"],
+            "postUpgradeTasks": {
+                "commands": [".github/update_multitool_checksums.sh {{{depName}}}"],
+                "fileFilters": ["multitool.lock.json"],
+                "executionMode": "update"
             }
         }
     ]
