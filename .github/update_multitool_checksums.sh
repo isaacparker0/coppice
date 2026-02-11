@@ -15,6 +15,7 @@ fi
 
 urls=$(jq -r '
     to_entries[]
+    | select(.value | type == "object")
     | .value.binaries[]?
     | select(.url | contains("'"$tool"'"))
     | .url
@@ -31,6 +32,7 @@ while IFS= read -r url; do
 	matched=$((matched + 1))
 	old_sha=$(jq -r '
         to_entries[]
+        | select(.value | type == "object")
         | .value.binaries[]?
         | select(.url == "'"$url"'")
         | .sha256
