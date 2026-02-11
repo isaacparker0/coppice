@@ -10,6 +10,7 @@ extract_cargo_lints(
 format_multirun(
     name = "format",
     rust = "@rules_rust//rust/toolchain:current_rustfmt_toolchain",
+    shell = "@aspect_rules_lint//format:shfmt",
     starlark = "@buildifier_prebuilt//:buildifier",
     visibility = ["//visibility:public"],
 )
