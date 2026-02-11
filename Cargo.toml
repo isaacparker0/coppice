@@ -9,7 +9,7 @@ publish = false
 path = "placeholder.rs" 
 
 [dependencies]
-clap = { version = "^4.5.57", features = ["derive"] }
+clap = { version = "^4.5.58", features = ["derive"] }
 
 [lints.rust]
 # Our crate names use double underscore as path separator.
