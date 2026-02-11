@@ -446,11 +446,11 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
 
         if saw_newline {
             if parenthesis_depth == 0
-                && let Some(prev_token) = previous_significant_token.as_ref()
-                && is_statement_terminator_trigger(&prev_token.kind)
+                && let Some(previous_token) = previous_significant_token.as_ref()
+                && is_statement_terminator_trigger(&previous_token.kind)
                 && is_statement_start(&token.kind)
             {
-                let span = prev_token.span.clone();
+                let span = previous_token.span.clone();
                 output.push(Token {
                     kind: TokenKind::StatementTerminator,
                     span,
