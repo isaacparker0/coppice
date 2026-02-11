@@ -164,9 +164,9 @@ impl Parser {
     fn parse_function(&mut self, visibility: Visibility) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
-        self.expect_symbol(Symbol::LeftParen)?;
+        self.expect_symbol(Symbol::LeftParenthesis)?;
         let parameters = self.parse_parameters();
-        self.expect_symbol(Symbol::RightParen)?;
+        self.expect_symbol(Symbol::RightParenthesis)?;
         self.expect_symbol(Symbol::Arrow)?;
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
@@ -211,7 +211,7 @@ impl Parser {
     fn parse_parameters(&mut self) -> Vec<Parameter> {
         let mut parameters = Vec::new();
         self.skip_statement_terminators();
-        if self.peek_is_symbol(Symbol::RightParen) {
+        if self.peek_is_symbol(Symbol::RightParenthesis) {
             return parameters;
         }
         loop {
@@ -219,8 +219,8 @@ impl Parser {
             if let Some(parameter) = self.parse_parameter() {
                 parameters.push(parameter);
             } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
-                if self.peek_is_symbol(Symbol::RightParen) {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
                     break;
                 }
             }
@@ -229,7 +229,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
                 self.skip_statement_terminators();
-                if self.peek_is_symbol(Symbol::RightParen) {
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
                     break;
                 }
                 continue;
@@ -571,10 +571,10 @@ impl Parser {
     fn parse_postfix(&mut self) -> Option<Expression> {
         let mut expression = self.parse_primary()?;
         loop {
-            if self.peek_is_symbol(Symbol::LeftParen) {
-                let left_parenthesis = self.expect_symbol(Symbol::LeftParen)?;
+            if self.peek_is_symbol(Symbol::LeftParenthesis) {
+                let left_parenthesis = self.expect_symbol(Symbol::LeftParenthesis)?;
                 let arguments = self.parse_arguments();
-                let right_parenthesis = self.expect_symbol(Symbol::RightParen)?;
+                let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
                 let span = Span {
                     start: expression.span().start,
                     end: right_parenthesis.end,
@@ -647,7 +647,7 @@ impl Parser {
     fn parse_arguments(&mut self) -> Vec<Expression> {
         let mut arguments = Vec::new();
         self.skip_statement_terminators();
-        if self.peek_is_symbol(Symbol::RightParen) {
+        if self.peek_is_symbol(Symbol::RightParenthesis) {
             return arguments;
         }
         loop {
@@ -655,8 +655,8 @@ impl Parser {
             if let Some(argument) = self.parse_expression() {
                 arguments.push(argument);
             } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightParen);
-                if self.peek_is_symbol(Symbol::RightParen) {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
                     break;
                 }
             }
@@ -665,7 +665,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();
                 self.skip_statement_terminators();
-                if self.peek_is_symbol(Symbol::RightParen) {
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
                     break;
                 }
                 continue;
@@ -708,9 +708,9 @@ impl Parser {
                     span: token.span,
                 })
             }
-            TokenKind::Symbol(Symbol::LeftParen) => {
+            TokenKind::Symbol(Symbol::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
-                self.expect_symbol(Symbol::RightParen)?;
+                self.expect_symbol(Symbol::RightParenthesis)?;
                 Some(expression)
             }
             TokenKind::Error(_message) => None,

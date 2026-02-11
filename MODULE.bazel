@@ -39,3 +39,8 @@ use_repo(crate, "crates")
 
 bazel_dep(name = "aspect_rules_lint", version = "2.1.0")
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1.2")
+bazel_dep(name = "rules_multitool", version = "1.11.1")
+
+multitool = use_extension("@rules_multitool//multitool:extension.bzl", "multitool")
+multitool.hub(lockfile = "//:multitool.lock.json")
+use_repo(multitool, "multitool")

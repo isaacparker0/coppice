@@ -33,8 +33,8 @@ impl Keyword {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Symbol {
-    LeftParen,
-    RightParen,
+    LeftParenthesis,
+    RightParenthesis,
     LeftBrace,
     RightBrace,
     Comma,
@@ -147,8 +147,8 @@ impl<'a> Lexer<'a> {
                     },
                 }
             }
-            b'(' => self.single(Symbol::LeftParen, 1, start, line, column),
-            b')' => self.single(Symbol::RightParen, 1, start, line, column),
+            b'(' => self.single(Symbol::LeftParenthesis, 1, start, line, column),
+            b')' => self.single(Symbol::RightParenthesis, 1, start, line, column),
             b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
@@ -474,10 +474,10 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
 
 fn update_parenthesis_depth(kind: &TokenKind, parenthesis_depth: &mut usize) {
     match kind {
-        TokenKind::Symbol(Symbol::LeftParen) => {
+        TokenKind::Symbol(Symbol::LeftParenthesis) => {
             *parenthesis_depth = parenthesis_depth.saturating_add(1);
         }
-        TokenKind::Symbol(Symbol::RightParen) => {
+        TokenKind::Symbol(Symbol::RightParenthesis) => {
             *parenthesis_depth = parenthesis_depth.saturating_sub(1);
         }
         _ => {}
@@ -491,7 +491,7 @@ fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
             | TokenKind::IntegerLiteral(_)
             | TokenKind::StringLiteral(_)
             | TokenKind::BooleanLiteral(_)
-            | TokenKind::Symbol(Symbol::RightParen | Symbol::RightBrace)
+            | TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBrace)
             | TokenKind::Keyword(Keyword::Return)
     )
 }
