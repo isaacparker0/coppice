@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Refreshes SHA256 checksums in multitool.lock.json after Renovate bumps
-# the versions.
+# Refreshes SHA256 checksums in multitool.lock.json after Renovate bumps the
+# versions.
 #
 # Usage: update_multitool_checksums.sh <dep-name>
 set -euo pipefail
