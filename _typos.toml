@@ -1,5 +1,6 @@
 [default.extend-words]
 # Commonly used abbreviations, banned per styleguide.
+alnum = "alphanumeric"
 paren = "parenthesis"
 prev = "previous"
 ty = "type"

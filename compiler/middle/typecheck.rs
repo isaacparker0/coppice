@@ -1510,12 +1510,12 @@ fn is_pascal_case(name: &str) -> bool {
     if !first.is_ascii_uppercase() {
         return false;
     }
-    if !is_alnum_no_underscore(first) {
+    if !is_alphanumeric_no_underscore(first) {
         return false;
     }
     let mut previous_upper = true;
     for ch in chars {
-        if !is_alnum_no_underscore(ch) {
+        if !is_alphanumeric_no_underscore(ch) {
             return false;
         }
         let is_upper = ch.is_ascii_uppercase();
@@ -1535,12 +1535,12 @@ fn is_camel_case(name: &str) -> bool {
     if !first.is_ascii_lowercase() {
         return false;
     }
-    if !is_alnum_no_underscore(first) {
+    if !is_alphanumeric_no_underscore(first) {
         return false;
     }
     let mut previous_upper = false;
     for ch in chars {
-        if !is_alnum_no_underscore(ch) {
+        if !is_alphanumeric_no_underscore(ch) {
             return false;
         }
         let is_upper = ch.is_ascii_uppercase();
@@ -1581,7 +1581,7 @@ fn is_camel_case_with_optional_leading_underscore(name: &str) -> bool {
     is_camel_case(name)
 }
 
-fn is_alnum_no_underscore(ch: char) -> bool {
+fn is_alphanumeric_no_underscore(ch: char) -> bool {
     ch.is_ascii_alphanumeric()
 }
 
