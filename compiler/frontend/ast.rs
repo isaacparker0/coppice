@@ -2,9 +2,9 @@ use crate::diagnostics::Span;
 
 #[derive(Clone, Debug)]
 pub struct File {
-    pub type_declarations: Vec<TypeDeclaration>,
-    pub constant_declarations: Vec<ConstantDeclaration>,
-    pub function_declarations: Vec<FunctionDeclaration>,
+    pub types: Vec<TypeDeclaration>,
+    pub constants: Vec<ConstantDeclaration>,
+    pub functions: Vec<FunctionDeclaration>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,14 +23,30 @@ pub struct TypeDeclaration {
 
 #[derive(Clone, Debug)]
 pub enum TypeDeclarationKind {
-    Struct { fields: Vec<StructField> },
-    Union { variants: Vec<TypeName> },
+    Struct {
+        fields: Vec<FieldDeclaration>,
+        methods: Vec<MethodDeclaration>,
+    },
+    Union {
+        variants: Vec<TypeName>,
+    },
 }
 
 #[derive(Clone, Debug)]
-pub struct StructField {
+pub struct FieldDeclaration {
     pub name: String,
     pub type_name: TypeName,
+    pub visibility: Visibility,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct MethodDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub parameters: Vec<ParameterDeclaration>,
+    pub return_type: TypeName,
+    pub body: Block,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -47,7 +63,7 @@ pub struct ConstantDeclaration {
 pub struct FunctionDeclaration {
     pub name: String,
     pub name_span: Span,
-    pub parameters: Vec<Parameter>,
+    pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
     pub visibility: Visibility,
@@ -55,7 +71,7 @@ pub struct FunctionDeclaration {
 }
 
 #[derive(Clone, Debug)]
-pub struct Parameter {
+pub struct ParameterDeclaration {
     pub name: String,
     pub type_name: TypeName,
     pub span: Span,

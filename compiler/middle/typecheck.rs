@@ -12,10 +12,10 @@ use crate::types::{Type, type_from_name};
 pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut checker = Checker::new(&mut diagnostics);
-    checker.collect_type_declarations(&file.type_declarations);
-    checker.collect_function_signatures(&file.function_declarations);
-    checker.check_constant_declarations(&file.constant_declarations);
-    for function in &file.function_declarations {
+    checker.collect_type_declarations(&file.types);
+    checker.collect_function_signatures(&file.functions);
+    checker.check_constant_declarations(&file.constants);
+    for function in &file.functions {
         checker.check_function(function);
     }
     diagnostics
@@ -107,7 +107,7 @@ impl<'a> Checker<'a> {
 
         for type_declaration in types {
             match &type_declaration.kind {
-                TypeDeclarationKind::Struct { fields } => {
+                TypeDeclarationKind::Struct { fields, .. } => {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for field in fields {
