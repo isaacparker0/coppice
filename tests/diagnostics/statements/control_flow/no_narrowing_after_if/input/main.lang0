@@ -1,0 +1,7 @@
+function unwrap(value: int64 | nil) -> int64 {
+    if value != nil {
+        x := value
+        return x
+    }
+    return value
+}

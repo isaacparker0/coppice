@@ -18,6 +18,7 @@ pub enum Keyword {
     Nil,
     Mut,
     Struct,
+    Matches,
 }
 
 impl Keyword {
@@ -39,6 +40,7 @@ impl Keyword {
             Keyword::Nil => "nil",
             Keyword::Mut => "mut",
             Keyword::Struct => "struct",
+            Keyword::Matches => "matches",
         }
     }
 }
@@ -360,6 +362,7 @@ impl<'a> Lexer<'a> {
             "nil" => TokenKind::Keyword(Keyword::Nil),
             "mut" => TokenKind::Keyword(Keyword::Mut),
             "struct" => TokenKind::Keyword(Keyword::Struct),
+            "matches" => TokenKind::Keyword(Keyword::Matches),
             "true" => TokenKind::BooleanLiteral(true),
             "false" => TokenKind::BooleanLiteral(false),
             _ => TokenKind::Identifier(text.to_string()),

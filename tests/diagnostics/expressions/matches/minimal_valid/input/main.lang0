@@ -1,0 +1,12 @@
+type Result :: int64 | string
+
+function isInt(value: int64 | string) -> boolean {
+    return value matches int64
+}
+
+function unwrapInt(value: int64 | string) -> int64 {
+    if value matches int64 {
+        return value
+    }
+    return 0
+}

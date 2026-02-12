@@ -158,6 +158,11 @@ pub enum Expression {
         arms: Vec<MatchArm>,
         span: Span,
     },
+    Matches {
+        value: Box<Expression>,
+        type_name: TypeName,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

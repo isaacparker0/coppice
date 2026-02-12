@@ -1,0 +1,3 @@
+function main(value: int64 | string) -> boolean {
+    return value matches boolean
+}

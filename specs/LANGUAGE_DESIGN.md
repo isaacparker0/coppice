@@ -162,17 +162,10 @@ for { ... }                     // infinite loop
 Control-flow narrowing:
 
 ```
-function handle(user: User?) {
+function handle(user: User | nil) {
     if user == nil { return }
     // user is User (non-optional) from here — no unwrap needed
     print(user.name)
-}
-
-function process(value: string | u64) {
-    if value is string {
-        // compiler knows value is string here
-        print(value.to_upper())
-    }
 }
 ```
 
@@ -536,14 +529,15 @@ group Token.parse {
 
     test "rejects malformed input" {
         result := parse("garbage")
-        assert result is ParseError
+        assert result matches ParseError
     }
 }
 
 group Token.validate {
     test "accepts unexpired token" {
         token := make_test_token(ttl: 3600)
-        assert token.validate() is OK
+        status := token.validate()
+        assert status matches OK
     }
 }
 ```
@@ -608,9 +602,9 @@ platform/auth/token_test.lang
     FAIL rejects expired token (1ms)
 
   FAIL: "rejects expired token"
-    assert token.validate() is TokenExpired
-           |                |
-           OK               TokenExpired
+    assert status matches TokenExpired
+           |      |
+           OK     TokenExpired
     at: token_test.lang:28
 
 3 passed, 1 failed

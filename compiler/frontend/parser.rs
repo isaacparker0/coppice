@@ -554,6 +554,22 @@ impl Parser {
     fn parse_comparison(&mut self) -> Option<Expression> {
         let mut expression = self.parse_additive()?;
         loop {
+            if self.peek_is_keyword(Keyword::Matches) {
+                let operator_span = self.advance().span.clone();
+                let type_name = self.parse_type_name()?;
+                let span = Span {
+                    start: expression.span().start,
+                    end: type_name.span.end,
+                    line: operator_span.line,
+                    column: operator_span.column,
+                };
+                expression = Expression::Matches {
+                    value: Box::new(expression),
+                    type_name,
+                    span,
+                };
+                continue;
+            }
             let operator = if self.peek_is_symbol(Symbol::Less) {
                 BinaryOperator::LessThan
             } else if self.peek_is_symbol(Symbol::LessEqual) {
@@ -1187,7 +1203,8 @@ impl ExpressionSpan for Expression {
             | Expression::Call { span, .. }
             | Expression::Unary { span, .. }
             | Expression::Binary { span, .. }
-            | Expression::Match { span, .. } => span.clone(),
+            | Expression::Match { span, .. }
+            | Expression::Matches { span, .. } => span.clone(),
         }
     }
 }
