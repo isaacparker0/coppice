@@ -49,6 +49,7 @@ struct FunctionInfo {
 }
 
 struct MethodInfo {
+    self_mutable: bool,
     parameter_types: Vec<Type>,
     return_type: Type,
 }
@@ -236,6 +237,7 @@ impl<'a> Checker<'a> {
                 self.methods.insert(
                     method_key,
                     MethodInfo {
+                        self_mutable: method.self_mutable,
                         parameter_types,
                         return_type,
                     },
@@ -323,7 +325,7 @@ impl<'a> Checker<'a> {
         self.define_variable(
             "self".to_string(),
             Type::Named(type_declaration.name.clone()),
-            false,
+            method.self_mutable,
             method.self_span.clone(),
         );
         if let Some(scope) = self.scopes.last_mut()
@@ -615,75 +617,111 @@ impl<'a> Checker<'a> {
                 arguments,
                 span,
             } => {
-                let (callee_name, parameter_types, return_type) =
-                    if let Expression::Identifier { name, span } = callee.as_ref() {
-                        if let Some(info) = self.functions.get(name) {
-                            (
-                                name.as_str(),
-                                info.parameter_types.clone(),
-                                info.return_type.clone(),
-                            )
-                        } else {
-                            self.error(format!("unknown function '{name}'"), span.clone());
-                            for argument in arguments {
-                                self.check_expression(argument);
-                            }
-                            return Type::Unknown;
+                let (callee_name, parameter_types, return_type) = if let Expression::Identifier {
+                    name,
+                    span,
+                } = callee.as_ref()
+                {
+                    if let Some(info) = self.functions.get(name) {
+                        (
+                            name.as_str(),
+                            info.parameter_types.clone(),
+                            info.return_type.clone(),
+                        )
+                    } else {
+                        self.error(format!("unknown function '{name}'"), span.clone());
+                        for argument in arguments {
+                            self.check_expression(argument);
                         }
-                    } else if let Expression::FieldAccess {
-                        target,
-                        field,
-                        field_span,
-                        ..
-                    } = callee.as_ref()
-                    {
-                        let receiver_type = self.check_expression(target);
-                        let receiver_type_name = if let Type::Named(type_name) = &receiver_type {
-                            type_name.clone()
-                        } else {
-                            if receiver_type != Type::Unknown {
-                                self.error(
-                                    format!(
-                                        "cannot call method '{}' on non-struct type {}",
-                                        field,
-                                        receiver_type.display()
-                                    ),
-                                    field_span.clone(),
-                                );
-                            }
-                            for argument in arguments {
-                                self.check_expression(argument);
-                            }
-                            return Type::Unknown;
-                        };
-
-                        let method_key = MethodKey {
-                            receiver_type_name: receiver_type_name.clone(),
-                            method_name: field.clone(),
-                        };
-                        if let Some(info) = self.methods.get(&method_key) {
-                            (
-                                field.as_str(),
-                                info.parameter_types.clone(),
-                                info.return_type.clone(),
-                            )
-                        } else {
+                        return Type::Unknown;
+                    }
+                } else if let Expression::FieldAccess {
+                    target,
+                    field,
+                    field_span,
+                    ..
+                } = callee.as_ref()
+                {
+                    let receiver_type = self.check_expression(target);
+                    let receiver_type_name = if let Type::Named(type_name) = &receiver_type {
+                        type_name.clone()
+                    } else {
+                        if receiver_type != Type::Unknown {
                             self.error(
-                                format!("unknown method '{receiver_type_name}.{field}'"),
+                                format!(
+                                    "cannot call method '{}' on non-struct type {}",
+                                    field,
+                                    receiver_type.display()
+                                ),
                                 field_span.clone(),
                             );
-                            for argument in arguments {
-                                self.check_expression(argument);
-                            }
-                            return Type::Unknown;
                         }
-                    } else {
-                        self.error("invalid call target", callee.span());
                         for argument in arguments {
                             self.check_expression(argument);
                         }
                         return Type::Unknown;
                     };
+
+                    let method_key = MethodKey {
+                        receiver_type_name: receiver_type_name.clone(),
+                        method_name: field.clone(),
+                    };
+                    if let Some(info) = self.methods.get(&method_key) {
+                        let method_self_mutable = info.self_mutable;
+                        let method_parameter_types = info.parameter_types.clone();
+                        let method_return_type = info.return_type.clone();
+                        if method_self_mutable {
+                            if let Expression::Identifier { name, .. } = target.as_ref() {
+                                let receiver_is_mutable = self
+                                    .lookup_variable_for_assignment(name)
+                                    .is_some_and(|(is_mutable, _)| is_mutable);
+                                if !receiver_is_mutable {
+                                    if self.constants.contains_key(name)
+                                        || self.lookup_variable_type(name).is_some()
+                                    {
+                                        self.error(
+                                                format!(
+                                                    "cannot call mutating method '{receiver_type_name}.{field}' on immutable binding '{name}'"
+                                                ),
+                                                field_span.clone(),
+                                            );
+                                    }
+                                    for argument in arguments {
+                                        self.check_expression(argument);
+                                    }
+                                    return Type::Unknown;
+                                }
+                            } else {
+                                self.error(
+                                        format!(
+                                            "cannot call mutating method '{receiver_type_name}.{field}' on non-binding receiver"
+                                        ),
+                                        field_span.clone(),
+                                    );
+                                for argument in arguments {
+                                    self.check_expression(argument);
+                                }
+                                return Type::Unknown;
+                            }
+                        }
+                        (field.as_str(), method_parameter_types, method_return_type)
+                    } else {
+                        self.error(
+                            format!("unknown method '{receiver_type_name}.{field}'"),
+                            field_span.clone(),
+                        );
+                        for argument in arguments {
+                            self.check_expression(argument);
+                        }
+                        return Type::Unknown;
+                    }
+                } else {
+                    self.error("invalid call target", callee.span());
+                    for argument in arguments {
+                        self.check_expression(argument);
+                    }
+                    return Type::Unknown;
+                };
 
                 if arguments.len() != parameter_types.len() {
                     self.error(

@@ -204,7 +204,7 @@ impl Parser {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
-        let (self_span, parameters) = self.parse_method_parameters()?;
+        let (self_span, self_mutable, parameters) = self.parse_method_parameters()?;
         self.expect_symbol(Symbol::RightParenthesis)?;
         self.expect_symbol(Symbol::Arrow)?;
         let return_type = self.parse_type_name()?;
@@ -214,6 +214,7 @@ impl Parser {
             name,
             name_span,
             self_span,
+            self_mutable,
             parameters,
             return_type,
             body,
@@ -227,7 +228,13 @@ impl Parser {
         })
     }
 
-    fn parse_method_parameters(&mut self) -> Option<(Span, Vec<ParameterDeclaration>)> {
+    fn parse_method_parameters(&mut self) -> Option<(Span, bool, Vec<ParameterDeclaration>)> {
+        let self_mutable = if self.peek_is_keyword(Keyword::Mut) {
+            self.advance();
+            true
+        } else {
+            false
+        };
         let (receiver_name, receiver_span) = self.expect_identifier()?;
         if receiver_name != "self" {
             self.error("first method parameter must be 'self'", receiver_span);
@@ -242,14 +249,14 @@ impl Parser {
             let _ = self.parse_type_name();
         }
         if !self.peek_is_symbol(Symbol::Comma) {
-            return Some((receiver_span, Vec::new()));
+            return Some((receiver_span, self_mutable, Vec::new()));
         }
 
         self.advance();
         let mut parameters = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParenthesis) {
-            return Some((receiver_span, parameters));
+            return Some((receiver_span, self_mutable, parameters));
         }
         loop {
             self.skip_statement_terminators();
@@ -273,7 +280,7 @@ impl Parser {
             }
             break;
         }
-        Some((receiver_span, parameters))
+        Some((receiver_span, self_mutable, parameters))
     }
 
     fn parse_function(&mut self, visibility: Visibility) -> Option<FunctionDeclaration> {

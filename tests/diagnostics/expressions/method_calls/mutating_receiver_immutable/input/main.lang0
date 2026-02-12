@@ -1,8 +1,5 @@
 type User :: struct {
     id: int64,
-    function idValue(self) -> int64 {
-        return self.id
-    },
     function bump(mut self, delta: int64) -> int64 {
         self = User { id: self.id + delta }
         return self.id
@@ -10,6 +7,6 @@ type User :: struct {
 }
 
 function main() -> int64 {
-    mut user := User { id: 41 }
+    user := User { id: 1 }
     return user.bump(1)
 }
