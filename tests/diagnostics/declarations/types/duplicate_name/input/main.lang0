@@ -1,7 +1,7 @@
-User :: struct {
+type User :: struct {
     id: int64,
 }
 
-User :: struct {
+type User :: struct {
     name: string,
 }

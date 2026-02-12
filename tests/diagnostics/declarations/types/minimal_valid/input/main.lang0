@@ -1,6 +1,6 @@
-User :: struct {
+type User :: struct {
     id: int64,
     name: string,
 }
 
-Outcome :: User | string
+type Outcome :: User | string

@@ -33,17 +33,15 @@ impl Parser {
             self.skip_statement_terminators();
             if self.peek_is_keyword(Keyword::Public) {
                 let visibility = self.parse_visibility();
-                if self.peek_is_keyword(Keyword::Function) {
-                    if let Some(function) = self.parse_function(visibility) {
-                        function_declarations.push(function);
+                if self.peek_is_keyword(Keyword::Type) {
+                    if let Some(type_declaration) = self.parse_type_declaration(visibility) {
+                        type_declarations.push(type_declaration);
                     } else {
                         self.synchronize();
                     }
-                } else if self.peek_is_identifier()
-                    && self.peek_second_is_symbol(Symbol::DoubleColon)
-                {
-                    if let Some(type_declaration) = self.parse_type_declaration(visibility) {
-                        type_declarations.push(type_declaration);
+                } else if self.peek_is_keyword(Keyword::Function) {
+                    if let Some(function) = self.parse_function(visibility) {
+                        function_declarations.push(function);
                     } else {
                         self.synchronize();
                     }
@@ -58,6 +56,12 @@ impl Parser {
                     self.error("expected declaration after 'public'", span);
                     self.synchronize();
                 }
+            } else if self.peek_is_keyword(Keyword::Type) {
+                if let Some(type_declaration) = self.parse_type_declaration(Visibility::Private) {
+                    type_declarations.push(type_declaration);
+                } else {
+                    self.synchronize();
+                }
             } else if self.peek_is_keyword(Keyword::Function) {
                 if let Some(function) = self.parse_function(Visibility::Private) {
                     function_declarations.push(function);
@@ -65,11 +69,10 @@ impl Parser {
                     self.synchronize();
                 }
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
-                if let Some(type_declaration) = self.parse_type_declaration(Visibility::Private) {
-                    type_declarations.push(type_declaration);
-                } else {
-                    self.synchronize();
-                }
+                let span = self.peek_span();
+                self.error("expected keyword 'type' before type declaration", span);
+                self.advance();
+                self.synchronize();
             } else if self.peek_is_identifier() {
                 if let Some(constant) = self.parse_constant_declaration(Visibility::Private) {
                     constant_declarations.push(constant);
@@ -90,6 +93,7 @@ impl Parser {
     }
 
     fn parse_type_declaration(&mut self, visibility: Visibility) -> Option<TypeDeclaration> {
+        self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::DoubleColon)?;
         let start = name_span.clone();
@@ -1069,7 +1073,7 @@ impl Parser {
 
     fn synchronize(&mut self) {
         while !self.at_eof() {
-            if self.peek_is_keyword(Keyword::Function) {
+            if self.peek_is_keyword(Keyword::Type) || self.peek_is_keyword(Keyword::Function) {
                 return;
             }
             if self.peek_is_identifier()

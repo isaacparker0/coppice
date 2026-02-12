@@ -3,6 +3,7 @@ use crate::diagnostics::{Diagnostic, Span};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keyword {
     Public,
+    Type,
     Function,
     Return,
     If,
@@ -19,6 +20,7 @@ impl Keyword {
     pub fn as_str(self) -> &'static str {
         match self {
             Keyword::Public => "public",
+            Keyword::Type => "type",
             Keyword::Function => "function",
             Keyword::Return => "return",
             Keyword::If => "if",
@@ -335,6 +337,7 @@ impl<'a> Lexer<'a> {
         let text = &self.source[start..self.index];
         let kind = match text {
             "public" => TokenKind::Keyword(Keyword::Public),
+            "type" => TokenKind::Keyword(Keyword::Type),
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),

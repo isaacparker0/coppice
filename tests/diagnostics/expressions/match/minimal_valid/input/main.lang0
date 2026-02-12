@@ -1,4 +1,4 @@
-Result :: int64 | string
+type Result :: int64 | string
 
 function main() -> string {
     value: int64 | string := "ok"

@@ -1,4 +1,4 @@
-public User :: struct {
+public type User :: struct {
     public name: string,
     id: int64,
 }

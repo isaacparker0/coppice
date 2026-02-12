@@ -1,4 +1,4 @@
-UserProfile :: struct {
+type UserProfile :: struct {
     id: int64,
     displayName: string,
 }
