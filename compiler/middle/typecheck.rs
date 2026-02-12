@@ -53,6 +53,7 @@ struct Checker<'a> {
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
+    loop_depth: usize,
 }
 
 impl<'a> Checker<'a> {
@@ -64,6 +65,7 @@ impl<'a> Checker<'a> {
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
+            loop_depth: 0,
         }
     }
 
@@ -329,6 +331,12 @@ impl<'a> Checker<'a> {
                 }
                 true
             }
+            Statement::Break { span } => {
+                if self.loop_depth == 0 {
+                    self.error("break can only be used inside a loop", span.clone());
+                }
+                false
+            }
             Statement::If {
                 condition,
                 then_block,
@@ -354,7 +362,9 @@ impl<'a> Checker<'a> {
                         self.error("for condition must be boolean", condition.span());
                     }
                 }
+                self.loop_depth += 1;
                 let _ = self.check_block(body);
+                self.loop_depth = self.loop_depth.saturating_sub(1);
                 false
             }
         }

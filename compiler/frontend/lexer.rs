@@ -6,6 +6,7 @@ pub enum Keyword {
     Type,
     Function,
     Return,
+    Break,
     If,
     For,
     Else,
@@ -25,6 +26,7 @@ impl Keyword {
             Keyword::Type => "type",
             Keyword::Function => "function",
             Keyword::Return => "return",
+            Keyword::Break => "break",
             Keyword::If => "if",
             Keyword::For => "for",
             Keyword::Else => "else",
@@ -344,6 +346,7 @@ impl<'a> Lexer<'a> {
             "type" => TokenKind::Keyword(Keyword::Type),
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
+            "break" => TokenKind::Keyword(Keyword::Break),
             "if" => TokenKind::Keyword(Keyword::If),
             "for" => TokenKind::Keyword(Keyword::For),
             "else" => TokenKind::Keyword(Keyword::Else),
@@ -509,7 +512,7 @@ fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
             | TokenKind::StringLiteral(_)
             | TokenKind::BooleanLiteral(_)
             | TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBrace)
-            | TokenKind::Keyword(Keyword::Return)
+            | TokenKind::Keyword(Keyword::Return | Keyword::Break)
     )
 }
 
@@ -518,7 +521,12 @@ fn is_statement_start(kind: &TokenKind) -> bool {
         kind,
         TokenKind::Identifier(_)
             | TokenKind::Keyword(
-                Keyword::Return | Keyword::If | Keyword::For | Keyword::Mut | Keyword::Match
+                Keyword::Return
+                    | Keyword::Break
+                    | Keyword::If
+                    | Keyword::For
+                    | Keyword::Mut
+                    | Keyword::Match
             )
     )
 }
