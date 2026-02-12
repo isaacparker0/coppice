@@ -2,3 +2,5 @@ User :: struct {
     id: int64,
     name: string,
 }
+
+Outcome :: User | string

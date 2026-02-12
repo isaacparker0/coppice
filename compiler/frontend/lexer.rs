@@ -7,6 +7,7 @@ pub enum Keyword {
     Return,
     If,
     Else,
+    Match,
     And,
     Or,
     Not,
@@ -22,6 +23,7 @@ impl Keyword {
             Keyword::Return => "return",
             Keyword::If => "if",
             Keyword::Else => "else",
+            Keyword::Match => "match",
             Keyword::And => "and",
             Keyword::Or => "or",
             Keyword::Not => "not",
@@ -41,6 +43,7 @@ pub enum Symbol {
     Colon,
     DoubleColon,
     Dot,
+    Pipe,
     Less,
     LessEqual,
     Greater,
@@ -51,6 +54,7 @@ pub enum Symbol {
     Slash,
     Assign,
     Arrow,
+    FatArrow,
     EqualEqual,
     BangEqual,
     Equal,
@@ -153,6 +157,7 @@ impl<'a> Lexer<'a> {
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
             b'.' => self.single(Symbol::Dot, 1, start, line, column),
+            b'|' => self.single(Symbol::Pipe, 1, start, line, column),
             b'<' => {
                 if self.match_bytes(b"<=") {
                     self.single(Symbol::LessEqual, 2, start, line, column)
@@ -198,6 +203,8 @@ impl<'a> Lexer<'a> {
             b'=' => {
                 if self.match_bytes(b"==") {
                     self.single(Symbol::EqualEqual, 2, start, line, column)
+                } else if self.match_bytes(b"=>") {
+                    self.single(Symbol::FatArrow, 2, start, line, column)
                 } else {
                     self.single(Symbol::Equal, 1, start, line, column)
                 }
@@ -332,6 +339,7 @@ impl<'a> Lexer<'a> {
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
+            "match" => TokenKind::Keyword(Keyword::Match),
             "and" => TokenKind::Keyword(Keyword::And),
             "or" => TokenKind::Keyword(Keyword::Or),
             "not" => TokenKind::Keyword(Keyword::Not),
@@ -499,6 +507,7 @@ fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
 fn is_statement_start(kind: &TokenKind) -> bool {
     matches!(
         kind,
-        TokenKind::Identifier(_) | TokenKind::Keyword(Keyword::Return | Keyword::If | Keyword::Mut)
+        TokenKind::Identifier(_)
+            | TokenKind::Keyword(Keyword::Return | Keyword::If | Keyword::Mut | Keyword::Match)
     )
 }

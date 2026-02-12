@@ -16,9 +16,15 @@ pub enum Visibility {
 #[derive(Clone, Debug)]
 pub struct TypeDeclaration {
     pub name: String,
-    pub fields: Vec<StructField>,
+    pub kind: TypeDeclarationKind,
     pub visibility: Visibility,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum TypeDeclarationKind {
+    Struct { fields: Vec<StructField> },
+    Union { variants: Vec<TypeName> },
 }
 
 #[derive(Clone, Debug)]
@@ -133,6 +139,11 @@ pub enum Expression {
         right: Box<Expression>,
         span: Span,
     },
+    Match {
+        target: Box<Expression>,
+        arms: Vec<MatchArm>,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,6 +170,12 @@ pub enum UnaryOperator {
 
 #[derive(Clone, Debug)]
 pub struct TypeName {
+    pub names: Vec<TypeNameAtom>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeNameAtom {
     pub name: String,
     pub span: Span,
 }
@@ -169,4 +186,34 @@ pub struct StructLiteralField {
     pub name_span: Span,
     pub value: Expression,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct MatchArm {
+    pub pattern: MatchPattern,
+    pub value: Expression,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum MatchPattern {
+    Type {
+        type_name: TypeName,
+        span: Span,
+    },
+    Binding {
+        name: String,
+        name_span: Span,
+        type_name: TypeName,
+        span: Span,
+    },
+}
+
+impl MatchPattern {
+    #[must_use]
+    pub fn span(&self) -> Span {
+        match self {
+            MatchPattern::Type { span, .. } | MatchPattern::Binding { span, .. } => span.clone(),
+        }
+    }
 }

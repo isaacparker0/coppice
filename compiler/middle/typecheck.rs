@@ -2,7 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use compiler__frontend::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
-    Span, Statement, StructLiteralField, TypeDeclaration, TypeName, UnaryOperator,
+    MatchArm, MatchPattern, Span, Statement, StructLiteralField, TypeDeclaration,
+    TypeDeclarationKind, TypeName, UnaryOperator,
 };
 
 use crate::types::{Type, type_from_name};
@@ -32,7 +33,12 @@ struct ConstantInfo {
 }
 
 struct TypeInfo {
-    fields: Vec<(String, Type)>,
+    kind: TypeKind,
+}
+
+enum TypeKind {
+    Struct { fields: Vec<(String, Type)> },
+    Union { variants: Vec<Type> },
 }
 
 struct FunctionInfo {
@@ -71,32 +77,66 @@ impl<'a> Checker<'a> {
                 );
                 continue;
             }
-            self.types.insert(
-                type_declaration.name.clone(),
-                TypeInfo { fields: Vec::new() },
-            );
+            let kind = match &type_declaration.kind {
+                TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
+                TypeDeclarationKind::Union { .. } => TypeKind::Union {
+                    variants: Vec::new(),
+                },
+            };
+            self.types
+                .insert(type_declaration.name.clone(), TypeInfo { kind });
         }
 
         for type_declaration in types {
-            let mut fields = Vec::new();
-            let mut seen = HashSet::new();
-            for field in &type_declaration.fields {
-                if !seen.insert(field.name.clone()) {
-                    self.error(
-                        format!(
-                            "duplicate field '{}' in '{}'",
-                            field.name, type_declaration.name
-                        ),
-                        field.span.clone(),
-                    );
-                    continue;
+            match &type_declaration.kind {
+                TypeDeclarationKind::Struct { fields } => {
+                    let mut resolved_fields = Vec::new();
+                    let mut seen = HashSet::new();
+                    for field in fields {
+                        if !seen.insert(field.name.clone()) {
+                            self.error(
+                                format!(
+                                    "duplicate field '{}' in '{}'",
+                                    field.name, type_declaration.name
+                                ),
+                                field.span.clone(),
+                            );
+                            continue;
+                        }
+                        let field_type = self.resolve_type_name(&field.type_name);
+                        resolved_fields.push((field.name.clone(), field_type));
+                    }
+                    if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                        info.kind = TypeKind::Struct {
+                            fields: resolved_fields,
+                        };
+                    }
                 }
-                let field_type =
-                    self.resolve_type_name(&field.type_name.name, &field.type_name.span);
-                fields.push((field.name.clone(), field_type));
-            }
-            if let Some(info) = self.types.get_mut(&type_declaration.name) {
-                info.fields = fields;
+                TypeDeclarationKind::Union { variants } => {
+                    let mut resolved_variants = Vec::new();
+                    let mut seen = HashSet::new();
+                    for variant in variants {
+                        if variant.names.len() != 1 {
+                            self.error("union variants must be single types", variant.span.clone());
+                            continue;
+                        }
+                        let variant_type = self.resolve_type_name(variant);
+                        let key = variant_type.display();
+                        if !seen.insert(key.clone()) {
+                            self.error(
+                                format!("duplicate union variant '{key}'"),
+                                variant.span.clone(),
+                            );
+                            continue;
+                        }
+                        resolved_variants.push(variant_type);
+                    }
+                    if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                        info.kind = TypeKind::Union {
+                            variants: resolved_variants,
+                        };
+                    }
+                }
             }
         }
     }
@@ -112,13 +152,11 @@ impl<'a> Checker<'a> {
                 continue;
             }
 
-            let return_type =
-                self.resolve_type_name(&function.return_type.name, &function.return_type.span);
+            let return_type = self.resolve_type_name(&function.return_type);
 
             let mut parameter_types = Vec::new();
             for parameter in &function.parameters {
-                let value_type =
-                    self.resolve_type_name(&parameter.type_name.name, &parameter.type_name.span);
+                let value_type = self.resolve_type_name(&parameter.type_name);
                 parameter_types.push(value_type);
             }
 
@@ -155,10 +193,7 @@ impl<'a> Checker<'a> {
         {
             (info.parameter_types.clone(), info.return_type.clone())
         } else {
-            (
-                Vec::new(),
-                self.resolve_type_name(&function.return_type.name, &function.return_type.span),
-            )
+            (Vec::new(), self.resolve_type_name(&function.return_type))
         };
         self.current_return_type = return_type;
 
@@ -212,23 +247,29 @@ impl<'a> Checker<'a> {
             } => {
                 self.check_variable_name(name, span);
                 let value_type = self.check_expression(expression);
+                let mut binding_type = value_type.clone();
+                let mut annotation_mismatch = false;
                 if let Some(type_name) = type_name {
-                    let annotated_type = self.resolve_type_name(&type_name.name, &type_name.span);
+                    let annotated_type = self.resolve_type_name(type_name);
                     if annotated_type != Type::Unknown
                         && value_type != Type::Unknown
-                        && value_type != annotated_type
+                        && !Self::is_assignable(&value_type, &annotated_type)
                     {
                         self.error(
                             format!(
                                 "type mismatch: expected {}, got {}",
-                                annotated_type.name(),
-                                value_type.name()
+                                annotated_type.display(),
+                                value_type.display()
                             ),
                             expression.span(),
                         );
+                        annotation_mismatch = true;
+                    }
+                    if annotated_type != Type::Unknown && !annotation_mismatch {
+                        binding_type = annotated_type;
                     }
                 }
-                self.define_variable(name.clone(), value_type, *mutable, span.clone());
+                self.define_variable(name.clone(), binding_type, *mutable, span.clone());
                 false
             }
             Statement::Assign {
@@ -247,13 +288,13 @@ impl<'a> Checker<'a> {
                         );
                     } else if variable_type != Type::Unknown
                         && value_type != Type::Unknown
-                        && variable_type != value_type
+                        && !Self::is_assignable(&value_type, &variable_type)
                     {
                         self.error(
                             format!(
                                 "assignment type mismatch: expected {}, got {}",
-                                variable_type.name(),
-                                value_type.name()
+                                variable_type.display(),
+                                value_type.display()
                             ),
                             expression.span(),
                         );
@@ -275,13 +316,13 @@ impl<'a> Checker<'a> {
                 let value_type = self.check_expression(expression);
                 if self.current_return_type != Type::Unknown
                     && value_type != Type::Unknown
-                    && value_type != self.current_return_type
+                    && !Self::is_assignable(&value_type, &self.current_return_type)
                 {
                     self.error(
                         format!(
                             "return type mismatch: expected {}, got {}",
-                            self.current_return_type.name(),
-                            value_type.name()
+                            self.current_return_type.display(),
+                            value_type.display()
                         ),
                         expression.span(),
                     );
@@ -373,15 +414,15 @@ impl<'a> Checker<'a> {
                     if let Some(expected_type) = parameter_types.get(index)
                         && *expected_type != Type::Unknown
                         && argument_type != Type::Unknown
-                        && argument_type != *expected_type
+                        && !Self::is_assignable(&argument_type, expected_type)
                     {
                         self.error(
                             format!(
                                 "argument {} to '{}' must be {}, got {}",
                                 index + 1,
                                 function_name,
-                                expected_type.name(),
-                                argument_type.name()
+                                expected_type.display(),
+                                argument_type.display()
                             ),
                             argument.span(),
                         );
@@ -461,7 +502,137 @@ impl<'a> Checker<'a> {
                     }
                 }
             }
+            Expression::Match { target, arms, span } => {
+                self.check_match_expression(target, arms, span)
+            }
         }
+    }
+
+    fn check_match_expression(
+        &mut self,
+        target: &Expression,
+        arms: &[MatchArm],
+        span: &Span,
+    ) -> Type {
+        let target_type = self.check_expression(target);
+        if arms.is_empty() {
+            self.error("match must have at least one arm", span.clone());
+            return Type::Unknown;
+        }
+
+        let target_variants = match &target_type {
+            Type::Union(variants) => Some(variants.clone()),
+            _ => None,
+        };
+
+        let mut seen_patterns = HashSet::new();
+        let mut result_type: Option<Type> = None;
+
+        for arm in arms {
+            let pattern_type = self.resolve_match_pattern_type(&arm.pattern);
+            if pattern_type != Type::Unknown && target_type != Type::Unknown {
+                if let Some(variants) = &target_variants {
+                    if !variants.contains(&pattern_type) {
+                        self.error(
+                            format!(
+                                "match pattern type '{}' is not in target type",
+                                pattern_type.display()
+                            ),
+                            arm.pattern.span(),
+                        );
+                    }
+                } else if pattern_type != target_type {
+                    self.error(
+                        format!(
+                            "match pattern type '{}' does not match target type {}",
+                            pattern_type.display(),
+                            target_type.display()
+                        ),
+                        arm.pattern.span(),
+                    );
+                }
+            }
+
+            if pattern_type != Type::Unknown {
+                let pattern_key = pattern_type.display();
+                if !seen_patterns.insert(pattern_key.clone()) {
+                    self.error(
+                        format!("duplicate match arm for type '{pattern_key}'"),
+                        arm.pattern.span(),
+                    );
+                }
+            }
+
+            self.scopes.push(HashMap::new());
+            if let MatchPattern::Binding {
+                name, name_span, ..
+            } = &arm.pattern
+            {
+                self.define_variable(name.clone(), pattern_type.clone(), false, name_span.clone());
+            }
+
+            let arm_type = self.check_expression(&arm.value);
+            self.check_unused_in_current_scope();
+            self.scopes.pop();
+
+            if let Some(expected_type) = &result_type {
+                if *expected_type != Type::Unknown
+                    && arm_type != Type::Unknown
+                    && !Self::is_assignable(&arm_type, expected_type)
+                {
+                    self.error(
+                        format!(
+                            "match arm type mismatch: expected {}, got {}",
+                            expected_type.display(),
+                            arm_type.display()
+                        ),
+                        arm.value.span(),
+                    );
+                }
+            } else {
+                result_type = Some(arm_type);
+            }
+        }
+
+        if let Some(variants) = target_variants {
+            let missing = variants
+                .iter()
+                .filter(|variant| !seen_patterns.contains(&variant.display()))
+                .map(Type::display)
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                self.error(
+                    format!("non-exhaustive match, missing: {}", missing.join(", ")),
+                    span.clone(),
+                );
+            }
+        }
+
+        result_type.unwrap_or(Type::Unknown)
+    }
+
+    fn resolve_match_pattern_type(&mut self, pattern: &MatchPattern) -> Type {
+        match pattern {
+            MatchPattern::Type { type_name, span } => {
+                self.resolve_match_pattern_type_name(type_name, span)
+            }
+            MatchPattern::Binding {
+                type_name, span, ..
+            } => self.resolve_match_pattern_type_name(type_name, span),
+        }
+    }
+
+    fn resolve_match_pattern_type_name(&mut self, type_name: &TypeName, span: &Span) -> Type {
+        if type_name.names.len() != 1 {
+            self.error("match patterns must be single types", span.clone());
+            return Type::Unknown;
+        }
+        let resolved = self.resolve_type_name(type_name);
+        if matches!(resolved, Type::Union(_)) {
+            self.error("match patterns must be concrete types", span.clone());
+            return Type::Unknown;
+        }
+        resolved
     }
 
     fn check_struct_literal(
@@ -469,16 +640,37 @@ impl<'a> Checker<'a> {
         type_name: &TypeName,
         fields: &[StructLiteralField],
     ) -> Type {
-        let struct_type = self.resolve_type_name(&type_name.name, &type_name.span);
-        let Some(field_defs) = self
-            .types
-            .get(&type_name.name)
-            .map(|info| info.fields.clone())
-        else {
+        if type_name.names.len() != 1 {
+            self.error(
+                "struct literal requires a named struct type",
+                type_name.span.clone(),
+            );
+            for field in fields {
+                self.check_expression(&field.value);
+            }
+            return Type::Unknown;
+        }
+
+        let struct_type = self.resolve_type_name(type_name);
+        let type_name_str = &type_name.names[0].name;
+        let Some(info) = self.types.get(type_name_str) else {
             for field in fields {
                 self.check_expression(&field.value);
             }
             return struct_type;
+        };
+        let field_defs = match &info.kind {
+            TypeKind::Struct { fields } => fields.clone(),
+            TypeKind::Union { .. } => {
+                self.error(
+                    format!("struct literal requires struct type, found '{type_name_str}'"),
+                    type_name.span.clone(),
+                );
+                for field in fields {
+                    self.check_expression(&field.value);
+                }
+                return struct_type;
+            }
         };
 
         let mut seen = HashSet::new();
@@ -487,7 +679,7 @@ impl<'a> Checker<'a> {
                 self.error(
                     format!(
                         "duplicate field '{}' in {} literal",
-                        field.name, type_name.name
+                        field.name, type_name_str
                     ),
                     field.name_span.clone(),
                 );
@@ -498,7 +690,7 @@ impl<'a> Checker<'a> {
             let Some((_, field_type)) = field_defs.iter().find(|(name, _)| name == &field.name)
             else {
                 self.error(
-                    format!("unknown field '{}' on {}", field.name, type_name.name),
+                    format!("unknown field '{}' on {}", field.name, type_name_str),
                     field.name_span.clone(),
                 );
                 self.check_expression(&field.value);
@@ -514,8 +706,8 @@ impl<'a> Checker<'a> {
                     format!(
                         "field '{}' must be {}, got {}",
                         field.name,
-                        field_type.name(),
-                        value_type.name()
+                        field_type.display(),
+                        value_type.display()
                     ),
                     field.value.span(),
                 );
@@ -525,10 +717,7 @@ impl<'a> Checker<'a> {
         for (field_name, _) in &field_defs {
             if !seen.contains(field_name.as_str()) {
                 self.error(
-                    format!(
-                        "missing field '{}' in {} literal",
-                        field_name, type_name.name
-                    ),
+                    format!("missing field '{field_name}' in {type_name_str} literal"),
                     type_name.span.clone(),
                 );
             }
@@ -544,7 +733,7 @@ impl<'a> Checker<'a> {
                     format!(
                         "cannot access field '{}' on non-struct type {}",
                         field,
-                        target_type.name()
+                        target_type.display()
                     ),
                     span.clone(),
                 );
@@ -555,8 +744,16 @@ impl<'a> Checker<'a> {
         let Some(info) = self.types.get(type_name) else {
             return Type::Unknown;
         };
-        if let Some((_, field_type)) = info.fields.iter().find(|(name, _)| name == field) {
-            return field_type.clone();
+        if let TypeKind::Struct { fields } = &info.kind {
+            if let Some((_, field_type)) = fields.iter().find(|(name, _)| name == field) {
+                return field_type.clone();
+            }
+        } else {
+            self.error(
+                format!("cannot access field '{field}' on non-struct type {type_name}"),
+                span.clone(),
+            );
+            return Type::Unknown;
         }
         self.error(
             format!("unknown field '{field}' on {type_name}"),
@@ -636,6 +833,24 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn is_assignable(value_type: &Type, expected_type: &Type) -> bool {
+        match expected_type {
+            Type::Unknown => true,
+            Type::Union(members) => match value_type {
+                Type::Unknown => true,
+                Type::Union(value_members) => value_members
+                    .iter()
+                    .all(|value_member| members.contains(value_member)),
+                _ => members.contains(value_type),
+            },
+            _ => match value_type {
+                Type::Unknown => true,
+                Type::Union(_) => false,
+                _ => value_type == expected_type,
+            },
+        }
+    }
+
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(Diagnostic::new(message, span));
     }
@@ -670,15 +885,61 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn resolve_type_name(&mut self, name: &str, span: &Span) -> Type {
-        if let Some(builtin) = type_from_name(name) {
-            return builtin;
+    fn resolve_type_name(&mut self, type_name: &TypeName) -> Type {
+        let mut resolved = Vec::new();
+        let mut has_unknown = false;
+        for atom in &type_name.names {
+            let name = atom.name.as_str();
+            if let Some(builtin) = type_from_name(name) {
+                resolved.push(builtin);
+                continue;
+            }
+            if let Some(info) = self.types.get(name) {
+                match &info.kind {
+                    TypeKind::Struct { .. } => resolved.push(Type::Named(name.to_string())),
+                    TypeKind::Union { variants } => {
+                        resolved.push(Self::normalize_union(variants.clone()));
+                    }
+                }
+                continue;
+            }
+            self.error(format!("unknown type '{name}'"), atom.span.clone());
+            has_unknown = true;
         }
-        if self.types.contains_key(name) {
-            return Type::Named(name.to_string());
+
+        if has_unknown {
+            return Type::Unknown;
         }
-        self.error(format!("unknown type '{name}'"), span.clone());
-        Type::Unknown
+
+        if resolved.len() == 1 {
+            return resolved.remove(0);
+        }
+        Self::normalize_union(resolved)
+    }
+
+    fn normalize_union(types: Vec<Type>) -> Type {
+        let mut flat = Vec::new();
+        let mut seen = HashSet::new();
+        for value_type in types {
+            if let Type::Union(inner) = value_type {
+                for inner_type in inner {
+                    let key = inner_type.display();
+                    if seen.insert(key) {
+                        flat.push(inner_type);
+                    }
+                }
+            } else {
+                let key = value_type.display();
+                if seen.insert(key) {
+                    flat.push(value_type);
+                }
+            }
+        }
+        if flat.len() == 1 {
+            flat.remove(0)
+        } else {
+            Type::Union(flat)
+        }
     }
 }
 
@@ -780,7 +1041,8 @@ impl ExpressionSpan for Expression {
             | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
             | Expression::Unary { span, .. }
-            | Expression::Binary { span, .. } => span.clone(),
+            | Expression::Binary { span, .. }
+            | Expression::Match { span, .. } => span.clone(),
         }
     }
 }

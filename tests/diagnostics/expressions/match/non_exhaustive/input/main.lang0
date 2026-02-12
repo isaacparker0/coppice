@@ -1,0 +1,8 @@
+Result :: int64 | string
+
+function main() -> int64 {
+    value: int64 | string := 1
+    return match value {
+        int64 => 1
+    }
+}

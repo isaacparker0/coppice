@@ -1,0 +1,9 @@
+Result :: int64 | string
+
+function main() -> string {
+    value: int64 | string := "ok"
+    return match value {
+        int64 => "int"
+        s: string => s
+    }
+}

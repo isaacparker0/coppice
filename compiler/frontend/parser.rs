@@ -1,7 +1,7 @@
 use crate::ast::{
-    BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, Parameter,
-    Statement, StructField, StructLiteralField, TypeDeclaration, TypeName, UnaryOperator,
-    Visibility,
+    BinaryOperator, Block, ConstantDeclaration, Expression, File, FunctionDeclaration, MatchArm,
+    MatchPattern, Parameter, Statement, StructField, StructLiteralField, TypeDeclaration,
+    TypeDeclarationKind, TypeName, TypeNameAtom, UnaryOperator, Visibility,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
@@ -92,20 +92,38 @@ impl Parser {
     fn parse_type_declaration(&mut self, visibility: Visibility) -> Option<TypeDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::DoubleColon)?;
-        self.expect_keyword(Keyword::Struct)?;
         let start = name_span.clone();
-        self.expect_symbol(Symbol::LeftBrace)?;
-        let fields = self.parse_struct_fields();
-        let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+        if self.peek_is_keyword(Keyword::Struct) {
+            self.expect_keyword(Keyword::Struct)?;
+            self.expect_symbol(Symbol::LeftBrace)?;
+            let fields = self.parse_struct_fields();
+            let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+            let span = Span {
+                start: start.start,
+                end: right_brace.end,
+                line: start.line,
+                column: start.column,
+            };
+            return Some(TypeDeclaration {
+                name,
+                kind: TypeDeclarationKind::Struct { fields },
+                visibility,
+                span,
+            });
+        }
+        let variants = self.parse_union_type_declaration()?;
+        let end = variants
+            .last()
+            .map_or(start.end, |variant| variant.span.end);
         let span = Span {
             start: start.start,
-            end: right_brace.end,
+            end,
             line: start.line,
             column: start.column,
         };
         Some(TypeDeclaration {
             name,
-            fields,
+            kind: TypeDeclarationKind::Union { variants },
             visibility,
             span,
         })
@@ -391,7 +409,28 @@ impl Parser {
 
     fn parse_type_name(&mut self) -> Option<TypeName> {
         let (name, span) = self.expect_identifier()?;
-        Some(TypeName { name, span })
+        let mut names = vec![TypeNameAtom {
+            name,
+            span: span.clone(),
+        }];
+        while self.peek_is_symbol(Symbol::Pipe) {
+            self.advance();
+            let (name, name_span) = self.expect_identifier()?;
+            names.push(TypeNameAtom {
+                name,
+                span: name_span,
+            });
+        }
+        let end = names.last().map_or(span.end, |atom| atom.span.end);
+        Some(TypeName {
+            names,
+            span: Span {
+                start: span.start,
+                end,
+                line: span.line,
+                column: span.column,
+            },
+        })
     }
 
     fn parse_expression(&mut self) -> Option<Expression> {
@@ -698,7 +737,10 @@ impl Parser {
                         .is_some_and(|ch| ch.is_ascii_uppercase())
                 {
                     let type_name = TypeName {
-                        name,
+                        names: vec![TypeNameAtom {
+                            name,
+                            span: token.span.clone(),
+                        }],
                         span: token.span,
                     };
                     return self.parse_struct_literal(type_name);
@@ -708,6 +750,7 @@ impl Parser {
                     span: token.span,
                 })
             }
+            TokenKind::Keyword(Keyword::Match) => self.parse_match_expression(&token.span),
             TokenKind::Symbol(Symbol::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
                 self.expect_symbol(Symbol::RightParenthesis)?;
@@ -736,6 +779,134 @@ impl Parser {
             fields,
             span,
         })
+    }
+
+    fn parse_match_expression(&mut self, start_span: &Span) -> Option<Expression> {
+        let target = self.parse_expression()?;
+        self.expect_symbol(Symbol::LeftBrace)?;
+        let arms = self.parse_match_arms();
+        let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+        let span = Span {
+            start: start_span.start,
+            end: right_brace.end,
+            line: start_span.line,
+            column: start_span.column,
+        };
+        Some(Expression::Match {
+            target: Box::new(target),
+            arms,
+            span,
+        })
+    }
+
+    fn parse_match_arms(&mut self) -> Vec<MatchArm> {
+        let mut arms = Vec::new();
+        self.skip_statement_terminators();
+        if self.peek_is_symbol(Symbol::RightBrace) {
+            return arms;
+        }
+        loop {
+            self.skip_statement_terminators();
+            if let Some(arm) = self.parse_match_arm() {
+                arms.push(arm);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+            }
+
+            self.skip_statement_terminators();
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
+            }
+            if self.peek_is_identifier() {
+                continue;
+            }
+            break;
+        }
+        arms
+    }
+
+    fn parse_match_arm(&mut self) -> Option<MatchArm> {
+        let pattern = self.parse_match_pattern()?;
+        self.expect_symbol(Symbol::FatArrow)?;
+        let value = self.parse_expression()?;
+        let span = Span {
+            start: pattern.span().start,
+            end: value.span().end,
+            line: pattern.span().line,
+            column: pattern.span().column,
+        };
+        Some(MatchArm {
+            pattern,
+            value,
+            span,
+        })
+    }
+
+    fn parse_match_pattern(&mut self) -> Option<MatchPattern> {
+        let (name, name_span) = self.expect_identifier()?;
+        if self.peek_is_symbol(Symbol::Colon) {
+            self.advance();
+            let type_name = self.parse_type_name()?;
+            let span = Span {
+                start: name_span.start,
+                end: type_name.span.end,
+                line: name_span.line,
+                column: name_span.column,
+            };
+            return Some(MatchPattern::Binding {
+                name,
+                name_span,
+                type_name,
+                span,
+            });
+        }
+
+        let type_name = TypeName {
+            names: vec![TypeNameAtom {
+                name,
+                span: name_span.clone(),
+            }],
+            span: name_span.clone(),
+        };
+        Some(MatchPattern::Type {
+            type_name,
+            span: name_span,
+        })
+    }
+
+    fn parse_union_type_declaration(&mut self) -> Option<Vec<TypeName>> {
+        let mut variants = Vec::new();
+        let (name, span) = self.expect_identifier()?;
+        variants.push(TypeName {
+            names: vec![TypeNameAtom {
+                name,
+                span: span.clone(),
+            }],
+            span,
+        });
+        while self.peek_is_symbol(Symbol::Pipe) {
+            self.advance();
+            let (name, span) = self.expect_identifier()?;
+            variants.push(TypeName {
+                names: vec![TypeNameAtom {
+                    name,
+                    span: span.clone(),
+                }],
+                span,
+            });
+        }
+        Some(variants)
     }
 
     fn parse_struct_literal_fields(&mut self) -> Vec<StructLiteralField> {
@@ -952,7 +1123,8 @@ impl ExpressionSpan for Expression {
             | Expression::FieldAccess { span, .. }
             | Expression::Call { span, .. }
             | Expression::Unary { span, .. }
-            | Expression::Binary { span, .. } => span.clone(),
+            | Expression::Binary { span, .. }
+            | Expression::Match { span, .. } => span.clone(),
         }
     }
 }

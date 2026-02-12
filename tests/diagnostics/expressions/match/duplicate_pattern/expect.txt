@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:7:9: error: duplicate match arm for type 'int64'
+          int64 => 2
+          ^

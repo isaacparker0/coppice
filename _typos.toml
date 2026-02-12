@@ -2,3 +2,4 @@
 # Commonly used abbreviations, banned per styleguide.
 paren = "parenthesis"
 prev = "previous"
+ty = "type"

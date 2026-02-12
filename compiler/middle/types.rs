@@ -4,6 +4,7 @@ pub enum Type {
     Boolean,
     String,
     Named(String),
+    Union(Vec<Type>),
     Unknown,
 }
 
@@ -14,7 +15,19 @@ impl Type {
             Type::Boolean => "boolean",
             Type::String => "string",
             Type::Named(name) => name.as_str(),
+            Type::Union(_) => "<union>",
             Type::Unknown => "<unknown>",
+        }
+    }
+
+    pub fn display(&self) -> String {
+        match self {
+            Type::Union(types) => types
+                .iter()
+                .map(Type::display)
+                .collect::<Vec<_>>()
+                .join(" | "),
+            _ => self.name().to_string(),
         }
     }
 }
