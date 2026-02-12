@@ -251,14 +251,14 @@ move("oops")    // compile error
 ### Nullability
 
 ```
-function find_user(id: u64) -> User? {
+function find_user(id: u64) -> User | nil {
     ...
 }
 
 user := find_user(42) ?? return
 ```
 
-`T?` is the optional type. Control-flow narrowing eliminates the need for
+`T | nil` is the optional form. Control-flow narrowing eliminates the need for
 explicit unwrapping in most code.
 
 ### No Implicit Conversions
@@ -373,7 +373,7 @@ shared data). No lifetime annotations. No `'a`. No borrow checker fights.
 | --------------------- | ---------------------------------------------------------------- |
 | No use-after-free     | ARC for shared, scope-bound for values                           |
 | No data races         | Immutable by default, `mut` is exclusive, `shared` requires sync |
-| No null dereference   | `T?` with control-flow narrowing                                 |
+| No null dereference   | `T \| nil` with control-flow narrowing                           |
 | No unhandled errors   | `T \| Error` union types                                         |
 | Deterministic cleanup | ARC, not GC                                                      |
 | No aliasing bugs      | Values by default                                                |
@@ -647,7 +647,7 @@ No syntax alternatives. No feature overlaps.
 - One equality operator: `==` (structural).
 - One null value: `nil`.
 - One generic syntax: `[T]`.
-- One optional syntax: `T?`.
+- One optional form: `T | nil`.
 - One error propagation: `?`.
 
 ### What Doesn't Exist
