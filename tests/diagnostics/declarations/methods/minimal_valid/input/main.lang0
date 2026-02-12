@@ -11,5 +11,6 @@ type User :: struct {
 
 function main() -> int64 {
     mut user := User { id: 41 }
-    return user.bump(1)
+    user.bump(1)
+    return user.idValue()
 }

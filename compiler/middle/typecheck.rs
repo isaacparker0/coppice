@@ -391,12 +391,12 @@ impl<'a> Checker<'a> {
                 name,
                 mutable,
                 type_name,
-                expression,
+                initializer,
                 span,
                 ..
             } => {
                 self.check_variable_name(name, span);
-                let value_type = self.check_expression(expression);
+                let value_type = self.check_expression(initializer);
                 let mut binding_type = value_type.clone();
                 let mut annotation_mismatch = false;
                 if let Some(type_name) = type_name {
@@ -411,7 +411,7 @@ impl<'a> Checker<'a> {
                                 annotated_type.display(),
                                 value_type.display()
                             ),
-                            expression.span(),
+                            initializer.span(),
                         );
                         annotation_mismatch = true;
                     }
@@ -428,10 +428,10 @@ impl<'a> Checker<'a> {
             Statement::Assign {
                 name,
                 name_span,
-                expression,
+                value,
                 ..
             } => {
-                let value_type = self.check_expression(expression);
+                let value_type = self.check_expression(value);
                 if let Some((is_mutable, variable_type)) = self.lookup_variable_for_assignment(name)
                 {
                     if !is_mutable {
@@ -449,7 +449,7 @@ impl<'a> Checker<'a> {
                                 variable_type.display(),
                                 value_type.display()
                             ),
-                            expression.span(),
+                            value.span(),
                         );
                     }
                 } else if self.constants.contains_key(name) {
@@ -465,11 +465,8 @@ impl<'a> Checker<'a> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Return {
-                expression,
-                span: _,
-            } => {
-                let value_type = self.check_expression(expression);
+            Statement::Return { value, span: _ } => {
+                let value_type = self.check_expression(value);
                 if self.current_return_type != Type::Unknown
                     && value_type != Type::Unknown
                     && !Self::is_assignable(&value_type, &self.current_return_type)
@@ -480,7 +477,7 @@ impl<'a> Checker<'a> {
                             self.current_return_type.display(),
                             value_type.display()
                         ),
-                        expression.span(),
+                        value.span(),
                     );
                 }
                 StatementOutcome {
@@ -583,6 +580,16 @@ impl<'a> Checker<'a> {
                 self.loop_depth += 1;
                 let _ = self.check_block(body);
                 self.loop_depth = self.loop_depth.saturating_sub(1);
+                StatementOutcome {
+                    terminates: false,
+                    fallthrough_narrowing: None,
+                }
+            }
+            Statement::Expression { value, .. } => {
+                let _ = self.check_expression(value);
+                if !matches!(value, Expression::Call { .. }) {
+                    self.error("expression statements must be calls", value.span());
+                }
                 StatementOutcome {
                     terminates: false,
                     fallthrough_narrowing: None,
@@ -1615,7 +1622,8 @@ impl StatementSpan for Statement {
             | Statement::If { span, .. }
             | Statement::For { span, .. }
             | Statement::Break { span, .. }
-            | Statement::Continue { span, .. } => span.clone(),
+            | Statement::Continue { span, .. }
+            | Statement::Expression { span, .. } => span.clone(),
         }
     }
 }

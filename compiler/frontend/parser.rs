@@ -405,8 +405,8 @@ impl Parser {
     fn parse_statement(&mut self) -> Option<Statement> {
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
-            let expression = self.parse_expression()?;
-            return Some(Statement::Return { expression, span });
+            let value = self.parse_expression()?;
+            return Some(Statement::Return { value, span });
         }
         if self.peek_is_keyword(Keyword::Abort) {
             let start = self.expect_keyword(Keyword::Abort)?;
@@ -476,80 +476,81 @@ impl Parser {
             });
         }
 
-        let mutable = if self.peek_is_keyword(Keyword::Mut) {
+        if self.peek_is_keyword(Keyword::Mut) {
             self.advance();
-            true
-        } else {
-            false
-        };
-
-        if let Some((name, name_span)) = self.expect_identifier() {
-            if mutable {
-                let type_name = if self.peek_is_symbol(Symbol::Colon) {
-                    self.advance();
-                    Some(self.parse_type_name()?)
-                } else {
-                    None
-                };
-                self.expect_symbol(Symbol::Assign)?;
-                let expression = self.parse_expression()?;
-                let span = Span {
-                    start: name_span.start,
-                    end: expression.span().end,
-                    line: name_span.line,
-                    column: name_span.column,
-                };
-                return Some(Statement::Let {
-                    name,
-                    mutable,
-                    type_name,
-                    expression,
-                    span,
-                });
-            }
-
-            if self.peek_is_symbol(Symbol::Colon) || self.peek_is_symbol(Symbol::Assign) {
-                let type_name = if self.peek_is_symbol(Symbol::Colon) {
-                    self.advance();
-                    Some(self.parse_type_name()?)
-                } else {
-                    None
-                };
-                self.expect_symbol(Symbol::Assign)?;
-                let expression = self.parse_expression()?;
-                let span = Span {
-                    start: name_span.start,
-                    end: expression.span().end,
-                    line: name_span.line,
-                    column: name_span.column,
-                };
-                return Some(Statement::Let {
-                    name,
-                    mutable: false,
-                    type_name,
-                    expression,
-                    span,
-                });
-            }
-
-            if self.peek_is_symbol(Symbol::Equal) {
+            let (name, name_span) = self.expect_identifier()?;
+            let type_name = if self.peek_is_symbol(Symbol::Colon) {
                 self.advance();
-                let expression = self.parse_expression()?;
-                let span = Span {
-                    start: name_span.start,
-                    end: expression.span().end,
-                    line: name_span.line,
-                    column: name_span.column,
-                };
-                return Some(Statement::Assign {
-                    name,
-                    name_span,
-                    expression,
-                    span,
-                });
-            }
+                Some(self.parse_type_name()?)
+            } else {
+                None
+            };
+            self.expect_symbol(Symbol::Assign)?;
+            let initializer = self.parse_expression()?;
+            let span = Span {
+                start: name_span.start,
+                end: initializer.span().end,
+                line: name_span.line,
+                column: name_span.column,
+            };
+            return Some(Statement::Let {
+                name,
+                mutable: true,
+                type_name,
+                initializer,
+                span,
+            });
         }
-        None
+
+        if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::Equal) {
+            let (name, name_span) = self.expect_identifier()?;
+            self.advance();
+            let value = self.parse_expression()?;
+            let span = Span {
+                start: name_span.start,
+                end: value.span().end,
+                line: name_span.line,
+                column: name_span.column,
+            };
+            return Some(Statement::Assign {
+                name,
+                name_span,
+                value,
+                span,
+            });
+        }
+
+        if self.peek_is_identifier()
+            && (self.peek_second_is_symbol(Symbol::Colon)
+                || self.peek_second_is_symbol(Symbol::Assign))
+        {
+            let (name, name_span) = self.expect_identifier()?;
+            let type_name = if self.peek_is_symbol(Symbol::Colon) {
+                self.advance();
+                Some(self.parse_type_name()?)
+            } else {
+                None
+            };
+            self.expect_symbol(Symbol::Assign)?;
+            let initializer = self.parse_expression()?;
+            let span = Span {
+                start: name_span.start,
+                end: initializer.span().end,
+                line: name_span.line,
+                column: name_span.column,
+            };
+            return Some(Statement::Let {
+                name,
+                mutable: false,
+                type_name,
+                initializer,
+                span,
+            });
+        }
+
+        let value = self.parse_expression()?;
+        let span = value.span();
+        Some(Statement::Expression { value, span })
     }
 
     fn parse_type_name(&mut self) -> Option<TypeName> {

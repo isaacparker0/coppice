@@ -91,17 +91,17 @@ pub enum Statement {
         name: String,
         mutable: bool,
         type_name: Option<TypeName>,
-        expression: Expression,
+        initializer: Expression,
         span: Span,
     },
     Assign {
         name: String,
         name_span: Span,
-        expression: Expression,
+        value: Expression,
         span: Span,
     },
     Return {
-        expression: Expression,
+        value: Expression,
         span: Span,
     },
     Abort {
@@ -123,6 +123,10 @@ pub enum Statement {
     For {
         condition: Option<Expression>,
         body: Block,
+        span: Span,
+    },
+    Expression {
+        value: Expression,
         span: Span,
     },
 }
