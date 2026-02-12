@@ -93,7 +93,7 @@ pub enum Statement {
         span: Span,
     },
     For {
-        condition: Expression,
+        condition: Option<Expression>,
         body: Block,
         span: Span,
     },

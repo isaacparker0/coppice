@@ -348,9 +348,11 @@ impl<'a> Checker<'a> {
             Statement::For {
                 condition, body, ..
             } => {
-                let condition_type = self.check_expression(condition);
-                if condition_type != Type::Boolean && condition_type != Type::Unknown {
-                    self.error("for condition must be boolean", condition.span());
+                if let Some(condition) = condition {
+                    let condition_type = self.check_expression(condition);
+                    if condition_type != Type::Boolean && condition_type != Type::Unknown {
+                        self.error("for condition must be boolean", condition.span());
+                    }
                 }
                 let _ = self.check_block(body);
                 false

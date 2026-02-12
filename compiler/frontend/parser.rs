@@ -336,7 +336,11 @@ impl Parser {
         }
         if self.peek_is_keyword(Keyword::For) {
             let start = self.expect_keyword(Keyword::For)?;
-            let condition = self.parse_expression()?;
+            let condition = if self.peek_is_symbol(Symbol::LeftBrace) {
+                None
+            } else {
+                Some(self.parse_expression()?)
+            };
             let body = self.parse_block()?;
             let span = Span {
                 start: start.start,
