@@ -92,6 +92,11 @@ pub enum Statement {
         else_block: Option<Block>,
         span: Span,
     },
+    For {
+        condition: Expression,
+        body: Block,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug)]

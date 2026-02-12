@@ -345,6 +345,16 @@ impl<'a> Checker<'a> {
                     .is_some_and(|block| self.check_block(block));
                 then_returns && else_returns
             }
+            Statement::For {
+                condition, body, ..
+            } => {
+                let condition_type = self.check_expression(condition);
+                if condition_type != Type::Boolean && condition_type != Type::Unknown {
+                    self.error("for condition must be boolean", condition.span());
+                }
+                let _ = self.check_block(body);
+                false
+            }
         }
     }
 

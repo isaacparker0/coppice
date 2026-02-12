@@ -334,6 +334,22 @@ impl Parser {
                 span,
             });
         }
+        if self.peek_is_keyword(Keyword::For) {
+            let start = self.expect_keyword(Keyword::For)?;
+            let condition = self.parse_expression()?;
+            let body = self.parse_block()?;
+            let span = Span {
+                start: start.start,
+                end: body.span.end,
+                line: start.line,
+                column: start.column,
+            };
+            return Some(Statement::For {
+                condition,
+                body,
+                span,
+            });
+        }
 
         let mutable = if self.peek_is_keyword(Keyword::Mut) {
             self.advance();
@@ -1126,7 +1142,10 @@ impl Parser {
             if self.peek_is_symbol(Symbol::RightBrace) {
                 return;
             }
-            if self.peek_is_keyword(Keyword::Return) || self.peek_is_keyword(Keyword::If) {
+            if self.peek_is_keyword(Keyword::Return)
+                || self.peek_is_keyword(Keyword::If)
+                || self.peek_is_keyword(Keyword::For)
+            {
                 return;
             }
             if matches!(self.peek().kind, TokenKind::StatementTerminator) {

@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:9: error: for condition must be boolean
+      for 1 {
+          ^

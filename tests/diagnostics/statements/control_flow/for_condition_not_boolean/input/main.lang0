@@ -1,0 +1,6 @@
+function count() -> int64 {
+    for 1 {
+        return 1
+    }
+    return 0
+}

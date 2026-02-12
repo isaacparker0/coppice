@@ -12,3 +12,11 @@ function chooseWithElse() -> int64 {
         return 2
     }
 }
+
+function countToThree() -> int64 {
+    mut x := 0
+    for x < 3 {
+        x = x + 1
+    }
+    return x
+}

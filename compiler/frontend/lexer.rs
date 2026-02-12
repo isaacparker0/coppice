@@ -7,6 +7,7 @@ pub enum Keyword {
     Function,
     Return,
     If,
+    For,
     Else,
     Match,
     And,
@@ -25,6 +26,7 @@ impl Keyword {
             Keyword::Function => "function",
             Keyword::Return => "return",
             Keyword::If => "if",
+            Keyword::For => "for",
             Keyword::Else => "else",
             Keyword::Match => "match",
             Keyword::And => "and",
@@ -343,6 +345,7 @@ impl<'a> Lexer<'a> {
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
+            "for" => TokenKind::Keyword(Keyword::For),
             "else" => TokenKind::Keyword(Keyword::Else),
             "match" => TokenKind::Keyword(Keyword::Match),
             "and" => TokenKind::Keyword(Keyword::And),
@@ -514,6 +517,8 @@ fn is_statement_start(kind: &TokenKind) -> bool {
     matches!(
         kind,
         TokenKind::Identifier(_)
-            | TokenKind::Keyword(Keyword::Return | Keyword::If | Keyword::Mut | Keyword::Match)
+            | TokenKind::Keyword(
+                Keyword::Return | Keyword::If | Keyword::For | Keyword::Mut | Keyword::Match
+            )
     )
 }
