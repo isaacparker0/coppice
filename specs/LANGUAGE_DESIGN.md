@@ -18,15 +18,35 @@ fast compilation, simple mental model, and zero annotation burden.
 
 1. **Explicit over implicit.** Visibility uses `public`, not naming conventions.
    Mutation uses `mut`, not default. Sharing uses `shared`, not default.
-2. **One way to do things.** No syntax aliases, no alternative forms. If the
-   community would eventually converge on a convention, make it a compiler rule.
-3. **The compiler is the linter.** No external formatters, no lint configs, no
-   style guides. The compiler enforces everything and provides auto-fix.
-4. **Designed for hermetic builds.** The import system, module structure, and
+2. **One canonical construct per intent.** No syntax aliases, no overlapping
+   control-flow models. If two forms solve the same job, keep one and enforce
+   it.
+3. **Ergonomics without multiplicity.** Ergonomic shorthand is acceptable only
+   when it has a unique semantic role and does not introduce a second style for
+   the same intent.
+4. **The compiler is the linter.** No external formatters, no lint configs, no
+   style guides. The compiler enforces canonical forms and provides auto-fix
+   where correctness is unambiguous.
+5. **Designed for hermetic builds.** The import system, module structure, and
    compilation model are designed to map directly to Bazel's dependency graph.
-5. **No annotation burden.** No lifetime annotations, no explicit borrow/move
+6. **No annotation burden.** No lifetime annotations, no explicit borrow/move
    markers in common code. The compiler infers; the programmer writes clean
    code.
+
+### Feature Admission Test
+
+New syntax is accepted only if all of the following are true:
+
+1. It has a **unique semantic role** (not another way to express existing
+   intent).
+2. It is **compiler-enforceable** (rules can be made deterministic and
+   diagnostics can point to one canonical form).
+3. It **reduces ambiguity** in real code rather than increasing style choice.
+4. It preserves the language's constraint of **one canonical construct per
+   intent**.
+
+This is language governance, not just style guidance: when overlap appears, the
+compiler should require the canonical form.
 
 ---
 
@@ -643,6 +663,10 @@ No syntax alternatives. No feature overlaps.
 - One generic syntax: `[T]`.
 - One optional form: `T | nil`.
 - One error propagation: `?`.
+- One union branching form: `match`.
+- One union boolean membership check: `matches`.
+- The compiler rejects equivalent non-canonical patterns (for example, boolean
+  membership `match` expressions where `matches` is the canonical form).
 
 ### What Doesn't Exist
 
@@ -972,3 +996,5 @@ dogfooding is a means, not an end.
 - Backward compatibility with any existing language.
 - Gradual typing or dynamic escape hatches (`any`).
 - Macros or metaprogramming (at least initially).
+- Redundant expressivity: multiple interchangeable ways to encode the same
+  intent.
