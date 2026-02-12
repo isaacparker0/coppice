@@ -1,5 +1,29 @@
 {
     "$schema": "https://raw.githubusercontent.com/bazel-contrib/rules_multitool/main/lockfile.schema.json",
+    "deno": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/denoland/deno/releases/download/v2.6.9/deno-aarch64-apple-darwin.zip",
+                "sha256": "81f8da15540aa7cdcb1e37c13ee15e919b2aa26b65157c2aa69fed7c037dbfa5",
+                "file": "deno",
+                "os": "macos",
+                "cpu": "arm64"
+            }
+        ]
+    },
+    "taplo": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-aarch64.gz",
+                "sha256": "713734314c3e71894b9e77513c5349835eefbd52908445a0d73b0c7dc469347d",
+                "file": "taplo",
+                "os": "macos",
+                "cpu": "arm64"
+            }
+        ]
+    },
     "typos": {
         "binaries": [
             {

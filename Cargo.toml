@@ -6,7 +6,7 @@ publish = false
 
 [lib]
 # Placeholder for Bazel-only setup; Cargo isn't used.
-path = "placeholder.rs" 
+path = "placeholder.rs"
 
 [dependencies]
 clap = { version = "^4.5.58", features = ["derive"] }

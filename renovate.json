@@ -56,7 +56,9 @@
             // https://github.com/renovatebot/renovate/issues/21760
             "matchFileNames": ["multitool.lock.json"],
             "postUpgradeTasks": {
-                "commands": [".github/update_multitool_checksums.sh {{{depName}}}"],
+                "commands": [
+                    ".github/update_multitool_checksums.sh {{{depName}}}"
+                ],
                 "fileFilters": ["multitool.lock.json"],
                 "executionMode": "update"
             }

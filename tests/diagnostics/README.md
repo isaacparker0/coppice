@@ -10,11 +10,14 @@ tests/diagnostics/<area>/<feature>/<case>/
 
 ## Layout rules
 
-1. `<area>` is a broad syntactic category (e.g. `declarations`, `statements`, `expressions`, `naming`).
-2. `<feature>` is the feature family under that area (e.g. `imports`, `control_flow`, `literals`, `bindings`).
-3. `<case>` is the scenario. Use `minimal_valid` for the canonical positive case for that feature.
-   Error cases should be named after the behavior (e.g. `duplicate_name`, `return_type_mismatch`,
-   `unterminated_string`, `if_condition_not_boolean`).
+1. `<area>` is a broad syntactic category (e.g. `declarations`, `statements`,
+   `expressions`, `naming`).
+2. `<feature>` is the feature family under that area (e.g. `imports`,
+   `control_flow`, `literals`, `bindings`).
+3. `<case>` is the scenario. Use `minimal_valid` for the canonical positive case
+   for that feature. Error cases should be named after the behavior (e.g.
+   `duplicate_name`, `return_type_mismatch`, `unterminated_string`,
+   `if_condition_not_boolean`).
 
 ## Content rules
 
@@ -22,5 +25,5 @@ tests/diagnostics/<area>/<feature>/<case>/
 - `minimal_valid` should cover all valid sub-kinds for that feature in one file.
 - `expect.txt` starts with `# exit: <code>` and the exact expected output after
   running `compiler/cli` with `check`.
-- Avoid adding new case names for variations that can be covered by the
-  existing `minimal_valid` fixture.
+- Avoid adding new case names for variations that can be covered by the existing
+  `minimal_valid` fixture.

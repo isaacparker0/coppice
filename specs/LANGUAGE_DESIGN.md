@@ -2,21 +2,31 @@
 
 ## Design Goals
 
-Rust's safety guarantees and type-system expressiveness, with TypeScript's ergonomics and Go's compilation speed. One obvious way to do everything. The compiler is the linter, the formatter, and the style guide.
+Rust's safety guarantees and type-system expressiveness, with TypeScript's
+ergonomics and Go's compilation speed. One obvious way to do everything. The
+compiler is the linter, the formatter, and the style guide.
 
-**Target domain:** Backend services, application code, CLI tools. Not systems programming, not OS kernels, not embedded.
+**Target domain:** Backend services, application code, CLI tools. Not systems
+programming, not OS kernels, not embedded.
 
-**Core tradeoff:** Accept ~80-90% of LLVM -O3 peak performance in exchange for fast compilation, simple mental model, and zero annotation burden.
+**Core tradeoff:** Accept ~80-90% of LLVM -O3 peak performance in exchange for
+fast compilation, simple mental model, and zero annotation burden.
 
 ---
 
 ## Principles
 
-1. **Explicit over implicit.** Visibility uses `public`, not naming conventions. Mutation uses `mut`, not default. Sharing uses `shared`, not default.
-2. **One way to do things.** No syntax aliases, no alternative forms. If the community would eventually converge on a convention, make it a compiler rule.
-3. **The compiler is the linter.** No external formatters, no lint configs, no style guides. The compiler enforces everything and provides auto-fix.
-4. **Designed for hermetic builds.** The import system, module structure, and compilation model are designed to map directly to Bazel's dependency graph.
-5. **No annotation burden.** No lifetime annotations, no explicit borrow/move markers in common code. The compiler infers; the programmer writes clean code.
+1. **Explicit over implicit.** Visibility uses `public`, not naming conventions.
+   Mutation uses `mut`, not default. Sharing uses `shared`, not default.
+2. **One way to do things.** No syntax aliases, no alternative forms. If the
+   community would eventually converge on a convention, make it a compiler rule.
+3. **The compiler is the linter.** No external formatters, no lint configs, no
+   style guides. The compiler enforces everything and provides auto-fix.
+4. **Designed for hermetic builds.** The import system, module structure, and
+   compilation model are designed to map directly to Bazel's dependency graph.
+5. **No annotation burden.** No lifetime annotations, no explicit borrow/move
+   markers in common code. The compiler infers; the programmer writes clean
+   code.
 
 ---
 
@@ -93,7 +103,8 @@ type Rect :: struct { w: f64, h: f64 }
 type Point :: struct {}
 ```
 
-Union types are first-class. They compose at the use site without pre-declaring wrapper enums.
+Union types are first-class. They compose at the use site without pre-declaring
+wrapper enums.
 
 ```
 type ID :: string | u64
@@ -183,7 +194,8 @@ greeting := "hello, {name}"
 
 ### Structural Typing
 
-Interfaces are structural. No explicit `implements` declaration. If a type has the required methods, it satisfies the interface.
+Interfaces are structural. No explicit `implements` declaration. If a type has
+the required methods, it satisfies the interface.
 
 ```
 type Printable :: interface {
@@ -246,7 +258,8 @@ function find_user(id: u64) -> User? {
 user := find_user(42) ?? return
 ```
 
-`T?` is the optional type. Control-flow narrowing eliminates the need for explicit unwrapping in most code.
+`T?` is the optional type. Control-flow narrowing eliminates the need for
+explicit unwrapping in most code.
 
 ### No Implicit Conversions
 
@@ -262,18 +275,26 @@ y: i64 := x.to_i64()   // explicit
 
 Generics compile via **witness tables** (Swift model), not monomorphization.
 
-One function is compiled per generic definition. Type-specific operations dispatch through a witness table — a struct of function pointers describing how to copy, destroy, compare, and operate on the type.
+One function is compiled per generic definition. Type-specific operations
+dispatch through a witness table — a struct of function pointers describing how
+to copy, destroy, compare, and operate on the type.
 
-Small types (up to ~24 bytes) are stored inline in a fixed-size buffer with zero heap allocation. Large types spill to the heap.
+Small types (up to ~24 bytes) are stored inline in a fixed-size buffer with zero
+heap allocation. Large types spill to the heap.
 
 **Tradeoffs vs monomorphization:**
+
 - Compile time: dramatically faster (one copy per generic function, not N).
 - Runtime: ~5-20% slower for generic code due to indirect calls.
-- The compiler may opportunistically specialize hot generic functions as an optimization. This is optional, not required for correctness.
+- The compiler may opportunistically specialize hot generic functions as an
+  optimization. This is optional, not required for correctness.
 
-Type system expressiveness is fully independent of the compilation strategy. Constraints, associated types, conditional conformance — all resolved at compile time with zero codegen cost.
+Type system expressiveness is fully independent of the compilation strategy.
+Constraints, associated types, conditional conformance — all resolved at compile
+time with zero codegen cost.
 
-Selective monomorphization available via annotation for performance-critical code:
+Selective monomorphization available via annotation for performance-critical
+code:
 
 ```
 #[specialize]
@@ -294,11 +315,13 @@ p2 := p1    // copy — p1 and p2 are independent
 ```
 
 The compiler optimizes this:
+
 - Read-only function parameters: passed by reference automatically.
 - Last use of a value: moved, not copied.
 - Actual copy only when semantically necessary (mutate + continued use).
 
-This means values-by-default has near-zero overhead in practice. Most "copies" are elided.
+This means values-by-default has near-zero overhead in practice. Most "copies"
+are elided.
 
 ### Immutable by Default
 
@@ -325,7 +348,8 @@ add_item(mut items, 4)    // 'mut' required — caller acknowledges mutation
 
 ### Shared References (When Needed)
 
-Explicit, reference-counted. For the rare case where multiple owners need the same data.
+Explicit, reference-counted. For the rare case where multiple owners need the
+same data.
 
 ```
 pool := shared ConnectionPool.new(size: 10)
@@ -335,22 +359,24 @@ handler2 := Handler { pool: pool }
 // Both reference the same pool. Reference-counted.
 ```
 
-`shared` values use automatic reference counting (ARC) with deterministic cleanup. Cycle prevention via `weak` references.
+`shared` values use automatic reference counting (ARC) with deterministic
+cleanup. Cycle prevention via `weak` references.
 
 ### No Borrow Checker
 
-Ownership is managed through values (stack-scoped, no aliasing) and ARC (for shared data). No lifetime annotations. No `'a`. No borrow checker fights.
+Ownership is managed through values (stack-scoped, no aliasing) and ARC (for
+shared data). No lifetime annotations. No `'a`. No borrow checker fights.
 
 **Safety guarantees without a borrow checker:**
 
-| Property | Mechanism |
-|---|---|
-| No use-after-free | ARC for shared, scope-bound for values |
-| No data races | Immutable by default, `mut` is exclusive, `shared` requires sync |
-| No null dereference | `T?` with control-flow narrowing |
-| No unhandled errors | `T \| Error` union types |
-| Deterministic cleanup | ARC, not GC |
-| No aliasing bugs | Values by default |
+| Property              | Mechanism                                                        |
+| --------------------- | ---------------------------------------------------------------- |
+| No use-after-free     | ARC for shared, scope-bound for values                           |
+| No data races         | Immutable by default, `mut` is exclusive, `shared` requires sync |
+| No null dereference   | `T?` with control-flow narrowing                                 |
+| No unhandled errors   | `T \| Error` union types                                         |
+| Deterministic cleanup | ARC, not GC                                                      |
+| No aliasing bugs      | Values by default                                                |
 
 ---
 
@@ -374,7 +400,8 @@ match read_file("config.toml") {
 }
 ```
 
-No exceptions. No `throw`. No `try/catch`. Every error path is visible in the type signature.
+No exceptions. No `throw`. No `try/catch`. Every error path is visible in the
+type signature.
 
 ---
 
@@ -382,7 +409,8 @@ No exceptions. No `throw`. No `try/catch`. Every error path is visible in the ty
 
 ### Package Definition
 
-A directory is a package if and only if it contains a `PACKAGE.lang` file. Without one, a subdirectory's files belong to the parent package.
+A directory is a package if and only if it contains a `PACKAGE.lang` file.
+Without one, a subdirectory's files belong to the parent package.
 
 ```
 platform/
@@ -411,11 +439,13 @@ public import token { Token, parse }
 public import password { hash, verify }
 ```
 
-These relative imports re-export selected symbols as the package's public API. This is the only place `public import` and relative imports are allowed.
+These relative imports re-export selected symbols as the package's public API.
+This is the only place `public import` and relative imports are allowed.
 
 ### Imports
 
-Fully qualified. Always. No relative imports (except in PACKAGE.lang). No glob imports. No conditional imports.
+Fully qualified. Always. No relative imports (except in PACKAGE.lang). No glob
+imports. No conditional imports.
 
 ```
 import platform/auth
@@ -429,6 +459,7 @@ import std/fmt
 ### Visibility
 
 Two levels:
+
 - `public` — visible to importers of this package (controlled by PACKAGE.lang).
 - No modifier — visible within the package (all files in the same package).
 
@@ -449,7 +480,9 @@ Test files (`_test.lang`) can access all package-internal symbols.
 
 ### Intra-Package Access
 
-All files within a package (including files in subdirectories without `PACKAGE.lang`) can see each other's symbols freely. No `public` needed for intra-package use.
+All files within a package (including files in subdirectories without
+`PACKAGE.lang`) can see each other's symbols freely. No `public` needed for
+intra-package use.
 
 ```
 // auth/token.lang
@@ -477,7 +510,8 @@ function seal(t: Token) -> string {
 
 ### Test Files
 
-Tests live in separate `_test.lang` files. Same directory as the source. The compiler rejects `test` blocks in non-test files.
+Tests live in separate `_test.lang` files. Same directory as the source. The
+compiler rejects `test` blocks in non-test files.
 
 ```
 auth/
@@ -515,12 +549,14 @@ group Token.validate {
 ```
 
 - `test` blocks with string names.
-- `group` blocks for organization. One level of nesting only — the parser rejects nested groups.
+- `group` blocks for organization. One level of nesting only — the parser
+  rejects nested groups.
 - `test` blocks can exist outside groups for small files.
 
 ### Assertions
 
-One assertion primitive: `assert`. The compiler introspects the expression to produce detailed failure messages.
+One assertion primitive: `assert`. The compiler introspects the expression to
+produce detailed failure messages.
 
 ```
 assert user.age > 18
@@ -555,7 +591,8 @@ test "token contains user id" {
 }
 ```
 
-Cleanup is handled by deterministic resource cleanup (ARC + destructors). No `teardown`, `afterEach`, or `yield`.
+Cleanup is handled by deterministic resource cleanup (ARC + destructors). No
+`teardown`, `afterEach`, or `yield`.
 
 ### Test Output
 
@@ -646,19 +683,24 @@ yourlang doc .          # generate documentation
 
 `yourlang fix` auto-corrects everything with exactly one correct fix:
 
-- Formatting, import sorting, unused import removal, missing trailing commas, wrong naming convention (rename across file), unnecessary type annotations.
+- Formatting, import sorting, unused import removal, missing trailing commas,
+  wrong naming convention (rename across file), unnecessary type annotations.
 
-It does NOT fix ambiguous issues: unused parameters, unreachable code, type errors, non-exhaustive matches.
+It does NOT fix ambiguous issues: unused parameters, unreachable code, type
+errors, non-exhaustive matches.
 
 ### Formatter
 
-Non-configurable. No options file. One canonical output for any valid program. Built into the compiler, not a separate tool.
+Non-configurable. No options file. One canonical output for any valid program.
+Built into the compiler, not a separate tool.
 
 ### Build Modes
 
 - `yourlang build .` — strict. Rejects unfixed code. Used in CI.
-- `yourlang build --draft .` — runs `fix` implicitly before compiling. Used during development.
-- `yourlang check .` — type-check only, no codegen. Used by LSP for real-time feedback. Target: <100ms incremental.
+- `yourlang build --draft .` — runs `fix` implicitly before compiling. Used
+  during development.
+- `yourlang check .` — type-check only, no codegen. Used by LSP for real-time
+  feedback. Target: <100ms incremental.
 
 ---
 
@@ -666,11 +708,14 @@ Non-configurable. No options file. One canonical output for any valid program. B
 
 ### Backend
 
-Cranelift (Rust-native compiler backend). Fast compilation, good-enough output (~80-90% of LLVM -O3). Optional LLVM backend for release-optimized builds if ever needed.
+Cranelift (Rust-native compiler backend). Fast compilation, good-enough output
+(~80-90% of LLVM -O3). Optional LLVM backend for release-optimized builds if
+ever needed.
 
 ### Compilation Units
 
 File-level. Each `.lang` file compiles independently. Enables:
+
 - Granular caching (change one file, recompile one file).
 - Parallelism (files compile in parallel).
 - Fast incremental builds.
@@ -690,11 +735,14 @@ Byte-identical output across machines given identical inputs.
 
 ### Gazelle
 
-The source code contains enough information for the build graph to be mechanically derived.
+The source code contains enough information for the build graph to be
+mechanically derived.
 
 Gazelle plugin logic:
+
 1. Walk directory tree. A directory with `PACKAGE.lang` is a target.
-2. Collect all `.lang` files in the directory and subdirectories without their own `PACKAGE.lang` → `srcs`.
+2. Collect all `.lang` files in the directory and subdirectories without their
+   own `PACKAGE.lang` → `srcs`.
 3. Collect `_test.lang` files → separate `yourlang_test` target.
 4. Parse `import` statements → `deps`.
 5. Map `import platform/foo/bar` → `//platform/foo/bar`.
@@ -747,13 +795,15 @@ yourlang_test(
 - Deterministic output → remote cache hits across machines.
 - No hidden dependencies → build graph is correct by construction.
 - `PACKAGE.lang` as manifest → Gazelle plugin is trivial (~200 lines).
-- No transitive header includes, no implicit prelude (or a fixed one) → `deps` is minimal and precise.
+- No transitive header includes, no implicit prelude (or a fixed one) → `deps`
+  is minimal and precise.
 
 ---
 
 ## Concurrency (Sketch)
 
-Structured concurrency. Immutable data shares freely. Mutable data moves. `shared` data requires explicit synchronization.
+Structured concurrency. Immutable data shares freely. Mutable data moves.
+`shared` data requires explicit synchronization.
 
 ```
 async {
@@ -763,7 +813,8 @@ async {
 }
 ```
 
-`Send`/`Sync`-like constraints inferred by the compiler, not annotated by the programmer.
+`Send`/`Sync`-like constraints inferred by the compiler, not annotated by the
+programmer.
 
 Detailed concurrency design is deferred.
 
@@ -794,9 +845,12 @@ Everything else requires an explicit import.
 
 ## Implementation Strategy
 
-1. **Phase 1: Transpile to Rust.** Validate language design. Iterate on syntax and type system. Parser + type checker emitting Rust code.
-2. **Phase 2: Cranelift backend.** Direct compilation once the language stabilizes. Fast compilation for development.
-3. **Phase 3 (optional): LLVM backend.** For release-optimized builds if peak performance is needed.
+1. **Phase 1: Transpile to Rust.** Validate language design. Iterate on syntax
+   and type system. Parser + type checker emitting Rust code.
+2. **Phase 2: Cranelift backend.** Direct compilation once the language
+   stabilizes. Fast compilation for development.
+3. **Phase 3 (optional): LLVM backend.** For release-optimized builds if peak
+   performance is needed.
 
 The compiler is written in Rust. Parser is hand-written recursive descent.
 
@@ -804,7 +858,8 @@ The compiler is written in Rust. Parser is hand-written recursive descent.
 
 ## Serialization and Validation
 
-Part of the standard library (`std/encoding`). Serialization is too fundamental to leave to ecosystem fragmentation.
+Part of the standard library (`std/encoding`). Serialization is too fundamental
+to leave to ecosystem fragmentation.
 
 ### Encoding/Decoding Known Types
 
@@ -820,7 +875,8 @@ output := json.encode(message)
 // Returns string. Always succeeds for valid types.
 ```
 
-The compiler generates encode/decode implementations from struct definitions. No derive macros, no decorators, no schema classes.
+The compiler generates encode/decode implementations from struct definitions. No
+derive macros, no decorators, no schema classes.
 
 ### Validation of Untrusted Data
 
@@ -845,7 +901,8 @@ public type SignupRequest :: struct {
 }
 ```
 
-`where` clauses are checked at decode time when `validate: true`. Zero cost when not validating (internal data). Compiled into the type's witness table.
+`where` clauses are checked at decode time when `validate: true`. Zero cost when
+not validating (internal data). Compiled into the type's witness table.
 
 ```
 result := json.decode[SignupRequest](body, validate: true)
@@ -875,35 +932,42 @@ toml.decode[Config](data)
 yaml.decode[Config](data)
 ```
 
-Niche formats (MessagePack, CBOR, Avro) are third-party libraries implementing the same `Encoder`/`Decoder` interface.
+Niche formats (MessagePack, CBOR, Avro) are third-party libraries implementing
+the same `Encoder`/`Decoder` interface.
 
 ---
 
 ## Self-Hosting
 
-The compiler is written in Rust. Self-hosting (rewriting the compiler in lang0) is a non-goal for the foreseeable future.
+The compiler is written in Rust. Self-hosting (rewriting the compiler in lang0)
+is a non-goal for the foreseeable future.
 
-Rust is an excellent language for writing compilers — enums for AST nodes, pattern matching, strong type system. lang0 targets backend services, not compiler internals. Using Rust for the compiler is the right tool for the job, not a compromise.
+Rust is an excellent language for writing compilers — enums for AST nodes,
+pattern matching, strong type system. lang0 targets backend services, not
+compiler internals. Using Rust for the compiler is the right tool for the job,
+not a compromise.
 
 Self-hosting becomes worth considering only when:
+
 - The language spec is stable (not changing weekly).
 - lang0 has proven itself on other large codebases.
 - The bootstrap chain can be maintained (CI builds version N from version N-1).
 - There's a credibility or contributor-onboarding reason to do it.
 
-TypeScript's compiler moving from TypeScript to Go is a useful reminder that dogfooding is a means, not an end.
+TypeScript's compiler moving from TypeScript to Go is a useful reminder that
+dogfooding is a means, not an end.
 
 ---
 
 ## Prior Art and Influences
 
-| Influence | What's borrowed |
-|---|---|
-| **Rust** | Safety guarantees, `?` error propagation, exhaustive matching, `mut` |
-| **Go** | Compilation speed, `for` as only loop, package = directory, enforced formatting |
+| Influence      | What's borrowed                                                                    |
+| -------------- | ---------------------------------------------------------------------------------- |
+| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`               |
+| **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting    |
 | **TypeScript** | Structural typing, union/intersection types, control-flow narrowing, literal types |
-| **Swift** | Witness table generics, ARC memory model, value semantics |
-| **Kotlin** | `val`/`var` distinction (our `:=`/`mut :=`), null safety |
+| **Swift**      | Witness table generics, ARC memory model, value semantics                          |
+| **Kotlin**     | `val`/`var` distinction (our `:=`/`mut :=`), null safety                           |
 
 ---
 
