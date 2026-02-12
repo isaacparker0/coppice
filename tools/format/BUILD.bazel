@@ -2,7 +2,7 @@ load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("//tools/bazel/macros:rust.bzl", "rust_binary")
 
 copy_file(
-    name = "taplo",
+    name = "taplo_tool",
     src = "@multitool//tools/taplo",
     out = "taplo",
     is_executable = True,
@@ -13,19 +13,18 @@ rust_binary(
     name = "format",
     srcs = ["format.rs"],
     data = [
+        ":taplo_tool",
         "@buildifier_prebuilt//:buildifier",
         "@multitool//tools/deno",
+        "@multitool//tools/shfmt",
         "@rules_rust//rust/toolchain:current_rustfmt_toolchain",
-        # TODO(isaac): get this tool directly and drop rules_lint dep.
-        "@aspect_rules_lint//format:shfmt",
-        ":taplo",
     ],
     rustc_env = {
         "BUILDIFIER": "$(rlocationpath @buildifier_prebuilt//:buildifier)",
         "DENO": "$(rlocationpath @multitool//tools/deno)",
         "RUSTFMT": "$(rlocationpath @rules_rust//rust/toolchain:current_rustfmt_toolchain)",
-        "SHFMT": "$(rlocationpath @aspect_rules_lint//format:shfmt)",
-        "TAPLO": "$(rlocationpath :taplo)",
+        "SHFMT": "$(rlocationpath @multitool//tools/shfmt)",
+        "TAPLO": "$(rlocationpath :taplo_tool)",
     },
     visibility = ["//visibility:public"],
     deps = [
