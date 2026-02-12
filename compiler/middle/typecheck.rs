@@ -372,13 +372,20 @@ impl<'a> Checker<'a> {
                 if condition_type != Type::Boolean && condition_type != Type::Unknown {
                     self.error("if condition must be boolean", condition.span());
                 }
-                let narrowing = self.condition_narrowing(condition);
-                let then_returns =
-                    self.check_block_with_narrowing(then_block, narrowing.as_ref(), true);
-                let else_returns = else_block.as_ref().is_some_and(|block| {
-                    self.check_block_with_narrowing(block, narrowing.as_ref(), false)
+                let condition_type_narrowing = self.derive_condition_type_narrowing(condition);
+                let then_branch_terminates = self.check_block_with_type_narrowing(
+                    then_block,
+                    condition_type_narrowing.as_ref(),
+                    true,
+                );
+                let else_branch_terminates = else_block.as_ref().is_some_and(|block| {
+                    self.check_block_with_type_narrowing(
+                        block,
+                        condition_type_narrowing.as_ref(),
+                        false,
+                    )
                 });
-                then_returns && else_returns
+                then_branch_terminates && else_branch_terminates
             }
             Statement::For {
                 condition, body, ..
@@ -904,19 +911,19 @@ impl<'a> Checker<'a> {
         None
     }
 
-    fn check_block_with_narrowing(
+    fn check_block_with_type_narrowing(
         &mut self,
         block: &Block,
-        narrowing: Option<&BranchNarrowing>,
+        type_narrowing: Option<&BranchNarrowing>,
         use_true_branch: bool,
     ) -> bool {
-        let restore = narrowing.and_then(|narrowing| {
+        let restore = type_narrowing.and_then(|type_narrowing| {
             let narrowed_type = if use_true_branch {
-                narrowing.when_true.clone()
+                type_narrowing.when_true.clone()
             } else {
-                narrowing.when_false.clone()
+                type_narrowing.when_false.clone()
             };
-            self.apply_variable_narrowing(&narrowing.name, narrowed_type)
+            self.apply_variable_narrowing(&type_narrowing.name, narrowed_type)
         });
 
         let result = self.check_block(block);
@@ -954,7 +961,10 @@ impl<'a> Checker<'a> {
         }
     }
 
-    fn condition_narrowing(&mut self, condition: &Expression) -> Option<BranchNarrowing> {
+    fn derive_condition_type_narrowing(
+        &mut self,
+        condition: &Expression,
+    ) -> Option<BranchNarrowing> {
         if let Expression::Binary {
             operator,
             left,
