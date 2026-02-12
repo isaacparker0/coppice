@@ -1,0 +1,7 @@
+# exit: 1
+input/main.lang0:2:21: error: type mismatch: expected int64, got nil
+      value: int64 := nil
+                      ^
+input/main.lang0:3:12: error: return type mismatch: expected int64, got nil
+      return value
+             ^

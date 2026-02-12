@@ -12,6 +12,7 @@ pub enum Keyword {
     And,
     Or,
     Not,
+    Nil,
     Mut,
     Struct,
 }
@@ -29,6 +30,7 @@ impl Keyword {
             Keyword::And => "and",
             Keyword::Or => "or",
             Keyword::Not => "not",
+            Keyword::Nil => "nil",
             Keyword::Mut => "mut",
             Keyword::Struct => "struct",
         }
@@ -346,6 +348,7 @@ impl<'a> Lexer<'a> {
             "and" => TokenKind::Keyword(Keyword::And),
             "or" => TokenKind::Keyword(Keyword::Or),
             "not" => TokenKind::Keyword(Keyword::Not),
+            "nil" => TokenKind::Keyword(Keyword::Nil),
             "mut" => TokenKind::Keyword(Keyword::Mut),
             "struct" => TokenKind::Keyword(Keyword::Struct),
             "true" => TokenKind::BooleanLiteral(true),

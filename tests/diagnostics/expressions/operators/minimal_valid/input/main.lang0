@@ -12,3 +12,8 @@ function ops(a: int64, b: int64, c: boolean) -> boolean {
     ok := (eq or neq) and (lt or lte or gt or gte) and c
     return ok and (z == w or z != w)
 }
+
+function nilEq() -> boolean {
+    maybeText: string | nil := nil
+    return maybeText == nil and maybeText != "x"
+}

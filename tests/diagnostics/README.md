@@ -22,8 +22,11 @@ tests/diagnostics/<area>/<feature>/<case>/
 ## Content rules
 
 - Each fixture is self-contained and uses a single file: `input/main.lang0`.
-- `minimal_valid` should cover all valid sub-kinds for that feature in one file.
+- `minimal_valid` is the only success case for a feature and should cover all
+  valid sub-kinds for that feature in one file.
 - `expect.txt` starts with `# exit: <code>` and the exact expected output after
   running `compiler/cli` with `check`.
 - Avoid adding new case names for variations that can be covered by the existing
   `minimal_valid` fixture.
+- Non-`minimal_valid` fixtures should usually target one primary failure mode,
+  with clear behavior-based names.

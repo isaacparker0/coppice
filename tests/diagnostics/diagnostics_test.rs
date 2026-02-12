@@ -72,7 +72,6 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     }
 
     let actual_exit = output.status.code().unwrap_or(1);
-
     match mode {
         Mode::Update {
             workspace_directory,
@@ -89,6 +88,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
             let expect_contents =
                 fs::read_to_string(runfiles_directory.join(case_path).join("expect.txt")).unwrap();
             let (expected_exit, expected_output) = parse_expect(&expect_contents);
+            assert_case_name_matches_exit(case_path, expected_exit);
             assert_eq!(
                 expected_exit,
                 actual_exit,
@@ -104,6 +104,28 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 case_path.display()
             );
         }
+    }
+}
+
+fn assert_case_name_matches_exit(case_path: &Path, exit_code: i32) {
+    let case_name = case_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("case path must end with a valid UTF-8 directory name");
+    if exit_code == 0 {
+        assert_eq!(
+            case_name,
+            "minimal_valid",
+            "success fixtures must be named 'minimal_valid': {}",
+            case_path.display()
+        );
+    } else {
+        assert_ne!(
+            case_name,
+            "minimal_valid",
+            "error fixtures must not be named 'minimal_valid': {}",
+            case_path.display()
+        );
     }
 }
 

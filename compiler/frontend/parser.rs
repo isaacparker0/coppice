@@ -412,14 +412,14 @@ impl Parser {
     }
 
     fn parse_type_name(&mut self) -> Option<TypeName> {
-        let (name, span) = self.expect_identifier()?;
+        let (name, span) = self.expect_type_name_part()?;
         let mut names = vec![TypeNameAtom {
             name,
             span: span.clone(),
         }];
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let (name, name_span) = self.expect_identifier()?;
+            let (name, name_span) = self.expect_type_name_part()?;
             names.push(TypeNameAtom {
                 name,
                 span: name_span,
@@ -725,6 +725,7 @@ impl Parser {
                 value,
                 span: token.span,
             }),
+            TokenKind::Keyword(Keyword::Nil) => Some(Expression::NilLiteral { span: token.span }),
             TokenKind::StringLiteral(value) => Some(Expression::StringLiteral {
                 value,
                 span: token.span,
@@ -891,7 +892,7 @@ impl Parser {
 
     fn parse_union_type_declaration(&mut self) -> Option<Vec<TypeName>> {
         let mut variants = Vec::new();
-        let (name, span) = self.expect_identifier()?;
+        let (name, span) = self.expect_type_name_part()?;
         variants.push(TypeName {
             names: vec![TypeNameAtom {
                 name,
@@ -901,7 +902,7 @@ impl Parser {
         });
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let (name, span) = self.expect_identifier()?;
+            let (name, span) = self.expect_type_name_part()?;
             variants.push(TypeName {
                 names: vec![TypeNameAtom {
                     name,
@@ -966,6 +967,30 @@ impl Parser {
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => Some((name, token.span)),
+            TokenKind::Keyword(keyword) => {
+                self.error(
+                    format!(
+                        "reserved keyword '{}' cannot be used as an identifier",
+                        keyword.as_str()
+                    ),
+                    token.span,
+                );
+                None
+            }
+            _ => {
+                self.error("expected identifier", token.span);
+                None
+            }
+        }
+    }
+
+    fn expect_type_name_part(&mut self) -> Option<(String, Span)> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::Identifier(name) => Some((name, token.span)),
+            TokenKind::Keyword(Keyword::Nil) => {
+                Some((Keyword::Nil.as_str().to_string(), token.span))
+            }
             TokenKind::Keyword(keyword) => {
                 self.error(
                     format!(
@@ -1120,6 +1145,7 @@ impl ExpressionSpan for Expression {
     fn span(&self) -> Span {
         match self {
             Expression::IntegerLiteral { span, .. }
+            | Expression::NilLiteral { span, .. }
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }

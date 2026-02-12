@@ -351,6 +351,7 @@ impl<'a> Checker<'a> {
     fn check_expression(&mut self, expression: &Expression) -> Type {
         match expression {
             Expression::IntegerLiteral { .. } => Type::Integer64,
+            Expression::NilLiteral { .. } => Type::Nil,
             Expression::BooleanLiteral { .. } => Type::Boolean,
             Expression::StringLiteral { .. } => Type::String,
             Expression::Identifier { name, span } => self.resolve_variable(name, span),
@@ -451,7 +452,7 @@ impl<'a> Checker<'a> {
                         Type::Integer64
                     }
                     BinaryOperator::EqualEqual | BinaryOperator::NotEqual => {
-                        if left_type != right_type
+                        if !Self::are_comparable_for_equality(&left_type, &right_type)
                             && left_type != Type::Unknown
                             && right_type != Type::Unknown
                         {
@@ -851,6 +852,10 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn are_comparable_for_equality(left_type: &Type, right_type: &Type) -> bool {
+        Self::is_assignable(left_type, right_type) || Self::is_assignable(right_type, left_type)
+    }
+
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(Diagnostic::new(message, span));
     }
@@ -1034,6 +1039,7 @@ impl ExpressionSpan for Expression {
     fn span(&self) -> Span {
         match self {
             Expression::IntegerLiteral { span, .. }
+            | Expression::NilLiteral { span, .. }
             | Expression::BooleanLiteral { span, .. }
             | Expression::StringLiteral { span, .. }
             | Expression::Identifier { span, .. }

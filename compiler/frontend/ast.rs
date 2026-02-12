@@ -100,6 +100,9 @@ pub enum Expression {
         value: i64,
         span: Span,
     },
+    NilLiteral {
+        span: Span,
+    },
     BooleanLiteral {
         value: bool,
         span: Span,

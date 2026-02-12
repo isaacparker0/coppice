@@ -1,6 +1,0 @@
-function choose() -> int64 {
-    if true {
-        return 1
-    }
-    return 2
-}

@@ -9,3 +9,7 @@ function value() -> int64 {
 function greet() -> string {
     return "ok"
 }
+
+function maybe() -> string | nil {
+    return nil
+}

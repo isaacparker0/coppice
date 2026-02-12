@@ -1,0 +1,4 @@
+function main() -> int64 {
+    value: int64 := nil
+    return value
+}
