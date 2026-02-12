@@ -59,6 +59,13 @@ function unwrapMatches(value: int64 | string) -> int64 {
     }
 }
 
+function unwrapAfterGuard(value: int64 | nil) -> int64 {
+    if value == nil {
+        return 0
+    }
+    return value
+}
+
 function failFast() -> int64 {
     abort("boom")
 }

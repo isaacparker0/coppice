@@ -62,6 +62,16 @@ struct BranchNarrowing {
     when_false: Type,
 }
 
+struct StatementOutcome {
+    terminates: bool,
+    fallthrough_narrowing: Option<FallthroughNarrowing>,
+}
+
+struct FallthroughNarrowing {
+    variable_name: String,
+    narrowed_type: Type,
+}
+
 impl<'a> Checker<'a> {
     fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
         Self {
@@ -242,8 +252,14 @@ impl<'a> Checker<'a> {
                 continue;
             }
 
-            let statement_terminates = self.check_statement(statement);
-            if falls_through && statement_terminates {
+            let outcome = self.check_statement(statement);
+            if let Some(fallthrough_narrowing) = outcome.fallthrough_narrowing {
+                self.apply_variable_narrowing(
+                    &fallthrough_narrowing.variable_name,
+                    fallthrough_narrowing.narrowed_type,
+                );
+            }
+            if falls_through && outcome.terminates {
                 falls_through = false;
             }
         }
@@ -252,7 +268,7 @@ impl<'a> Checker<'a> {
         !falls_through
     }
 
-    fn check_statement(&mut self, statement: &Statement) -> bool {
+    fn check_statement(&mut self, statement: &Statement) -> StatementOutcome {
         match statement {
             Statement::Let {
                 name,
@@ -287,7 +303,10 @@ impl<'a> Checker<'a> {
                     }
                 }
                 self.define_variable(name.clone(), binding_type, *mutable, span.clone());
-                false
+                StatementOutcome {
+                    terminates: false,
+                    fallthrough_narrowing: None,
+                }
             }
             Statement::Assign {
                 name,
@@ -324,7 +343,10 @@ impl<'a> Checker<'a> {
                 } else {
                     self.error(format!("unknown name '{name}'"), name_span.clone());
                 }
-                false
+                StatementOutcome {
+                    terminates: false,
+                    fallthrough_narrowing: None,
+                }
             }
             Statement::Return {
                 expression,
@@ -344,29 +366,47 @@ impl<'a> Checker<'a> {
                         expression.span(),
                     );
                 }
-                true
+                StatementOutcome {
+                    terminates: true,
+                    fallthrough_narrowing: None,
+                }
             }
             Statement::Abort { message, .. } => {
                 let message_type = self.check_expression(message);
                 if message_type != Type::String && message_type != Type::Unknown {
                     self.error("abort message must be string", message.span());
                 }
-                true
+                StatementOutcome {
+                    terminates: true,
+                    fallthrough_narrowing: None,
+                }
             }
             Statement::Break { span } => {
                 if self.loop_depth == 0 {
                     self.error("break can only be used inside a loop", span.clone());
-                    false
+                    StatementOutcome {
+                        terminates: false,
+                        fallthrough_narrowing: None,
+                    }
                 } else {
-                    true
+                    StatementOutcome {
+                        terminates: true,
+                        fallthrough_narrowing: None,
+                    }
                 }
             }
             Statement::Continue { span } => {
                 if self.loop_depth == 0 {
                     self.error("continue can only be used inside a loop", span.clone());
-                    false
+                    StatementOutcome {
+                        terminates: false,
+                        fallthrough_narrowing: None,
+                    }
                 } else {
-                    true
+                    StatementOutcome {
+                        terminates: true,
+                        fallthrough_narrowing: None,
+                    }
                 }
             }
             Statement::If {
@@ -392,7 +432,27 @@ impl<'a> Checker<'a> {
                         false,
                     )
                 });
-                then_branch_terminates && else_branch_terminates
+                let fallthrough_narrowing = if then_branch_terminates && !else_branch_terminates {
+                    condition_type_narrowing
+                        .as_ref()
+                        .map(|type_narrowing| FallthroughNarrowing {
+                            variable_name: type_narrowing.name.clone(),
+                            narrowed_type: type_narrowing.when_false.clone(),
+                        })
+                } else if !then_branch_terminates && else_branch_terminates {
+                    condition_type_narrowing
+                        .as_ref()
+                        .map(|type_narrowing| FallthroughNarrowing {
+                            variable_name: type_narrowing.name.clone(),
+                            narrowed_type: type_narrowing.when_true.clone(),
+                        })
+                } else {
+                    None
+                };
+                StatementOutcome {
+                    terminates: then_branch_terminates && else_branch_terminates,
+                    fallthrough_narrowing,
+                }
             }
             Statement::For {
                 condition, body, ..
@@ -406,7 +466,10 @@ impl<'a> Checker<'a> {
                 self.loop_depth += 1;
                 let _ = self.check_block(body);
                 self.loop_depth = self.loop_depth.saturating_sub(1);
-                false
+                StatementOutcome {
+                    terminates: false,
+                    fallthrough_narrowing: None,
+                }
             }
         }
     }
