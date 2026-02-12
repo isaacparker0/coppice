@@ -416,6 +416,17 @@ match read_file("config.toml") {
 No exceptions. No `throw`. No `try/catch`. Every error path is visible in the
 type signature.
 
+For unrecoverable invariant violations, use `abort("message")`.
+
+```
+if state != "ready" {
+    abort("internal invariant violated: state must be ready")
+}
+```
+
+`abort` is process-terminating and non-recoverable. It is not a substitute for
+returning recoverable errors in function signatures.
+
 ---
 
 ## Package System
@@ -663,6 +674,7 @@ No syntax alternatives. No feature overlaps.
 - One generic syntax: `[T]`.
 - One optional form: `T | nil`.
 - One error propagation: `?`.
+- One fatal unrecoverable failure construct: `abort(...)`.
 - One union branching form: `match`.
 - One union boolean membership check: `matches`.
 - The compiler rejects equivalent non-canonical patterns (for example, boolean
@@ -672,6 +684,7 @@ No syntax alternatives. No feature overlaps.
 
 - No semicolons (grammar doesn't have them).
 - No exceptions / `throw` / `try-catch`.
+- No `panic` keyword (use `abort(...)`).
 - No `null` AND `undefined` (one `nil`).
 - No operator overloading (or very limited).
 - No variadic arguments (pass a list).
@@ -854,7 +867,7 @@ string
 List, Map, Set
 
 // Built-ins
-assert, print, nil
+assert, abort, print, nil
 ```
 
 Everything else requires an explicit import.
