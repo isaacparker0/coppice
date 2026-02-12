@@ -17,3 +17,7 @@ function demo() -> int64 {
     }
     return total
 }
+
+function failFast() -> int64 {
+    abort("invariant violated")
+}

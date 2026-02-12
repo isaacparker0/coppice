@@ -346,6 +346,13 @@ impl<'a> Checker<'a> {
                 }
                 true
             }
+            Statement::Abort { message, .. } => {
+                let message_type = self.check_expression(message);
+                if message_type != Type::String && message_type != Type::Unknown {
+                    self.error("abort message must be string", message.span());
+                }
+                true
+            }
             Statement::Break { span } => {
                 if self.loop_depth == 0 {
                     self.error("break can only be used inside a loop", span.clone());
@@ -1343,6 +1350,7 @@ impl StatementSpan for Statement {
             Statement::Let { span, .. }
             | Statement::Assign { span, .. }
             | Statement::Return { span, .. }
+            | Statement::Abort { span, .. }
             | Statement::If { span, .. }
             | Statement::For { span, .. }
             | Statement::Break { span, .. }

@@ -1,0 +1,4 @@
+function failFast() -> int64 {
+    abort("boom")
+    return 1
+}

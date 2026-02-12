@@ -58,3 +58,7 @@ function unwrapMatches(value: int64 | string) -> int64 {
         return 0
     }
 }
+
+function failFast() -> int64 {
+    abort("boom")
+}

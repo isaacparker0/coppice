@@ -86,6 +86,10 @@ pub enum Statement {
         expression: Expression,
         span: Span,
     },
+    Abort {
+        message: Expression,
+        span: Span,
+    },
     Break {
         span: Span,
     },

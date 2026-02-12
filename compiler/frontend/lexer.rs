@@ -6,6 +6,7 @@ pub enum Keyword {
     Type,
     Function,
     Return,
+    Abort,
     Break,
     Continue,
     If,
@@ -28,6 +29,7 @@ impl Keyword {
             Keyword::Type => "type",
             Keyword::Function => "function",
             Keyword::Return => "return",
+            Keyword::Abort => "abort",
             Keyword::Break => "break",
             Keyword::Continue => "continue",
             Keyword::If => "if",
@@ -350,6 +352,7 @@ impl<'a> Lexer<'a> {
             "type" => TokenKind::Keyword(Keyword::Type),
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
+            "abort" => TokenKind::Keyword(Keyword::Abort),
             "break" => TokenKind::Keyword(Keyword::Break),
             "continue" => TokenKind::Keyword(Keyword::Continue),
             "if" => TokenKind::Keyword(Keyword::If),
@@ -528,6 +531,7 @@ fn is_statement_start(kind: &TokenKind) -> bool {
         TokenKind::Identifier(_)
             | TokenKind::Keyword(
                 Keyword::Return
+                    | Keyword::Abort
                     | Keyword::Break
                     | Keyword::Continue
                     | Keyword::If

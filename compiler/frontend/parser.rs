@@ -308,6 +308,19 @@ impl Parser {
             let expression = self.parse_expression()?;
             return Some(Statement::Return { expression, span });
         }
+        if self.peek_is_keyword(Keyword::Abort) {
+            let start = self.expect_keyword(Keyword::Abort)?;
+            self.expect_symbol(Symbol::LeftParenthesis)?;
+            let message = self.parse_expression()?;
+            let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
+            let span = Span {
+                start: start.start,
+                end: right_parenthesis.end,
+                line: start.line,
+                column: start.column,
+            };
+            return Some(Statement::Abort { message, span });
+        }
         if self.peek_is_keyword(Keyword::Break) {
             let span = self.expect_keyword(Keyword::Break)?;
             return Some(Statement::Break { span });
@@ -1171,6 +1184,7 @@ impl Parser {
                 return;
             }
             if self.peek_is_keyword(Keyword::Return)
+                || self.peek_is_keyword(Keyword::Abort)
                 || self.peek_is_keyword(Keyword::Break)
                 || self.peek_is_keyword(Keyword::Continue)
                 || self.peek_is_keyword(Keyword::If)
