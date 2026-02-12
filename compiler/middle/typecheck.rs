@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use compiler__frontend::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
-    MatchArm, MatchPattern, Span, Statement, StructLiteralField, TypeDeclaration,
-    TypeDeclarationKind, TypeName, UnaryOperator,
+    MatchArm, MatchPattern, MethodDeclaration, Span, Statement, StructLiteralField,
+    TypeDeclaration, TypeDeclarationKind, TypeName, UnaryOperator,
 };
 
 use crate::types::{Type, type_from_name};
@@ -14,10 +14,12 @@ pub fn check_file(file: &File) -> Vec<Diagnostic> {
     let mut checker = Checker::new(&mut diagnostics);
     checker.collect_type_declarations(&file.types);
     checker.collect_function_signatures(&file.functions);
+    checker.collect_method_signatures(&file.types);
     checker.check_constant_declarations(&file.constants);
     for function in &file.functions {
         checker.check_function(function);
     }
+    checker.check_methods(&file.types);
     diagnostics
 }
 
@@ -46,10 +48,22 @@ struct FunctionInfo {
     return_type: Type,
 }
 
+struct MethodInfo {
+    parameter_types: Vec<Type>,
+    return_type: Type,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct MethodKey {
+    receiver_type_name: String,
+    method_name: String,
+}
+
 struct Checker<'a> {
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
+    methods: HashMap<MethodKey, MethodInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
@@ -78,6 +92,7 @@ impl<'a> Checker<'a> {
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: HashMap::new(),
+            methods: HashMap::new(),
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
@@ -188,6 +203,47 @@ impl<'a> Checker<'a> {
         }
     }
 
+    fn collect_method_signatures(&mut self, types: &[TypeDeclaration]) {
+        for type_declaration in types {
+            let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
+                continue;
+            };
+
+            for method in methods {
+                self.check_function_name(&method.name, &method.name_span);
+                let method_key = MethodKey {
+                    receiver_type_name: type_declaration.name.clone(),
+                    method_name: method.name.clone(),
+                };
+                if self.methods.contains_key(&method_key) {
+                    self.error(
+                        format!(
+                            "duplicate method '{}.{}'",
+                            type_declaration.name, method.name
+                        ),
+                        method.name_span.clone(),
+                    );
+                    continue;
+                }
+
+                let return_type = self.resolve_type_name(&method.return_type);
+                let mut parameter_types = Vec::new();
+                for parameter in &method.parameters {
+                    let value_type = self.resolve_type_name(&parameter.type_name);
+                    parameter_types.push(value_type);
+                }
+
+                self.methods.insert(
+                    method_key,
+                    MethodInfo {
+                        parameter_types,
+                        return_type,
+                    },
+                );
+            }
+        }
+    }
+
     fn check_constant_declarations(&mut self, constants: &[ConstantDeclaration]) {
         for constant in constants {
             self.check_constant_name(&constant.name, &constant.span);
@@ -236,6 +292,65 @@ impl<'a> Checker<'a> {
                 "missing return in function body",
                 function.body.span.clone(),
             );
+        }
+    }
+
+    fn check_methods(&mut self, types: &[TypeDeclaration]) {
+        for type_declaration in types {
+            let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
+                continue;
+            };
+            for method in methods {
+                self.check_method(type_declaration, method);
+            }
+        }
+    }
+
+    fn check_method(&mut self, type_declaration: &TypeDeclaration, method: &MethodDeclaration) {
+        self.scopes.push(HashMap::new());
+
+        let method_key = MethodKey {
+            receiver_type_name: type_declaration.name.clone(),
+            method_name: method.name.clone(),
+        };
+        let (parameter_types, return_type) = if let Some(info) = self.methods.get(&method_key) {
+            (info.parameter_types.clone(), info.return_type.clone())
+        } else {
+            (Vec::new(), self.resolve_type_name(&method.return_type))
+        };
+        self.current_return_type = return_type;
+
+        self.define_variable(
+            "self".to_string(),
+            Type::Named(type_declaration.name.clone()),
+            false,
+            method.self_span.clone(),
+        );
+        if let Some(scope) = self.scopes.last_mut()
+            && let Some(self_variable) = scope.get_mut("self")
+        {
+            // Methods are allowed to ignore self.
+            self_variable.used = true;
+        }
+
+        for (index, parameter) in method.parameters.iter().enumerate() {
+            self.check_parameter_name(&parameter.name, &parameter.span);
+            let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
+            self.define_variable(
+                parameter.name.clone(),
+                value_type,
+                false,
+                parameter.span.clone(),
+            );
+        }
+
+        let body_returns = self.check_block(&method.body);
+
+        self.check_unused_in_current_scope();
+        self.scopes.pop();
+
+        if !body_returns {
+            self.error("missing return in function body", method.body.span.clone());
         }
     }
 
@@ -500,25 +615,70 @@ impl<'a> Checker<'a> {
                 arguments,
                 span,
             } => {
-                let (function_name, name_span) =
+                let (callee_name, parameter_types, return_type) =
                     if let Expression::Identifier { name, span } = callee.as_ref() {
-                        (name.as_str(), span.clone())
+                        if let Some(info) = self.functions.get(name) {
+                            (
+                                name.as_str(),
+                                info.parameter_types.clone(),
+                                info.return_type.clone(),
+                            )
+                        } else {
+                            self.error(format!("unknown function '{name}'"), span.clone());
+                            for argument in arguments {
+                                self.check_expression(argument);
+                            }
+                            return Type::Unknown;
+                        }
+                    } else if let Expression::FieldAccess {
+                        target,
+                        field,
+                        field_span,
+                        ..
+                    } = callee.as_ref()
+                    {
+                        let receiver_type = self.check_expression(target);
+                        let receiver_type_name = if let Type::Named(type_name) = &receiver_type {
+                            type_name.clone()
+                        } else {
+                            if receiver_type != Type::Unknown {
+                                self.error(
+                                    format!(
+                                        "cannot call method '{}' on non-struct type {}",
+                                        field,
+                                        receiver_type.display()
+                                    ),
+                                    field_span.clone(),
+                                );
+                            }
+                            for argument in arguments {
+                                self.check_expression(argument);
+                            }
+                            return Type::Unknown;
+                        };
+
+                        let method_key = MethodKey {
+                            receiver_type_name: receiver_type_name.clone(),
+                            method_name: field.clone(),
+                        };
+                        if let Some(info) = self.methods.get(&method_key) {
+                            (
+                                field.as_str(),
+                                info.parameter_types.clone(),
+                                info.return_type.clone(),
+                            )
+                        } else {
+                            self.error(
+                                format!("unknown method '{receiver_type_name}.{field}'"),
+                                field_span.clone(),
+                            );
+                            for argument in arguments {
+                                self.check_expression(argument);
+                            }
+                            return Type::Unknown;
+                        }
                     } else {
                         self.error("invalid call target", callee.span());
-                        for argument in arguments {
-                            self.check_expression(argument);
-                        }
-                        return Type::Unknown;
-                    };
-
-                let (parameter_types, return_type) =
-                    if let Some(info) = self.functions.get(function_name) {
-                        (info.parameter_types.clone(), info.return_type.clone())
-                    } else {
-                        self.error(
-                            format!("unknown function '{function_name}'"),
-                            name_span.clone(),
-                        );
                         for argument in arguments {
                             self.check_expression(argument);
                         }
@@ -547,7 +707,7 @@ impl<'a> Checker<'a> {
                             format!(
                                 "argument {} to '{}' must be {}, got {}",
                                 index + 1,
-                                function_name,
+                                callee_name,
                                 expected_type.display(),
                                 argument_type.display()
                             ),

@@ -44,6 +44,7 @@ pub struct FieldDeclaration {
 pub struct MethodDeclaration {
     pub name: String,
     pub name_span: Span,
+    pub self_span: Span,
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,

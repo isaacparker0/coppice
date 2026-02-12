@@ -1,7 +1,7 @@
 use crate::ast::{
     BinaryOperator, Block, ConstantDeclaration, Expression, FieldDeclaration, File,
-    FunctionDeclaration, MatchArm, MatchPattern, ParameterDeclaration, Statement,
-    StructLiteralField, TypeDeclaration, TypeDeclarationKind, TypeName, TypeNameAtom,
+    FunctionDeclaration, MatchArm, MatchPattern, MethodDeclaration, ParameterDeclaration,
+    Statement, StructLiteralField, TypeDeclaration, TypeDeclarationKind, TypeName, TypeNameAtom,
     UnaryOperator, Visibility,
 };
 use crate::diagnostics::{Diagnostic, Span};
@@ -104,7 +104,7 @@ impl Parser {
         if self.peek_is_keyword(Keyword::Struct) {
             self.expect_keyword(Keyword::Struct)?;
             self.expect_symbol(Symbol::LeftBrace)?;
-            let fields = self.parse_fields();
+            let (fields, methods) = self.parse_struct_members();
             let right_brace = self.expect_symbol(Symbol::RightBrace)?;
             let span = Span {
                 start: start.start,
@@ -114,10 +114,7 @@ impl Parser {
             };
             return Some(TypeDeclaration {
                 name,
-                kind: TypeDeclarationKind::Struct {
-                    fields,
-                    methods: Vec::new(),
-                },
+                kind: TypeDeclarationKind::Struct { fields, methods },
                 visibility,
                 span,
             });
@@ -140,15 +137,26 @@ impl Parser {
         })
     }
 
-    fn parse_fields(&mut self) -> Vec<FieldDeclaration> {
+    fn parse_struct_members(&mut self) -> (Vec<FieldDeclaration>, Vec<MethodDeclaration>) {
         let mut fields = Vec::new();
+        let mut methods = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
-            return fields;
+            return (fields, methods);
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(field) = self.parse_field() {
+            let visibility = self.parse_visibility();
+            if self.peek_is_keyword(Keyword::Function) {
+                if let Some(method) = self.parse_method_declaration(visibility) {
+                    methods.push(method);
+                } else {
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
+                }
+            } else if let Some(field) = self.parse_field_declaration(visibility) {
                 fields.push(field);
             } else {
                 self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
@@ -166,13 +174,15 @@ impl Parser {
                 }
                 continue;
             }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
+            }
             break;
         }
-        fields
+        (fields, methods)
     }
 
-    fn parse_field(&mut self) -> Option<FieldDeclaration> {
-        let visibility = self.parse_visibility();
+    fn parse_field_declaration(&mut self, visibility: Visibility) -> Option<FieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -188,6 +198,82 @@ impl Parser {
             visibility,
             span,
         })
+    }
+
+    fn parse_method_declaration(&mut self, visibility: Visibility) -> Option<MethodDeclaration> {
+        let start = self.expect_keyword(Keyword::Function)?;
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::LeftParenthesis)?;
+        let (self_span, parameters) = self.parse_method_parameters()?;
+        self.expect_symbol(Symbol::RightParenthesis)?;
+        self.expect_symbol(Symbol::Arrow)?;
+        let return_type = self.parse_type_name()?;
+        let body = self.parse_block()?;
+        let body_end = body.span.end;
+        Some(MethodDeclaration {
+            name,
+            name_span,
+            self_span,
+            parameters,
+            return_type,
+            body,
+            visibility,
+            span: Span {
+                start: start.start,
+                end: body_end,
+                line: start.line,
+                column: start.column,
+            },
+        })
+    }
+
+    fn parse_method_parameters(&mut self) -> Option<(Span, Vec<ParameterDeclaration>)> {
+        let (receiver_name, receiver_span) = self.expect_identifier()?;
+        if receiver_name != "self" {
+            self.error("first method parameter must be 'self'", receiver_span);
+            return None;
+        }
+        if self.peek_is_symbol(Symbol::Colon) {
+            let span = self.expect_symbol(Symbol::Colon)?;
+            self.error(
+                "method receiver 'self' must not have a type annotation",
+                span,
+            );
+            let _ = self.parse_type_name();
+        }
+        if !self.peek_is_symbol(Symbol::Comma) {
+            return Some((receiver_span, Vec::new()));
+        }
+
+        self.advance();
+        let mut parameters = Vec::new();
+        self.skip_statement_terminators();
+        if self.peek_is_symbol(Symbol::RightParenthesis) {
+            return Some((receiver_span, parameters));
+        }
+        loop {
+            self.skip_statement_terminators();
+            if let Some(parameter) = self.parse_parameter() {
+                parameters.push(parameter);
+            } else {
+                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
+                    break;
+                }
+            }
+
+            self.skip_statement_terminators();
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::RightParenthesis) {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        Some((receiver_span, parameters))
     }
 
     fn parse_function(&mut self, visibility: Visibility) -> Option<FunctionDeclaration> {

@@ -5,3 +5,6 @@
   the jargon is the standard term for the concept.
 - Use full words instead of abbreviations.
 - Avoid redundant names/comments; if the name is clear, drop the comment.
+- Prefer self-evident data types. Avoid opaque composite shapes (for example
+  positional tuples for multi-part keys) when a named struct makes intent
+  explicit.

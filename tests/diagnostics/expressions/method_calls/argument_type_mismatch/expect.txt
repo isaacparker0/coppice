@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:10:22: error: argument 1 to 'plus' must be int64, got boolean
+      return user.plus(true)
+                       ^

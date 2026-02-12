@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:2:14: error: cannot call method 'missing' on non-struct type int64
+      return 1.missing()
+               ^

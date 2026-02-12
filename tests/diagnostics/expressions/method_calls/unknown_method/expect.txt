@@ -1,0 +1,4 @@
+# exit: 1
+input/main.lang0:7:17: error: unknown method 'User.missing'
+      return user.missing()
+                  ^
