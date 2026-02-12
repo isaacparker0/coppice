@@ -64,12 +64,14 @@ Same semantics as functions, shorter syntax for inline use.
 ### Types
 
 ```
-public User :: struct {
+public type User :: struct {
     public name: string
     public email: string
     password_hash: string       // package-internal field
 }
 ```
+
+Type declarations use the `type` keyword.
 
 ### Methods
 
@@ -84,17 +86,17 @@ Methods are scoped functions, not `impl` blocks.
 ### Enums / Union Types
 
 ```
-Shape :: Circle | Rect | Point
+type Shape :: Circle | Rect | Point
 
-Circle :: struct { radius: f64 }
-Rect :: struct { w: f64, h: f64 }
-Point :: struct {}
+type Circle :: struct { radius: f64 }
+type Rect :: struct { w: f64, h: f64 }
+type Point :: struct {}
 ```
 
 Union types are first-class. They compose at the use site without pre-declaring wrapper enums.
 
 ```
-ID :: string | u64
+type ID :: string | u64
 
 function describe(id: ID) -> string {
     match id {
@@ -114,7 +116,7 @@ public function max[T: Ord](a: T, b: T) -> T {
     return b
 }
 
-Map[K: Hash + Eq, V] :: struct {
+type Map[K: Hash + Eq, V] :: struct {
     entries: List[Entry[K, V]]
 }
 ```
@@ -184,7 +186,7 @@ greeting := "hello, {name}"
 Interfaces are structural. No explicit `implements` declaration. If a type has the required methods, it satisfies the interface.
 
 ```
-Printable :: interface {
+type Printable :: interface {
     function to_string(self) -> string
 }
 
@@ -203,8 +205,8 @@ Semantic traits (Hash, Eq, Serialize) use explicit `derives` for opt-in.
 ### Union Types
 
 ```
-Result :: Success | Failure
-StringOrInt :: string | u64
+type Result :: Success | Failure
+type StringOrInt :: string | u64
 ```
 
 Tagged unions under the hood. Composable at the use site.
@@ -212,12 +214,12 @@ Tagged unions under the hood. Composable at the use site.
 ### Intersection Types
 
 ```
-Timestamped :: interface {
+type Timestamped :: interface {
     created_at: Time
     updated_at: Time
 }
 
-Authored :: interface {
+type Authored :: interface {
     author: string
 }
 
@@ -227,7 +229,7 @@ function fetch_posts() -> List[Timestamped & Authored] { ... }
 ### Literal Types
 
 ```
-Direction :: "north" | "south" | "east" | "west"
+type Direction :: "north" | "south" | "east" | "west"
 
 function move(d: Direction) { ... }
 move("north")   // ok
@@ -433,7 +435,7 @@ Two levels:
 ```
 // auth/token.lang
 
-public Token :: struct {        // re-exportable via PACKAGE.lang
+public type Token :: struct {        // re-exportable via PACKAGE.lang
     public user_id: i64         // visible on the struct externally
     signature: string           // package-internal field
 }
@@ -835,7 +837,7 @@ message := json.decode[Message](request.body, validate: true)
 Validation constraints are part of the type definition via `where` clauses:
 
 ```
-public SignupRequest :: struct {
+public type SignupRequest :: struct {
     email: string where match("[^@]+@[^@]+")
     age: u32 where 13 <= self <= 150
     username: string where 3 <= self.length <= 20
