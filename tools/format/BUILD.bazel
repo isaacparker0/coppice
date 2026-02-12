@@ -10,8 +10,8 @@ copy_file(
 )
 
 rust_binary(
-    name = "format",
-    srcs = ["format.rs"],
+    name = "main",
+    srcs = ["main.rs"],
     data = [
         ":taplo_tool",
         "@buildifier_prebuilt//:buildifier",

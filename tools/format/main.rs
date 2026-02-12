@@ -23,12 +23,74 @@ enum Mode {
     Fix,
 }
 
+#[derive(Copy, Clone)]
+enum Tool {
+    Deno,
+    Rustfmt,
+    Shfmt,
+    Buildifier,
+    Taplo,
+}
+
 struct Formatter {
+    name: &'static str,
+    tool: Tool,
+    check_args: &'static [&'static str],
+    fix_args: &'static [&'static str],
+    extensions: &'static [&'static str],
+}
+
+struct FormatterInvocation {
     name: &'static str,
     bin: PathBuf,
     args: Vec<String>,
     extensions: &'static [&'static str],
 }
+
+const FORMATTERS: [Formatter; 6] = [
+    Formatter {
+        name: "JSON",
+        tool: Tool::Deno,
+        check_args: &["fmt", "--check"],
+        fix_args: &["fmt"],
+        extensions: &["json"],
+    },
+    Formatter {
+        name: "Markdown",
+        tool: Tool::Deno,
+        check_args: &["fmt", "--check"],
+        fix_args: &["fmt"],
+        extensions: &["md"],
+    },
+    Formatter {
+        name: "Rust",
+        tool: Tool::Rustfmt,
+        check_args: &["--check"],
+        fix_args: &[],
+        extensions: &["rs"],
+    },
+    Formatter {
+        name: "Shell",
+        tool: Tool::Shfmt,
+        check_args: &["-d"],
+        fix_args: &["-w"],
+        extensions: &["sh"],
+    },
+    Formatter {
+        name: "Starlark",
+        tool: Tool::Buildifier,
+        check_args: &["-lint=off", "-mode=check"],
+        fix_args: &["-lint=off", "-mode=fix"],
+        extensions: &["bzl", "bazel"],
+    },
+    Formatter {
+        name: "TOML",
+        tool: Tool::Taplo,
+        check_args: &["fmt", "--check"],
+        fix_args: &["fmt"],
+        extensions: &["toml"],
+    },
+];
 
 fn main() -> ExitCode {
     let command_line = CommandLine::parse();
@@ -40,12 +102,32 @@ fn main() -> ExitCode {
     });
 
     let tools = read_tools_from_build();
-    let formatters = build_formatters(&mode, &tools);
+    let formatter_invocations: Vec<FormatterInvocation> = FORMATTERS
+        .iter()
+        .map(|formatter| FormatterInvocation {
+            name: formatter.name,
+            bin: match formatter.tool {
+                Tool::Deno => tools.deno.clone(),
+                Tool::Rustfmt => tools.rustfmt.clone(),
+                Tool::Shfmt => tools.shfmt.clone(),
+                Tool::Buildifier => tools.buildifier.clone(),
+                Tool::Taplo => tools.taplo.clone(),
+            },
+            args: match mode {
+                Mode::Check => formatter.check_args,
+                Mode::Fix => formatter.fix_args,
+            }
+            .iter()
+            .map(|arg| (*arg).to_string())
+            .collect(),
+            extensions: formatter.extensions,
+        })
+        .collect();
 
     // Build extension -> formatter index map.
     let mut extension_map: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (index, formatter) in formatters.iter().enumerate() {
-        for extension in formatter.extensions {
+    for (index, formatter_invocation) in formatter_invocations.iter().enumerate() {
+        for extension in formatter_invocation.extensions {
             extension_map.entry(extension).or_default().push(index);
         }
     }
@@ -79,7 +161,7 @@ fn main() -> ExitCode {
             .collect();
 
     // Partition files into per-formatter buckets.
-    let mut buckets: Vec<Vec<String>> = vec![vec![]; formatters.len()];
+    let mut buckets: Vec<Vec<String>> = vec![vec![]; formatter_invocations.len()];
 
     for line in String::from_utf8_lossy(&git_output.stdout).lines() {
         if deleted.contains(line) {
@@ -100,7 +182,7 @@ fn main() -> ExitCode {
     let (sender, receiver) = mpsc::channel();
 
     thread::scope(|scope| {
-        for (index, formatter) in formatters.iter().enumerate() {
+        for (index, formatter_invocation) in formatter_invocations.iter().enumerate() {
             let files = &buckets[index];
             if files.is_empty() {
                 continue;
@@ -112,14 +194,16 @@ fn main() -> ExitCode {
             scope.spawn(move || {
                 let start = Instant::now();
 
-                let output = Command::new(&formatter.bin)
-                    .args(&formatter.args)
+                let output = Command::new(&formatter_invocation.bin)
+                    .args(&formatter_invocation.args)
                     .args(files)
                     .current_dir(workspace)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .output()
-                    .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", formatter.name));
+                    .unwrap_or_else(|e| {
+                        panic!("failed to spawn {}: {e}", formatter_invocation.name)
+                    });
 
                 let elapsed = start.elapsed();
 
@@ -128,7 +212,7 @@ fn main() -> ExitCode {
 
                 sender
                     .send((
-                        formatter.name,
+                        formatter_invocation.name,
                         output.status.success(),
                         elapsed,
                         stderr.to_string(),
@@ -171,87 +255,6 @@ fn main() -> ExitCode {
     });
 
     ExitCode::SUCCESS
-}
-
-fn build_formatters(mode: &Mode, tools: &Tools) -> Vec<Formatter> {
-    match mode {
-        Mode::Check => vec![
-            Formatter {
-                name: "JSON",
-                bin: tools.deno.clone(),
-                args: vec!["fmt".into(), "--check".into()],
-                extensions: &["json"],
-            },
-            Formatter {
-                name: "Markdown",
-                bin: tools.deno.clone(),
-                args: vec!["fmt".into(), "--check".into()],
-                extensions: &["md"],
-            },
-            Formatter {
-                name: "Rust",
-                bin: tools.rustfmt.clone(),
-                args: vec!["--check".into()],
-                extensions: &["rs"],
-            },
-            Formatter {
-                name: "Shell",
-                bin: tools.shfmt.clone(),
-                args: vec!["-d".into()],
-                extensions: &["sh"],
-            },
-            Formatter {
-                name: "Starlark",
-                bin: tools.buildifier.clone(),
-                args: vec!["-lint=off".into(), "-mode=check".into()],
-                extensions: &["bzl", "bazel"],
-            },
-            Formatter {
-                name: "TOML",
-                bin: tools.taplo.clone(),
-                args: vec!["fmt".into(), "--check".into()],
-                extensions: &["toml"],
-            },
-        ],
-        Mode::Fix => vec![
-            Formatter {
-                name: "JSON",
-                bin: tools.deno.clone(),
-                args: vec!["fmt".into()],
-                extensions: &["json"],
-            },
-            Formatter {
-                name: "Markdown",
-                bin: tools.deno.clone(),
-                args: vec!["fmt".into()],
-                extensions: &["md"],
-            },
-            Formatter {
-                name: "Rust",
-                bin: tools.rustfmt.clone(),
-                args: vec![],
-                extensions: &["rs"],
-            },
-            Formatter {
-                name: "Shell",
-                bin: tools.shfmt.clone(),
-                args: vec!["-w".into()],
-                extensions: &["sh"],
-            },
-            Formatter {
-                name: "Starlark",
-                bin: tools.buildifier.clone(),
-                args: vec!["-lint=off".into(), "-mode=fix".into()],
-                extensions: &["bzl", "bazel"],
-            },
-            Formatter {
-                name: "TOML",
-                bin: tools.taplo.clone(),
-                args: vec!["fmt".into()],
-                extensions: &["toml"],
-            },
-        ],
-    }
 }
 
 struct Tools {

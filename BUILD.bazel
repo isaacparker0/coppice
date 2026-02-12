@@ -8,6 +8,6 @@ extract_cargo_lints(
 
 alias(
     name = "format",
-    actual = "//tools/format:format",
+    actual = "//tools/format:main",
     visibility = ["//visibility:public"],
 )
