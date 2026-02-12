@@ -1,0 +1,4 @@
+function main() -> int64 {
+    return 1
+    return 2
+}

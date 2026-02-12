@@ -226,9 +226,18 @@ impl<'a> Checker<'a> {
     fn check_block(&mut self, block: &Block) -> bool {
         self.scopes.push(HashMap::new());
         let mut falls_through = true;
+        let mut has_reported_unreachable = false;
         for statement in &block.statements {
-            let statement_returns = self.check_statement(statement);
-            if falls_through && statement_returns {
+            if !falls_through {
+                if !has_reported_unreachable {
+                    self.error("unreachable code", statement.span());
+                    has_reported_unreachable = true;
+                }
+                continue;
+            }
+
+            let statement_terminates = self.check_statement(statement);
+            if falls_through && statement_terminates {
                 falls_through = false;
             }
         }
@@ -334,14 +343,18 @@ impl<'a> Checker<'a> {
             Statement::Break { span } => {
                 if self.loop_depth == 0 {
                     self.error("break can only be used inside a loop", span.clone());
+                    false
+                } else {
+                    true
                 }
-                false
             }
             Statement::Continue { span } => {
                 if self.loop_depth == 0 {
                     self.error("continue can only be used inside a loop", span.clone());
+                    false
+                } else {
+                    true
                 }
-                false
             }
             Statement::If {
                 condition,
@@ -1063,6 +1076,10 @@ trait ExpressionSpan {
     fn span(&self) -> Span;
 }
 
+trait StatementSpan {
+    fn span(&self) -> Span;
+}
+
 impl ExpressionSpan for Expression {
     fn span(&self) -> Span {
         match self {
@@ -1077,6 +1094,20 @@ impl ExpressionSpan for Expression {
             | Expression::Unary { span, .. }
             | Expression::Binary { span, .. }
             | Expression::Match { span, .. } => span.clone(),
+        }
+    }
+}
+
+impl StatementSpan for Statement {
+    fn span(&self) -> Span {
+        match self {
+            Statement::Let { span, .. }
+            | Statement::Assign { span, .. }
+            | Statement::Return { span, .. }
+            | Statement::If { span, .. }
+            | Statement::For { span, .. }
+            | Statement::Break { span, .. }
+            | Statement::Continue { span, .. } => span.clone(),
         }
     }
 }
