@@ -337,6 +337,12 @@ impl<'a> Checker<'a> {
                 }
                 false
             }
+            Statement::Continue { span } => {
+                if self.loop_depth == 0 {
+                    self.error("continue can only be used inside a loop", span.clone());
+                }
+                false
+            }
             Statement::If {
                 condition,
                 then_block,

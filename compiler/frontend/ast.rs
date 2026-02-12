@@ -89,6 +89,9 @@ pub enum Statement {
     Break {
         span: Span,
     },
+    Continue {
+        span: Span,
+    },
     If {
         condition: Expression,
         then_block: Block,

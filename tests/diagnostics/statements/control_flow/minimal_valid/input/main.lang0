@@ -17,6 +17,9 @@ function countToThree() -> int64 {
     mut x := 0
     for x < 3 {
         x = x + 1
+        if x == 2 {
+            continue
+        }
     }
     return x
 }

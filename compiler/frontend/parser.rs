@@ -312,6 +312,10 @@ impl Parser {
             let span = self.expect_keyword(Keyword::Break)?;
             return Some(Statement::Break { span });
         }
+        if self.peek_is_keyword(Keyword::Continue) {
+            let span = self.expect_keyword(Keyword::Continue)?;
+            return Some(Statement::Continue { span });
+        }
         if self.peek_is_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
             let condition = self.parse_expression()?;
@@ -1152,6 +1156,7 @@ impl Parser {
             }
             if self.peek_is_keyword(Keyword::Return)
                 || self.peek_is_keyword(Keyword::Break)
+                || self.peek_is_keyword(Keyword::Continue)
                 || self.peek_is_keyword(Keyword::If)
                 || self.peek_is_keyword(Keyword::For)
             {
