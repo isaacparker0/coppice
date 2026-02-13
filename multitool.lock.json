@@ -12,13 +12,12 @@
             }
         ]
     },
-    "taplo": {
+    "keep-sorted": {
         "binaries": [
             {
-                "kind": "archive",
-                "url": "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-aarch64.gz",
-                "sha256": "713734314c3e71894b9e77513c5349835eefbd52908445a0d73b0c7dc469347d",
-                "file": "taplo",
+                "kind": "file",
+                "url": "https://github.com/google/keep-sorted/releases/download/v0.7.1/keep-sorted_darwin",
+                "sha256": "e92fb7da55ead5048919a326e1bddd12f5e6a6b30b0c142f46b64122380f57db",
                 "os": "macos",
                 "cpu": "arm64"
             }
@@ -30,6 +29,18 @@
                 "kind": "file",
                 "url": "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_darwin_arm64",
                 "sha256": "d903802e0ce3ecbc82b98512f55ba370b0d37a93f3f78de394f5b657052b33dd",
+                "os": "macos",
+                "cpu": "arm64"
+            }
+        ]
+    },
+    "taplo": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-aarch64.gz",
+                "sha256": "713734314c3e71894b9e77513c5349835eefbd52908445a0d73b0c7dc469347d",
+                "file": "taplo",
                 "os": "macos",
                 "cpu": "arm64"
             }

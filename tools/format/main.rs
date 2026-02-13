@@ -30,6 +30,12 @@ enum Tool {
     Shfmt,
     Buildifier,
     Taplo,
+    KeepSorted,
+}
+
+enum FileSelector {
+    Extensions(&'static [&'static str]),
+    AllFiles,
 }
 
 struct Formatter {
@@ -37,58 +43,65 @@ struct Formatter {
     tool: Tool,
     check_args: &'static [&'static str],
     fix_args: &'static [&'static str],
-    extensions: &'static [&'static str],
+    selector: FileSelector,
 }
 
 struct FormatterInvocation {
     name: &'static str,
     bin: PathBuf,
     args: Vec<String>,
-    extensions: &'static [&'static str],
+    selector: FileSelector,
 }
 
-const FORMATTERS: [Formatter; 6] = [
+const FORMATTERS: [Formatter; 7] = [
     Formatter {
         name: "JSON",
         tool: Tool::Deno,
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        extensions: &["json"],
+        selector: FileSelector::Extensions(&["json"]),
     },
     Formatter {
         name: "Markdown",
         tool: Tool::Deno,
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        extensions: &["md"],
+        selector: FileSelector::Extensions(&["md"]),
     },
     Formatter {
         name: "Rust",
         tool: Tool::Rustfmt,
         check_args: &["--check"],
         fix_args: &[],
-        extensions: &["rs"],
+        selector: FileSelector::Extensions(&["rs"]),
     },
     Formatter {
         name: "Shell",
         tool: Tool::Shfmt,
         check_args: &["-d"],
         fix_args: &["-w"],
-        extensions: &["sh"],
+        selector: FileSelector::Extensions(&["sh"]),
     },
     Formatter {
         name: "Starlark",
         tool: Tool::Buildifier,
         check_args: &["-lint=off", "-mode=check"],
         fix_args: &["-lint=off", "-mode=fix"],
-        extensions: &["bzl", "bazel"],
+        selector: FileSelector::Extensions(&["bzl", "bazel"]),
     },
     Formatter {
         name: "TOML",
         tool: Tool::Taplo,
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        extensions: &["toml"],
+        selector: FileSelector::Extensions(&["toml"]),
+    },
+    Formatter {
+        name: "keep-sorted",
+        tool: Tool::KeepSorted,
+        check_args: &["--mode=lint"],
+        fix_args: &["--mode=fix"],
+        selector: FileSelector::AllFiles,
     },
 ];
 
@@ -112,6 +125,7 @@ fn main() -> ExitCode {
                 Tool::Shfmt => tools.shfmt.clone(),
                 Tool::Buildifier => tools.buildifier.clone(),
                 Tool::Taplo => tools.taplo.clone(),
+                Tool::KeepSorted => tools.keep_sorted.clone(),
             },
             args: match mode {
                 Mode::Check => formatter.check_args,
@@ -120,16 +134,32 @@ fn main() -> ExitCode {
             .iter()
             .map(|arg| (*arg).to_string())
             .collect(),
-            extensions: formatter.extensions,
+            selector: match formatter.selector {
+                FileSelector::Extensions(extensions) => FileSelector::Extensions(extensions),
+                FileSelector::AllFiles => FileSelector::AllFiles,
+            },
         })
         .collect();
 
-    // Build extension -> formatter index map.
-    let mut extension_map: HashMap<&str, Vec<usize>> = HashMap::new();
-    for (index, formatter_invocation) in formatter_invocations.iter().enumerate() {
-        for extension in formatter_invocation.extensions {
-            extension_map.entry(extension).or_default().push(index);
+    // Build routing tables for extension-based and all-file formatters.
+    let mut formatter_indices_by_extension: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut formatter_indices_for_all_files: Vec<usize> = Vec::new();
+    for (index, invocation) in formatter_invocations.iter().enumerate() {
+        match invocation.selector {
+            FileSelector::Extensions(extensions) => {
+                for extension in extensions {
+                    formatter_indices_by_extension
+                        .entry(extension)
+                        .or_default()
+                        .push(index);
+                }
+            }
+            FileSelector::AllFiles => formatter_indices_for_all_files.push(index),
         }
+    }
+
+    if formatter_indices_by_extension.is_empty() && formatter_indices_for_all_files.is_empty() {
+        return ExitCode::SUCCESS;
     }
 
     // Single `git ls-files` to discover all tracked + untracked, non-ignored
@@ -160,20 +190,24 @@ fn main() -> ExitCode {
             .map(String::from)
             .collect();
 
-    // Partition files into per-formatter buckets.
-    let mut buckets: Vec<Vec<String>> = vec![vec![]; formatter_invocations.len()];
+    // Partition files into per-formatter file lists.
+    let mut files_by_formatter_index: Vec<Vec<String>> = vec![vec![]; formatter_invocations.len()];
 
     for line in String::from_utf8_lossy(&git_output.stdout).lines() {
         if deleted.contains(line) {
             continue;
         }
 
+        for &index in &formatter_indices_for_all_files {
+            files_by_formatter_index[index].push(line.to_string());
+        }
+
         let path = Path::new(line);
         if let Some(extension) = path.extension().and_then(|e| e.to_str())
-            && let Some(indices) = extension_map.get(extension)
+            && let Some(formatter_indices) = formatter_indices_by_extension.get(extension)
         {
-            for &index in indices {
-                buckets[index].push(line.to_string());
+            for &index in formatter_indices {
+                files_by_formatter_index[index].push(line.to_string());
             }
         }
     }
@@ -183,7 +217,7 @@ fn main() -> ExitCode {
 
     thread::scope(|scope| {
         for (index, formatter_invocation) in formatter_invocations.iter().enumerate() {
-            let files = &buckets[index];
+            let files = &files_by_formatter_index[index];
             if files.is_empty() {
                 continue;
             }
@@ -263,6 +297,7 @@ struct Tools {
     shfmt: PathBuf,
     buildifier: PathBuf,
     taplo: PathBuf,
+    keep_sorted: PathBuf,
 }
 
 fn read_tools_from_build() -> Tools {
@@ -277,6 +312,7 @@ fn read_tools_from_build() -> Tools {
         shfmt: rlocation_from(&runfiles, env!("SHFMT"), "SHFMT"),
         buildifier: rlocation_from(&runfiles, env!("BUILDIFIER"), "BUILDIFIER"),
         taplo: rlocation_from(&runfiles, env!("TAPLO"), "TAPLO"),
+        keep_sorted: rlocation_from(&runfiles, env!("KEEP_SORTED"), "KEEP_SORTED"),
     }
 }
 

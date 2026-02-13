@@ -2,24 +2,26 @@ use crate::diagnostics::{Diagnostic, Span};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keyword {
-    Public,
-    Type,
-    Function,
-    Return,
+    // keep-sorted start
     Abort,
+    And,
     Break,
     Continue,
-    If,
-    For,
     Else,
+    For,
+    Function,
+    If,
     Match,
-    And,
-    Or,
-    Not,
-    Nil,
-    Mut,
-    Struct,
     Matches,
+    Mut,
+    Nil,
+    Not,
+    Or,
+    Public,
+    Return,
+    Struct,
+    Type,
+    // keep-sorted end
 }
 
 impl Keyword {
