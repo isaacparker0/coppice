@@ -15,5 +15,10 @@
 - For variables/constants that represent quantities with units, append the
   standard unit abbreviation as a suffix (for example `cache_ttl_s`,
   `request_timeout_ms`, `size_kb`).
+- Prefer inlining straightforward logic when it is used in one place; extract a
+  helper when it materially improves clarity (for example by encapsulating
+  genuinely complex logic behind a clear interface).
+- Avoid implicit boolean parameters/returns when their meaning is not obvious
+  from the function name/signature; prefer explicit names or a small enum/type.
 - Prefer self-evident data types. Avoid opaque composite shapes when a named
   struct makes intent explicit.

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use clap::{Parser, Subcommand};
 use runfiles::Runfiles;
@@ -15,7 +15,7 @@ struct CommandLine {
     command: Option<Mode>,
 }
 
-#[derive(Subcommand)]
+#[derive(Copy, Clone, Subcommand)]
 enum Mode {
     /// Check formatting without modifying files.
     Check,
@@ -53,11 +53,10 @@ struct FormatterInvocation {
     selector: FileSelector,
 }
 
-struct FormatterRunOutput {
-    success: bool,
-    elapsed: Duration,
-    stderr: String,
-    stdout: String,
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum FormatterOutcome {
+    Success,
+    Failure,
 }
 
 const FORMATTERS: [Formatter; 7] = [
@@ -234,25 +233,8 @@ fn main() -> ExitCode {
             continue;
         }
 
-        let output = run_formatter(formatter_invocation, files, &workspace_directory);
-        let elapsed_ms = output.elapsed.as_millis();
-        if output.success {
-            match mode {
-                Mode::Check => eprintln!("Checked {} in {elapsed_ms}ms", formatter_invocation.name),
-                Mode::Fix => {
-                    eprintln!("Formatted {} in {elapsed_ms}ms", formatter_invocation.name);
-                }
-            }
-        } else {
-            eprintln!("FAILED {} in {elapsed_ms}ms", formatter_invocation.name);
-            if !output.stderr.is_empty() {
-                eprint!("{}", output.stderr);
-            }
-            if !output.stdout.is_empty() {
-                eprint!("{}", output.stdout);
-            }
-            failed = true;
-        }
+        failed |= run_and_report_formatter(mode, formatter_invocation, files, &workspace_directory)
+            == FormatterOutcome::Failure;
     }
 
     // Run extension-based formatters in parallel.
@@ -270,15 +252,12 @@ fn main() -> ExitCode {
             let workspace = &workspace_directory;
 
             scope.spawn(move || {
-                let output = run_formatter(formatter_invocation, files, workspace);
-
                 sender
-                    .send((
-                        formatter_invocation.name,
-                        output.success,
-                        output.elapsed,
-                        output.stderr,
-                        output.stdout,
+                    .send(run_and_report_formatter(
+                        mode,
+                        formatter_invocation,
+                        files,
+                        workspace,
                     ))
                     .unwrap();
             });
@@ -286,23 +265,8 @@ fn main() -> ExitCode {
 
         drop(sender);
 
-        for (name, success, elapsed, stderr, stdout) in receiver {
-            let elapsed_ms = elapsed.as_millis();
-            if success {
-                match mode {
-                    Mode::Check => eprintln!("Checked {name} in {elapsed_ms}ms"),
-                    Mode::Fix => eprintln!("Formatted {name} in {elapsed_ms}ms"),
-                }
-            } else {
-                eprintln!("FAILED {name} in {elapsed_ms}ms");
-                if !stderr.is_empty() {
-                    eprint!("{stderr}");
-                }
-                if !stdout.is_empty() {
-                    eprint!("{stdout}");
-                }
-                failed = true;
-            }
+        for formatter_outcome in receiver {
+            failed |= formatter_outcome == FormatterOutcome::Failure;
         }
 
         if failed {
@@ -352,11 +316,12 @@ fn rlocation_from(runfiles: &Runfiles, path: &str, name: &str) -> PathBuf {
         })
 }
 
-fn run_formatter(
+fn run_and_report_formatter(
+    mode: Mode,
     formatter_invocation: &FormatterInvocation,
     files: &[String],
     workspace_directory: &str,
-) -> FormatterRunOutput {
+) -> FormatterOutcome {
     let start = Instant::now();
 
     let output = Command::new(&formatter_invocation.bin)
@@ -368,10 +333,24 @@ fn run_formatter(
         .output()
         .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", formatter_invocation.name));
 
-    FormatterRunOutput {
-        success: output.status.success(),
-        elapsed: start.elapsed(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+    let elapsed_ms = start.elapsed().as_millis();
+    let formatter_name = formatter_invocation.name;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if output.status.success() {
+        match mode {
+            Mode::Check => eprintln!("Checked {formatter_name} in {elapsed_ms}ms"),
+            Mode::Fix => eprintln!("Formatted {formatter_name} in {elapsed_ms}ms"),
+        }
+        return FormatterOutcome::Success;
     }
+
+    eprintln!("FAILED {formatter_name} in {elapsed_ms}ms");
+    if !stderr.is_empty() {
+        eprint!("{stderr}");
+    }
+    if !stdout.is_empty() {
+        eprint!("{stdout}");
+    }
+    FormatterOutcome::Failure
 }
