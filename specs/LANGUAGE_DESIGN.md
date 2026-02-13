@@ -33,6 +33,30 @@ fast compilation, simple mental model, and zero annotation burden.
    markers in common code. The compiler infers; the programmer writes clean
    code.
 
+### File Roles Are Language Semantics
+
+A file's suffix defines its role (library, binary entrypoint, test), and the
+compiler enforces that role. The filename is the single source of truth for how
+code participates in the build.
+
+This is somewhat novel in its completeness, but not in its ingredients. Go's
+`_test.go` changes compilation semantics based on filename; Rust's `main.rs` vs
+`lib.rs` determines whether a crate produces a binary or a library; TypeScript's
+`.d.ts` files are parsed under a different model. The precedent exists — lang0
+simply commits to it as a unified, primary mechanism rather than a one-off
+exception.
+
+The usual counterarguments do not apply under lang0's constraints. We do not
+support dual-use "importable and runnable" files, so the Python-style `__main__`
+convenience is intentionally excluded. We explicitly value build-system
+determinism over build-time ambiguity, so "target type is a build config" is the
+wrong model for lang0. And tooling friction is not a barrier here because the
+language and its toolchain are built together from the start.
+
+This fully committed stance reinforces the core principles: one canonical way to
+do a thing, explicit over implicit, and a clean mapping to hermetic build
+graphs.
+
 ### Feature Admission Test
 
 New syntax is accepted only if all of the following are true:

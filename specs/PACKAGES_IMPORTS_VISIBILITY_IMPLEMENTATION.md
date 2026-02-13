@@ -21,6 +21,7 @@ In scope:
 5. Package graph construction and cycle diagnostics.
 6. Resolver and typechecker integration.
 7. Diagnostics fixture infrastructure changes for multi-file cases.
+8. File-role enforcement for binary entrypoints and tests.
 
 Out of scope:
 
@@ -117,6 +118,8 @@ Add explicit semantic structures to avoid ad-hoc maps:
 6. `PackageSymbolTable { by_name, declarations }`.
 7. `ExportTable { exported_symbols }`.
 8. `ResolvedImport { source_file, package_id, imported_symbol_ids, aliases }`.
+9. `FileRole` enum: `Library | BinaryEntrypoint | Test`.
+10. `SourceFile { id, path, role, contents, ast }` (role derived from suffix).
 
 Avoid positional tuples for multi-part keys; use named structs.
 
@@ -150,6 +153,7 @@ Goals:
 
 1. Discover packages using `PACKAGE.lang0`.
 2. Associate each source file with exactly one package.
+3. Classify file role by suffix.
 
 Tasks:
 
@@ -157,6 +161,7 @@ Tasks:
    - locate all `PACKAGE.lang0`
    - assign descendant files to nearest ancestor package root unless shadowed by
      nested package.
+   - assign `FileRole` based on filename suffix.
 2. Validate package invariants:
    - no orphan source files outside any package (policy decision: error).
    - one manifest per package root directory.
@@ -166,6 +171,7 @@ Exit criteria:
 
 1. Unit tests for nested package ownership.
 2. Deterministic package set on repeated runs.
+3. Unit tests for file-role classification and suffix parsing.
 
 ---
 
@@ -175,6 +181,7 @@ Goals:
 
 1. Parse canonical file imports.
 2. Parse strict `PACKAGE.lang0` re-export declarations.
+3. Add file-role semantic validation on declarations.
 
 Tasks:
 
@@ -186,11 +193,21 @@ Tasks:
 3. Manifest parser:
    - parse `public import source/module { ... }`.
    - reject non-comment non-`public import` tokens.
+4. File-role validation (post-parse, pre-resolver):
+   - `*.bin.lang0` must declare exactly one `main`.
+   - `main` must have no params and no return value.
+   - `main` must be file-private (not `public`).
+   - `*.bin.lang0` must not contain any `public` declarations.
+   - `*.lang0` (library) must not declare `main`.
+   - `*.test.lang0` must not declare `main`.
+   - `*.test.lang0` must not contain any `public` declarations.
 
 Exit criteria:
 
 1. New parser fixture suite for valid/invalid import syntax.
 2. New parser fixture suite for manifest grammar violations.
+3. New diagnostics fixtures for file-role violations (missing/invalid `main`,
+   `public` in bin/test, `main` in library/test).
 
 ---
 
@@ -229,8 +246,9 @@ Tasks:
 
 1. For each source file import, resolve package path.
 2. Emit unknown package diagnostics with source span.
-3. Build directed package graph from resolved imports.
-4. Detect and report cycles (permanent error policy).
+3. Reject imports that resolve to a binary entrypoint or test file.
+4. Build directed package graph from resolved imports.
+5. Detect and report cycles (permanent error policy).
 
 Cycle diagnostic requirements:
 
@@ -241,6 +259,7 @@ Exit criteria:
 
 1. Fixtures for unknown package imports.
 2. Fixtures for simple and multi-node import cycles.
+3. Fixtures for illegal imports of `.bin.lang0` and `.test.lang0`.
 
 ---
 
@@ -341,6 +360,9 @@ Requirements:
    - defining package/file context
    - required visibility level
 4. Cycle errors should include cycle chain.
+5. File-role errors should mention:
+   - file path and role
+   - required rule (e.g., `main` signature, no `public` in bin/test)
 
 Stable order strategy:
 
@@ -378,6 +400,13 @@ Representative fixture cases:
 7. cycle of length 2 and 3.
 8. duplicate imports without alias.
 9. invalid `PACKAGE.lang0` code content.
+10. `.bin.lang0` missing `main`.
+11. `.bin.lang0` `main` signature mismatch.
+12. `main` declared in library file.
+13. `public` declaration in `.bin.lang0`.
+14. `public` declaration in `.test.lang0`.
+15. import of `.bin.lang0` file.
+16. import of `.test.lang0` file.
 
 ## Regression Tests
 

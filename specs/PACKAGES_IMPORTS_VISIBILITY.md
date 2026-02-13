@@ -34,6 +34,24 @@ The model intentionally prefers explicitness over minimal boilerplate.
 
 ---
 
+## File Roles (Suffix Semantics)
+
+File role is a first-class language decision. Using filename suffixes to define
+entrypoints and tests is a focused generalization of patterns already seen in Go
+(`_test.go`), Rust (`main.rs` vs `lib.rs`), and TypeScript (`.d.ts` files).
+Lang0 commits to this fully because it aligns with our constraints: no dual-use
+files, a single canonical structure, and deterministic build graph mapping.
+
+File roles:
+
+1. **Library file**: `*.lang0` excluding `.bin.lang0` and `.test.lang0`.
+2. **Binary entrypoint file**: `*.bin.lang0`.
+3. **Test file**: `*.test.lang0`.
+
+Role is determined by filename only; contents do not change role.
+
+---
+
 ## Package Boundaries
 
 ### Rule
@@ -73,6 +91,42 @@ In this layout:
    - comments/doc comments
    - `public import ...` declarations used as re-exports
 4. Any executable code or declarations in `PACKAGE.lang0` is a compile error.
+
+---
+
+## Binary Entrypoints
+
+Rules for `*.bin.lang0`:
+
+1. Must declare exactly one `main` function.
+2. `main` must have no parameters and no return value.
+3. `main` must be file-private (not `public`).
+4. No `public` declarations are allowed in a binary entrypoint file.
+5. A binary entrypoint file may not be imported by any other file.
+
+Violations are compile errors anchored to the offending declaration or import.
+
+---
+
+## Library Files
+
+Rules for `*.lang0` (non-bin, non-test):
+
+1. Must not declare `main`.
+2. Any `main` in a library file is a compile error.
+
+---
+
+## Test Files
+
+Rules for `*.test.lang0`:
+
+1. Must not declare `main`.
+2. No `public` declarations are allowed.
+3. A test file may not be imported by any other file.
+4. Tests may import library symbols per normal visibility rules.
+
+Violations are compile errors anchored to the offending declaration or import.
 
 ---
 
@@ -124,13 +178,14 @@ Visibility has three tiers:
 For `import A/B { X }` in file `f`:
 
 1. Resolver locates package `A/B`.
-2. If `f` is in package `A/B`:
+2. Imports from `*.bin.lang0` or `*.test.lang0` files are illegal.
+3. If `f` is in package `A/B`:
    - `X` must be package-visible (`public`) in some file of `A/B`.
    - file-private symbols are not importable.
-3. If `f` is in a different package:
+4. If `f` is in a different package:
    - `X` must be `public`.
    - `X` must be re-exported by `A/B/PACKAGE.lang0`.
-4. Missing or inaccessible symbols are compile errors with source span.
+5. Missing or inaccessible symbols are compile errors with source span.
 
 ---
 
