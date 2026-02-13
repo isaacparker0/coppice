@@ -1,0 +1,21 @@
+/// Public constant docs.
+public ANSWER := 42
+
+/// User docs.
+type User :: struct {
+    /// Public id field docs.
+    public id: int64,
+
+    /// Private name field docs.
+    name: string,
+
+    /// Method docs.
+    function displayName(self) -> string {
+        return self.name
+    },
+}
+
+/// Function docs.
+function greet(user: User) -> string {
+    return user.name
+}

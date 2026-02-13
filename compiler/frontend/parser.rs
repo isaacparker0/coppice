@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOperator, Block, ConstantDeclaration, Expression, FieldDeclaration, File,
+    BinaryOperator, Block, ConstantDeclaration, DocComment, Expression, FieldDeclaration, File,
     FunctionDeclaration, MatchArm, MatchPattern, MethodDeclaration, ParameterDeclaration,
     Statement, StructLiteralField, TypeDeclaration, TypeDeclarationKind, TypeName, TypeNameAtom,
     UnaryOperator, Visibility,
@@ -32,16 +32,32 @@ impl Parser {
         let mut functions = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
+            let mut doc = self.parse_leading_doc_comment_block();
+            if self.at_eof() {
+                if let Some(doc) = doc {
+                    self.error("doc comment must document a declaration", doc.span);
+                }
+                break;
+            }
+            if let Some(found_doc) = doc.as_ref()
+                && self.peek_span().line != found_doc.end_line + 1
+            {
+                self.error(
+                    "doc comment must document a declaration",
+                    found_doc.span.clone(),
+                );
+                doc = None;
+            }
             if self.peek_is_keyword(Keyword::Public) {
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
-                    if let Some(type_declaration) = self.parse_type_declaration(visibility) {
+                    if let Some(type_declaration) = self.parse_type_declaration(visibility, doc) {
                         types.push(type_declaration);
                     } else {
                         self.synchronize();
                     }
                 } else if self.peek_is_keyword(Keyword::Function) {
-                    if let Some(function_declaration) = self.parse_function(visibility) {
+                    if let Some(function_declaration) = self.parse_function(visibility, doc) {
                         functions.push(function_declaration);
                     } else {
                         self.synchronize();
@@ -49,28 +65,40 @@ impl Parser {
                 } else if self.peek_is_identifier() {
                     if let Some(constant_declaration) = self.parse_constant_declaration(visibility)
                     {
+                        let constant_declaration = ConstantDeclaration {
+                            doc,
+                            ..constant_declaration
+                        };
                         constants.push(constant_declaration);
                     } else {
                         self.synchronize();
                     }
                 } else {
+                    if let Some(doc) = doc {
+                        self.error("doc comment must document a declaration", doc.span);
+                    }
                     let span = self.peek_span();
                     self.error("expected declaration after 'public'", span);
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Type) {
-                if let Some(type_declaration) = self.parse_type_declaration(Visibility::Private) {
+                if let Some(type_declaration) =
+                    self.parse_type_declaration(Visibility::Private, doc)
+                {
                     types.push(type_declaration);
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Function) {
-                if let Some(function_declaration) = self.parse_function(Visibility::Private) {
+                if let Some(function_declaration) = self.parse_function(Visibility::Private, doc) {
                     functions.push(function_declaration);
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
+                if let Some(doc) = doc {
+                    self.error("doc comment must document a declaration", doc.span);
+                }
                 let span = self.peek_span();
                 self.error("expected keyword 'type' before type declaration", span);
                 self.advance();
@@ -79,11 +107,18 @@ impl Parser {
                 if let Some(constant_declaration) =
                     self.parse_constant_declaration(Visibility::Private)
                 {
+                    let constant_declaration = ConstantDeclaration {
+                        doc,
+                        ..constant_declaration
+                    };
                     constants.push(constant_declaration);
                 } else {
                     self.synchronize();
                 }
             } else {
+                if let Some(doc) = doc {
+                    self.error("doc comment must document a declaration", doc.span);
+                }
                 let span = self.peek_span();
                 self.error("expected declaration", span);
                 self.synchronize();
@@ -96,7 +131,11 @@ impl Parser {
         }
     }
 
-    fn parse_type_declaration(&mut self, visibility: Visibility) -> Option<TypeDeclaration> {
+    fn parse_type_declaration(
+        &mut self,
+        visibility: Visibility,
+        doc: Option<DocComment>,
+    ) -> Option<TypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::DoubleColon)?;
@@ -115,6 +154,7 @@ impl Parser {
             return Some(TypeDeclaration {
                 name,
                 kind: TypeDeclarationKind::Struct { fields, methods },
+                doc,
                 visibility,
                 span,
             });
@@ -132,6 +172,7 @@ impl Parser {
         Some(TypeDeclaration {
             name,
             kind: TypeDeclarationKind::Union { variants },
+            doc,
             visibility,
             span,
         })
@@ -146,9 +187,25 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
+            let mut doc = self.parse_leading_doc_comment_block();
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                if let Some(doc) = doc {
+                    self.error("doc comment must document a declaration", doc.span);
+                }
+                break;
+            }
+            if let Some(found_doc) = doc.as_ref()
+                && self.peek_span().line != found_doc.end_line + 1
+            {
+                self.error(
+                    "doc comment must document a declaration",
+                    found_doc.span.clone(),
+                );
+                doc = None;
+            }
             let visibility = self.parse_visibility();
             if self.peek_is_keyword(Keyword::Function) {
-                if let Some(method) = self.parse_method_declaration(visibility) {
+                if let Some(method) = self.parse_method_declaration(visibility, doc.clone()) {
                     methods.push(method);
                 } else {
                     self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
@@ -156,9 +213,12 @@ impl Parser {
                         break;
                     }
                 }
-            } else if let Some(field) = self.parse_field_declaration(visibility) {
+            } else if let Some(field) = self.parse_field_declaration(visibility, doc.clone()) {
                 fields.push(field);
             } else {
+                if let Some(doc) = doc {
+                    self.error("doc comment must document a declaration", doc.span);
+                }
                 self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
                 if self.peek_is_symbol(Symbol::RightBrace) {
                     break;
@@ -182,7 +242,11 @@ impl Parser {
         (fields, methods)
     }
 
-    fn parse_field_declaration(&mut self, visibility: Visibility) -> Option<FieldDeclaration> {
+    fn parse_field_declaration(
+        &mut self,
+        visibility: Visibility,
+        doc: Option<DocComment>,
+    ) -> Option<FieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -195,12 +259,17 @@ impl Parser {
         Some(FieldDeclaration {
             name,
             type_name,
+            doc,
             visibility,
             span,
         })
     }
 
-    fn parse_method_declaration(&mut self, visibility: Visibility) -> Option<MethodDeclaration> {
+    fn parse_method_declaration(
+        &mut self,
+        visibility: Visibility,
+        doc: Option<DocComment>,
+    ) -> Option<MethodDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
@@ -218,6 +287,7 @@ impl Parser {
             parameters,
             return_type,
             body,
+            doc,
             visibility,
             span: Span {
                 start: start.start,
@@ -283,7 +353,11 @@ impl Parser {
         Some((receiver_span, self_mutable, parameters))
     }
 
-    fn parse_function(&mut self, visibility: Visibility) -> Option<FunctionDeclaration> {
+    fn parse_function(
+        &mut self,
+        visibility: Visibility,
+        doc: Option<DocComment>,
+    ) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
@@ -299,6 +373,7 @@ impl Parser {
             parameters,
             return_type,
             body,
+            doc,
             visibility,
             span: Span {
                 start: start.start,
@@ -325,6 +400,7 @@ impl Parser {
         Some(ConstantDeclaration {
             name,
             expression,
+            doc: None,
             visibility,
             span,
         })
@@ -403,6 +479,12 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
+        if self.peek_is_doc_comment() {
+            if let Some(doc) = self.parse_leading_doc_comment_block() {
+                self.error("doc comment must document a declaration", doc.span);
+            }
+            return None;
+        }
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
             let value = self.parse_expression()?;
@@ -1205,6 +1287,10 @@ impl Parser {
         matches!(self.peek().kind, TokenKind::Identifier(_))
     }
 
+    fn peek_is_doc_comment(&self) -> bool {
+        matches!(self.peek().kind, TokenKind::DocComment(_))
+    }
+
     fn peek_is_symbol(&self, symbol: Symbol) -> bool {
         matches!(self.peek().kind, TokenKind::Symbol(found) if found == symbol)
     }
@@ -1244,6 +1330,32 @@ impl Parser {
         while matches!(self.peek().kind, TokenKind::StatementTerminator) {
             self.advance();
         }
+    }
+
+    fn parse_leading_doc_comment_block(&mut self) -> Option<DocComment> {
+        if !self.peek_is_doc_comment() {
+            return None;
+        }
+        let mut lines = Vec::new();
+        let start_span = self.peek().span.clone();
+        let mut end = start_span.end;
+        let mut end_line = start_span.line;
+        while let TokenKind::DocComment(line) = self.peek().kind.clone() {
+            let token = self.advance();
+            lines.push(line);
+            end = token.span.end;
+            end_line = token.span.line;
+        }
+        Some(DocComment {
+            lines,
+            span: Span {
+                start: start_span.start,
+                end,
+                line: start_span.line,
+                column: start_span.column,
+            },
+            end_line,
+        })
     }
 
     fn peek_span(&self) -> Span {

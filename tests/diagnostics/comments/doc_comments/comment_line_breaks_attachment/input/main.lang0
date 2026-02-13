@@ -1,0 +1,5 @@
+/// This should not attach because of an intervening line comment.
+// bridge comment
+function main() -> int64 {
+    return 0
+}

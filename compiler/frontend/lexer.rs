@@ -80,6 +80,7 @@ pub enum TokenKind {
     IntegerLiteral(i64),
     StringLiteral(String),
     BooleanLiteral(bool),
+    DocComment(String),
     Keyword(Keyword),
     Symbol(Symbol),
     /// Raw `\n` from the source. These are removed during normalization.
@@ -204,7 +205,13 @@ impl<'a> Lexer<'a> {
             }
             b'+' => self.single(Symbol::Plus, 1, start, line, column),
             b'*' => self.single(Symbol::Star, 1, start, line, column),
-            b'/' => self.single(Symbol::Slash, 1, start, line, column),
+            b'/' => {
+                if self.match_bytes(b"///") {
+                    self.lex_doc_comment(start, line, column)
+                } else {
+                    self.single(Symbol::Slash, 1, start, line, column)
+                }
+            }
             b'!' => {
                 if self.match_bytes(b"!=") {
                     self.single(Symbol::BangEqual, 2, start, line, column)
@@ -381,6 +388,27 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn lex_doc_comment(&mut self, start: usize, line: usize, column: usize) -> Token {
+        self.advance_by(3);
+        let content_start = self.index;
+        while self.index < self.bytes.len() && self.peek_byte() != b'\n' {
+            self.advance();
+        }
+        let mut text = self.source[content_start..self.index].to_string();
+        if text.starts_with(' ') {
+            text.remove(0);
+        }
+        Token {
+            kind: TokenKind::DocComment(text),
+            span: Span {
+                start,
+                end: self.index,
+                line,
+                column,
+            },
+        }
+    }
+
     fn error_token(
         &mut self,
         message: impl Into<String>,
@@ -416,6 +444,9 @@ impl<'a> Lexer<'a> {
                     self.advance();
                 }
                 b'/' => {
+                    if self.match_bytes(b"///") {
+                        break;
+                    }
                     if self.match_bytes(b"//") {
                         self.advance_by(2);
                         while self.index < self.bytes.len() && self.peek_byte() != b'\n' {

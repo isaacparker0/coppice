@@ -7,6 +7,13 @@ pub struct File {
     pub functions: Vec<FunctionDeclaration>,
 }
 
+#[derive(Clone, Debug)]
+pub struct DocComment {
+    pub lines: Vec<String>,
+    pub span: Span,
+    pub end_line: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Visibility {
     Private,
@@ -17,6 +24,7 @@ pub enum Visibility {
 pub struct TypeDeclaration {
     pub name: String,
     pub kind: TypeDeclarationKind,
+    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -36,6 +44,7 @@ pub enum TypeDeclarationKind {
 pub struct FieldDeclaration {
     pub name: String,
     pub type_name: TypeName,
+    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -49,6 +58,7 @@ pub struct MethodDeclaration {
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
+    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -57,6 +67,7 @@ pub struct MethodDeclaration {
 pub struct ConstantDeclaration {
     pub name: String,
     pub expression: Expression,
+    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -68,6 +79,7 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
+    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
