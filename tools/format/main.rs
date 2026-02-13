@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use clap::{Parser, Subcommand};
 use runfiles::Runfiles;
@@ -51,6 +51,13 @@ struct FormatterInvocation {
     bin: PathBuf,
     args: Vec<String>,
     selector: FileSelector,
+}
+
+struct FormatterRunOutput {
+    success: bool,
+    elapsed: Duration,
+    stderr: String,
+    stdout: String,
 }
 
 const FORMATTERS: [Formatter; 7] = [
@@ -142,23 +149,31 @@ fn main() -> ExitCode {
         .collect();
 
     // Build routing tables for extension-based and all-file formatters.
-    let mut formatter_indices_by_extension: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut formatter_index_by_extension: HashMap<&str, usize> = HashMap::new();
     let mut formatter_indices_for_all_files: Vec<usize> = Vec::new();
+    let mut formatter_indices_for_extension_files: Vec<usize> = Vec::new();
     for (index, invocation) in formatter_invocations.iter().enumerate() {
         match invocation.selector {
             FileSelector::Extensions(extensions) => {
+                formatter_indices_for_extension_files.push(index);
                 for extension in extensions {
-                    formatter_indices_by_extension
-                        .entry(extension)
-                        .or_default()
-                        .push(index);
+                    if let Some(existing_index) =
+                        formatter_index_by_extension.insert(extension, index)
+                    {
+                        eprintln!(
+                            "error: extension '.{extension}' is configured for multiple formatters: {} and {}",
+                            formatter_invocations[existing_index].name,
+                            formatter_invocations[index].name
+                        );
+                        std::process::exit(1);
+                    }
                 }
             }
             FileSelector::AllFiles => formatter_indices_for_all_files.push(index),
         }
     }
 
-    if formatter_indices_by_extension.is_empty() && formatter_indices_for_all_files.is_empty() {
+    if formatter_index_by_extension.is_empty() && formatter_indices_for_all_files.is_empty() {
         return ExitCode::SUCCESS;
     }
 
@@ -204,19 +219,48 @@ fn main() -> ExitCode {
 
         let path = Path::new(line);
         if let Some(extension) = path.extension().and_then(|e| e.to_str())
-            && let Some(formatter_indices) = formatter_indices_by_extension.get(extension)
+            && let Some(&formatter_index) = formatter_index_by_extension.get(extension)
         {
-            for &index in formatter_indices {
-                files_by_formatter_index[index].push(line.to_string());
-            }
+            files_by_formatter_index[formatter_index].push(line.to_string());
         }
     }
 
-    // Run all formatters in parallel.
+    // Run all all-file formatters sequentially to avoid concurrent edits.
+    let mut failed = false;
+    for &index in &formatter_indices_for_all_files {
+        let formatter_invocation = &formatter_invocations[index];
+        let files = &files_by_formatter_index[index];
+        if files.is_empty() {
+            continue;
+        }
+
+        let output = run_formatter(formatter_invocation, files, &workspace_directory);
+        let elapsed_ms = output.elapsed.as_millis();
+        if output.success {
+            match mode {
+                Mode::Check => eprintln!("Checked {} in {elapsed_ms}ms", formatter_invocation.name),
+                Mode::Fix => {
+                    eprintln!("Formatted {} in {elapsed_ms}ms", formatter_invocation.name);
+                }
+            }
+        } else {
+            eprintln!("FAILED {} in {elapsed_ms}ms", formatter_invocation.name);
+            if !output.stderr.is_empty() {
+                eprint!("{}", output.stderr);
+            }
+            if !output.stdout.is_empty() {
+                eprint!("{}", output.stdout);
+            }
+            failed = true;
+        }
+    }
+
+    // Run extension-based formatters in parallel.
     let (sender, receiver) = mpsc::channel();
 
     thread::scope(|scope| {
-        for (index, formatter_invocation) in formatter_invocations.iter().enumerate() {
+        for &index in &formatter_indices_for_extension_files {
+            let formatter_invocation = &formatter_invocations[index];
             let files = &files_by_formatter_index[index];
             if files.is_empty() {
                 continue;
@@ -226,31 +270,15 @@ fn main() -> ExitCode {
             let workspace = &workspace_directory;
 
             scope.spawn(move || {
-                let start = Instant::now();
-
-                let output = Command::new(&formatter_invocation.bin)
-                    .args(&formatter_invocation.args)
-                    .args(files)
-                    .current_dir(workspace)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .output()
-                    .unwrap_or_else(|e| {
-                        panic!("failed to spawn {}: {e}", formatter_invocation.name)
-                    });
-
-                let elapsed = start.elapsed();
-
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let stdout = String::from_utf8_lossy(&output.stdout);
+                let output = run_formatter(formatter_invocation, files, workspace);
 
                 sender
                     .send((
                         formatter_invocation.name,
-                        output.status.success(),
-                        elapsed,
-                        stderr.to_string(),
-                        stdout.to_string(),
+                        output.success,
+                        output.elapsed,
+                        output.stderr,
+                        output.stdout,
                     ))
                     .unwrap();
             });
@@ -258,16 +286,15 @@ fn main() -> ExitCode {
 
         drop(sender);
 
-        let mut failed = false;
         for (name, success, elapsed, stderr, stdout) in receiver {
-            let ms = elapsed.as_millis();
+            let elapsed_ms = elapsed.as_millis();
             if success {
                 match mode {
-                    Mode::Check => eprintln!("Checked {name} in {ms}ms"),
-                    Mode::Fix => eprintln!("Formatted {name} in {ms}ms"),
+                    Mode::Check => eprintln!("Checked {name} in {elapsed_ms}ms"),
+                    Mode::Fix => eprintln!("Formatted {name} in {elapsed_ms}ms"),
                 }
             } else {
-                eprintln!("FAILED {name} in {ms}ms");
+                eprintln!("FAILED {name} in {elapsed_ms}ms");
                 if !stderr.is_empty() {
                     eprint!("{stderr}");
                 }
@@ -323,4 +350,28 @@ fn rlocation_from(runfiles: &Runfiles, path: &str, name: &str) -> PathBuf {
             eprintln!("error: failed to resolve runfile for {name}: {path}");
             std::process::exit(1);
         })
+}
+
+fn run_formatter(
+    formatter_invocation: &FormatterInvocation,
+    files: &[String],
+    workspace_directory: &str,
+) -> FormatterRunOutput {
+    let start = Instant::now();
+
+    let output = Command::new(&formatter_invocation.bin)
+        .args(&formatter_invocation.args)
+        .args(files)
+        .current_dir(workspace_directory)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", formatter_invocation.name));
+
+    FormatterRunOutput {
+        success: output.status.success(),
+        elapsed: start.elapsed(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+    }
 }

@@ -27,53 +27,57 @@ pub enum Keyword {
 impl Keyword {
     pub fn as_str(self) -> &'static str {
         match self {
-            Keyword::Public => "public",
-            Keyword::Type => "type",
-            Keyword::Function => "function",
-            Keyword::Return => "return",
+            // keep-sorted start
             Keyword::Abort => "abort",
+            Keyword::And => "and",
             Keyword::Break => "break",
             Keyword::Continue => "continue",
-            Keyword::If => "if",
-            Keyword::For => "for",
             Keyword::Else => "else",
+            Keyword::For => "for",
+            Keyword::Function => "function",
+            Keyword::If => "if",
             Keyword::Match => "match",
-            Keyword::And => "and",
-            Keyword::Or => "or",
-            Keyword::Not => "not",
-            Keyword::Nil => "nil",
-            Keyword::Mut => "mut",
-            Keyword::Struct => "struct",
             Keyword::Matches => "matches",
+            Keyword::Mut => "mut",
+            Keyword::Nil => "nil",
+            Keyword::Not => "not",
+            Keyword::Or => "or",
+            Keyword::Public => "public",
+            Keyword::Return => "return",
+            Keyword::Struct => "struct",
+            Keyword::Type => "type",
+            // keep-sorted end
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Symbol {
-    LeftParenthesis,
-    RightParenthesis,
-    LeftBrace,
-    RightBrace,
-    Comma,
+    // keep-sorted start
+    Arrow,
+    Assign,
+    BangEqual,
     Colon,
-    DoubleColon,
+    Comma,
     Dot,
-    Pipe,
-    Less,
-    LessEqual,
+    DoubleColon,
+    Equal,
+    EqualEqual,
+    FatArrow,
     Greater,
     GreaterEqual,
-    Plus,
+    LeftBrace,
+    LeftParenthesis,
+    Less,
+    LessEqual,
     Minus,
-    Star,
+    Pipe,
+    Plus,
+    RightBrace,
+    RightParenthesis,
     Slash,
-    Assign,
-    Arrow,
-    FatArrow,
-    EqualEqual,
-    BangEqual,
-    Equal,
+    Star,
+    // keep-sorted end
 }
 
 #[derive(Clone, Debug, PartialEq)]
