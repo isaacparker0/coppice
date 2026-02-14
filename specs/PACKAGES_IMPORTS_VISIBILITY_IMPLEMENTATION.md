@@ -100,11 +100,11 @@ Planned compile pipeline for `check <path>`:
 
 Introduce a dedicated manifest AST:
 
-1. `PackageManifest { reexports: Vec<PublicImportDeclaration> }`
-2. `PublicImportDeclaration { source_path, members, span }`
+1. `PackageManifest { reexports: Vec<ExportDeclaration> }`
+2. `ExportDeclaration { members, span }`
 
 Manifest parser should be separate from normal source parser to enforce strict
-grammar (comments + `public import` only).
+grammar (comments + `export` only).
 
 ## Middle-Layer IR Structures
 
@@ -191,8 +191,8 @@ Tasks:
    - parse top-level `import package/path { ... }`.
    - enforce import-before-declarations policy (recommended for clarity).
 3. Manifest parser:
-   - parse `public import source/module { ... }`.
-   - reject non-comment non-`public import` tokens.
+   - parse `export { ... }`.
+   - reject non-comment non-`export` tokens.
 4. File-role validation (post-parse, pre-resolver):
    - `*.bin.coppice` must declare exactly one `main`.
    - `main` must have no params and no return value.
@@ -222,7 +222,8 @@ Tasks:
 
 1. Per-package declaration collector:
    - detect duplicate symbol names across package files.
-   - enforce file-private/package-visible modifiers.
+   - enforce top-level file-private/package-visible modifiers.
+   - enforce member type-private/public modifiers.
 2. Manifest export resolver:
    - resolve each re-export member to package symbol.
    - ensure exported symbol is `public`.
@@ -471,8 +472,8 @@ Recommended merge policy:
    - recommended: imports must appear before declarations.
 3. Alias requirement on collisions:
    - recommended: hard error unless explicit alias disambiguates.
-4. Re-export source path syntax detail:
-   - relative-to-package-root vs strict package path form.
+4. Re-export syntax shape:
+   - member-list-only form (`export { A, B }`) with no source path operand.
 
 These should be resolved in spec text before implementation begins.
 

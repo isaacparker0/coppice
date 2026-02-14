@@ -121,7 +121,7 @@ Same semantics as functions, shorter syntax for inline use.
 public type User :: struct {
     public name: string
     public email: string
-    password_hash: string       // package-internal field
+    password_hash: string       // type-private field
 }
 ```
 
@@ -130,12 +130,16 @@ Type declarations use the `type` keyword.
 ### Methods
 
 ```
-public function User.display_name(self) -> string {
-    return self.name
+public type User :: struct {
+    name: string
+
+    public function display_name(self) -> string {
+        return self.name
+    }
 }
 ```
 
-Methods are scoped functions, not `impl` blocks.
+Methods are declared inside struct bodies, not in `impl` blocks.
 
 ### Enums / Union Types
 
@@ -240,8 +244,12 @@ type Printable :: interface {
 }
 
 // User satisfies Printable because it has to_string. No declaration needed.
-function User.to_string(self) -> string {
-    return self.name
+type User :: struct {
+    name: string
+
+    function to_string(self) -> string {
+        return self.name
+    }
 }
 
 function print_it(thing: Printable) {
@@ -478,18 +486,18 @@ platform/
 
 ### PACKAGE.coppice
 
-Contains only a doc comment and `public import` declarations. No code.
+Contains only a doc comment and `export` declarations. No code.
 
 ```
 // platform/auth/PACKAGE.coppice
 
 // Package auth provides authentication and authorization.
 
-public import auth { Token, parse, hash, verify }
+export { Token, parse, hash, verify }
 ```
 
-`public import` re-exports selected symbols as the package's external API. This
-is the only place `public import` is allowed.
+`export` re-exports selected symbols as the package's external API. This is the
+only place `export` is allowed.
 
 ### Imports
 
@@ -508,18 +516,22 @@ import std/fmt { printLine as print }
 
 ### Visibility
 
-Three levels:
+Two visibility axes:
 
-- No modifier — file-private.
-- `public` — package-visible (importable by other files in the same package).
-- External visibility — requires `public` plus re-export in `PACKAGE.coppice`.
+- Top-level declarations:
+  - No modifier — file-private.
+  - `public` — package-visible (importable by other files in the same package).
+  - External visibility — requires `public` plus `export` in `PACKAGE.coppice`.
+- Struct members:
+  - No modifier — type-private (accessible only inside methods on that type).
+  - `public` — accessible anywhere the type itself is accessible.
 
 ```
 // auth/token.coppice
 
 public type Token :: struct {        // package-visible, re-exportable
     public user_id: i64         // visible on the struct externally
-    signature: string           // file-private field
+    signature: string           // type-private field
 }
 
 public function validate(t: Token) -> bool {   // package-visible function

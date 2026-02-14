@@ -89,7 +89,7 @@ In this layout:
 2. Package manifests are named `PACKAGE.coppice`.
 3. `PACKAGE.coppice` allows only:
    - comments/doc comments
-   - `public import ...` declarations used as re-exports
+   - `export ...` declarations used as re-exports
 4. Any executable code or declarations in `PACKAGE.coppice` is a compile error.
 
 ---
@@ -156,20 +156,22 @@ There is exactly one way to bring cross-file symbols into scope.
 
 ## Visibility Model
 
-Visibility has three tiers:
+Visibility is split across two declaration kinds with one keyword:
 
-1. **File-private** (default): declaration is visible only in defining file.
-2. **Package-visible** (`public`): declaration is visible to other files in the
-   same package via explicit import.
-3. **Externally exported**: declaration is visible to other packages only if:
-   - declaration is `public` in source file
-   - declaration is re-exported in `PACKAGE.coppice`
+1. **Top-level declarations** (`type`, `function`, constants):
+   - default: file-private
+   - `public`: package-visible (importable from other files in same package)
+   - externally visible only if `public` and listed in `PACKAGE.coppice` via
+     `export`
+2. **Struct members** (fields, methods):
+   - default: type-private (accessible only inside methods on that type)
+   - `public`: accessible anywhere the type is accessible
 
 ### Intent
 
-1. Default keeps local implementation details private.
-2. `public` enables internal package composition without exposing API.
-3. `PACKAGE.coppice` defines the package's external contract.
+1. Keep file/package API boundaries explicit for build graph clarity.
+2. Keep member encapsulation explicit at type boundary.
+3. Keep one external API surface defined only by `PACKAGE.coppice`.
 
 ---
 
@@ -194,18 +196,18 @@ For `import A/B { X }` in file `f`:
 Canonical form:
 
 ```lang
-public import source/module { SymbolA, SymbolB }
+export { SymbolA, SymbolB }
 ```
 
 Semantics:
 
-1. `source/module` is a package-relative path reference inside the package tree.
+1. Listed symbols are resolved in the current package symbol table.
 2. Listed symbols become part of the package external API.
 3. Re-exporting a non-`public` declaration is a compile error.
 4. Duplicate exports are compile errors.
-5. Re-export target ambiguity is a compile error.
+5. Unknown symbols are compile errors.
 
-Note: `public import` is only valid in `PACKAGE.coppice`.
+Note: `export` is only valid in `PACKAGE.coppice`.
 
 ---
 
