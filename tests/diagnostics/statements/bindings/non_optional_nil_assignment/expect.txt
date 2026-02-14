@@ -1,7 +1,4 @@
 # exit: 1
-input/main.coppice:2:21: error: type mismatch: expected int64, got nil
-      value: int64 := nil
-                      ^
-input/main.coppice:3:12: error: return type mismatch: expected int64, got nil
-      return value
-             ^
+input/main.coppice:2:22: error: type mismatch: expected int64, got nil
+      _value: int64 := nil
+                       ^

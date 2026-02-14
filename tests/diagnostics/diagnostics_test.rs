@@ -89,6 +89,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 fs::read_to_string(runfiles_directory.join(case_path).join("expect.txt")).unwrap();
             let (expected_exit, expected_output) = parse_expect(&expect_contents);
             assert_case_name_matches_exit(case_path, expected_exit);
+            assert_single_error_diagnostic(case_path, expected_exit, &expected_output);
             assert_eq!(
                 expected_exit,
                 actual_exit,
@@ -147,4 +148,21 @@ fn parse_expect(contents: &str) -> (i32, String) {
         remainder.pop();
     }
     (expected_exit, remainder)
+}
+
+fn assert_single_error_diagnostic(case_path: &Path, exit_code: i32, output: &str) {
+    if exit_code == 0 {
+        return;
+    }
+
+    let error_count = output
+        .lines()
+        .filter(|line| line.contains(": error:"))
+        .count();
+    assert_eq!(
+        1,
+        error_count,
+        "error fixtures must contain exactly one ': error:' diagnostic in expect.txt: {}",
+        case_path.display()
+    );
 }

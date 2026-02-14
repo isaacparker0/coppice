@@ -28,5 +28,7 @@ tests/diagnostics/<area>/<feature>/<case>/
   running `compiler/cli` with `check`.
 - Avoid adding new case names for variations that can be covered by the existing
   `minimal_valid` fixture.
-- Non-`minimal_valid` fixtures should usually target one primary failure mode,
-  with clear behavior-based names.
+- Non-`minimal_valid` fixtures must produce exactly one `: error:` diagnostic in
+  `expect.txt` to keep case intent obvious and avoid diagnostic cascades.
+- Name error cases after the single behavior they validate (for example,
+  `duplicate_name`, `return_type_mismatch`, `if_condition_not_boolean`).
