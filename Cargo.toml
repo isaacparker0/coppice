@@ -10,6 +10,7 @@ path = "placeholder.rs"
 
 [dependencies]
 clap = { version = "^4.5.58", features = ["derive"] }
+globset = { version = "^0.4.18" }
 syn = { version = "^2.0.115", features = ["full", "parsing", "visit"] }
 
 [lints.rust]
