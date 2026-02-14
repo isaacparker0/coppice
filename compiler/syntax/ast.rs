@@ -1,10 +1,49 @@
 use compiler__source::Span;
 
 #[derive(Clone, Debug)]
-pub struct File {
+pub struct LibraryFile {
     pub types: Vec<TypeDeclaration>,
     pub constants: Vec<ConstantDeclaration>,
     pub functions: Vec<FunctionDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryFile {
+    pub types: Vec<TypeDeclaration>,
+    pub constants: Vec<ConstantDeclaration>,
+    pub functions: Vec<FunctionDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TestFile {
+    pub types: Vec<TypeDeclaration>,
+    pub constants: Vec<ConstantDeclaration>,
+    pub functions: Vec<FunctionDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PackageFile {
+    pub exports: Vec<ExportDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExportDeclaration {
+    pub members: Vec<ExportMember>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExportMember {
+    pub name: String,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum ParsedFile {
+    Library(LibraryFile),
+    Binary(BinaryFile),
+    Test(TestFile),
+    Package(PackageFile),
 }
 
 #[derive(Clone, Debug)]

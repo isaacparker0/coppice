@@ -3,7 +3,7 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__parsing::parse_file;
+use compiler__parsing::parse_library_file;
 use compiler__source::Span;
 
 #[derive(Parser)]
@@ -31,9 +31,9 @@ fn main() {
         }
     };
 
-    match parse_file(&source) {
+    match parse_library_file(&source) {
         Ok(file) => {
-            let diagnostics = compiler__analysis::check_file(&file);
+            let diagnostics = compiler__analysis::check_library_file(&file);
             if diagnostics.is_empty() {
                 println!("ok");
             } else {

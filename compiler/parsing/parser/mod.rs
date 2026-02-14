@@ -1,7 +1,7 @@
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 use compiler__diagnostics::Diagnostic;
 use compiler__source::Span;
-use compiler__syntax::{ConstantDeclaration, DocComment, Expression, File, Visibility};
+use compiler__syntax::{ConstantDeclaration, DocComment, Expression, LibraryFile, Visibility};
 
 mod declarations;
 mod expressions;
@@ -28,7 +28,7 @@ impl Parser {
         self.diagnostics
     }
 
-    pub fn parse_file(&mut self) -> File {
+    pub fn parse_library_file(&mut self) -> LibraryFile {
         let mut types = Vec::new();
         let mut constants = Vec::new();
         let mut functions = Vec::new();
@@ -126,7 +126,7 @@ impl Parser {
                 self.synchronize();
             }
         }
-        File {
+        LibraryFile {
             types,
             constants,
             functions,

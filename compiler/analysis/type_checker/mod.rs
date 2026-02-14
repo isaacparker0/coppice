@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__diagnostics::Diagnostic;
 use compiler__source::Span;
-use compiler__syntax::{Expression, File, Statement, TypeName};
+use compiler__syntax::{Expression, LibraryFile, Statement, TypeName};
 
 use crate::types::{Type, type_from_name};
 
@@ -15,7 +15,7 @@ mod type_narrowing;
 mod unused_bindings;
 
 #[must_use]
-pub fn check_file(file: &File) -> Vec<Diagnostic> {
+pub fn check_library_file(file: &LibraryFile) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let mut type_checker = TypeChecker::new(&mut diagnostics);
     type_checker.collect_type_declarations(&file.types);
