@@ -1,41 +1,40 @@
 default_install_hook_types:
     - pre-push
-
 repos:
     - repo: local
       hooks:
-          - id: gazelle
-            name: Gazelle
-            entry: bazel run //:gazelle
-            language: system
-            stages: [pre-push]
-            always_run: true
-            pass_filenames: false
-          - id: format
-            name: Format
-            entry: bazel run //:format
-            language: system
-            stages: [pre-push]
-            always_run: true
-            pass_filenames: false
-          - id: build
-            name: Build
-            entry: bazel build //...
-            language: system
-            stages: [pre-push]
-            always_run: true
-            pass_filenames: false
-          - id: test
-            name: Test
-            entry: bazel test //...
-            language: system
-            stages: [pre-push]
-            always_run: true
-            pass_filenames: false
-          - id: typos
-            name: Typos
-            entry: bazel run --run_in_cwd @multitool//tools/typos
-            language: system
-            stages: [pre-push]
-            always_run: true
-            pass_filenames: false
+        - id: gazelle
+          name: Gazelle
+          entry: bazel run //:gazelle
+          language: system
+          stages: [pre-push]
+          always_run: true
+          pass_filenames: false
+        - id: format
+          name: Format
+          entry: bazel run //:format
+          language: system
+          stages: [pre-push]
+          always_run: true
+          pass_filenames: false
+        - id: build
+          name: Build
+          entry: bazel build //...
+          language: system
+          stages: [pre-push]
+          always_run: true
+          pass_filenames: false
+        - id: test
+          name: Test
+          entry: bazel test //...
+          language: system
+          stages: [pre-push]
+          always_run: true
+          pass_filenames: false
+        - id: typos
+          name: Typos
+          entry: bazel run --run_in_cwd @multitool//tools/typos
+          language: system
+          stages: [pre-push]
+          always_run: true
+          pass_filenames: false

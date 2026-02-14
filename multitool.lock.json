@@ -57,5 +57,17 @@
                 "cpu": "arm64"
             }
         ]
+    },
+    "yamlfmt": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/google/yamlfmt/releases/download/v0.17.2/yamlfmt_0.17.2_Darwin_arm64.tar.gz",
+                "sha256": "94bd3fb3a2c66bdab77b58cd91bece9e4a8a28a33cb4e0fe241e6220548f69dd",
+                "file": "yamlfmt",
+                "os": "macos",
+                "cpu": "arm64"
+            }
+        ]
     }
 }

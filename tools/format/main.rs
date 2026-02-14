@@ -31,6 +31,7 @@ enum Tool {
     Shfmt,
     Buildifier,
     Taplo,
+    Yamlfmt,
     KeepSorted,
 }
 
@@ -60,7 +61,7 @@ enum FormatterOutcome {
     Failure,
 }
 
-const FORMATTERS: [Formatter; 8] = [
+const FORMATTERS: [Formatter; 9] = [
     Formatter {
         name: "JSON",
         tool: Tool::Deno,
@@ -111,6 +112,13 @@ const FORMATTERS: [Formatter; 8] = [
         selector: FileSelector::Extensions(&["toml"]),
     },
     Formatter {
+        name: "YAML",
+        tool: Tool::Yamlfmt,
+        check_args: &["-lint"],
+        fix_args: &[],
+        selector: FileSelector::Extensions(&["yaml", "yml"]),
+    },
+    Formatter {
         name: "keep-sorted",
         tool: Tool::KeepSorted,
         check_args: &["--mode=lint"],
@@ -140,6 +148,7 @@ fn main() -> ExitCode {
                 Tool::Shfmt => tools.shfmt.clone(),
                 Tool::Buildifier => tools.buildifier.clone(),
                 Tool::Taplo => tools.taplo.clone(),
+                Tool::Yamlfmt => tools.yamlfmt.clone(),
                 Tool::KeepSorted => tools.keep_sorted.clone(),
             },
             args: match mode {
@@ -298,6 +307,7 @@ struct Tools {
     shfmt: PathBuf,
     buildifier: PathBuf,
     taplo: PathBuf,
+    yamlfmt: PathBuf,
     keep_sorted: PathBuf,
 }
 
@@ -314,6 +324,7 @@ fn read_tools_from_build() -> Tools {
         shfmt: rlocation_from(&runfiles, env!("SHFMT"), "SHFMT"),
         buildifier: rlocation_from(&runfiles, env!("BUILDIFIER"), "BUILDIFIER"),
         taplo: rlocation_from(&runfiles, env!("TAPLO"), "TAPLO"),
+        yamlfmt: rlocation_from(&runfiles, env!("YAMLFMT"), "YAMLFMT"),
         keep_sorted: rlocation_from(&runfiles, env!("KEEP_SORTED"), "KEEP_SORTED"),
     }
 }
