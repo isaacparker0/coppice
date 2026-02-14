@@ -1,4 +1,5 @@
-use compiler__syntax::{Diagnostic, Span};
+use compiler__diagnostics::Diagnostic;
+use compiler__source::Span;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keyword {

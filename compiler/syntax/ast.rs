@@ -1,4 +1,4 @@
-use crate::diagnostics::Span;
+use compiler__source::Span;
 
 #[derive(Clone, Debug)]
 pub struct File {

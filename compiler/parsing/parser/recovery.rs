@@ -1,5 +1,5 @@
 use crate::lexer::{Keyword, Symbol, TokenKind};
-use compiler__syntax::Span;
+use compiler__source::Span;
 
 use super::Parser;
 

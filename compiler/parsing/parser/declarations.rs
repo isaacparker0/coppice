@@ -1,5 +1,5 @@
 use crate::lexer::{Keyword, Symbol};
-use compiler__syntax::Span;
+use compiler__source::Span;
 use compiler__syntax::{
     ConstantDeclaration, DocComment, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
     ParameterDeclaration, TypeDeclaration, TypeDeclarationKind, Visibility,

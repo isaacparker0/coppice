@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use compiler__syntax::{Diagnostic, Expression, File, Span, Statement, TypeName};
+use compiler__diagnostics::Diagnostic;
+use compiler__source::Span;
+use compiler__syntax::{Expression, File, Statement, TypeName};
 
 use crate::types::{Type, type_from_name};
 

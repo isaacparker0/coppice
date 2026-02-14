@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
+use compiler__source::Span;
 use compiler__syntax::{
-    BinaryOperator, Expression, MatchArm, MatchPattern, Span, StructLiteralField, TypeName,
+    BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName,
 };
 
 use crate::types::Type;

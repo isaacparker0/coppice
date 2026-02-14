@@ -1,9 +1,9 @@
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "syntax",
+    name = "diagnostics",
     srcs = [
-        "ast.rs",
+        "diagnostic.rs",
         "lib.rs",
     ],
     visibility = ["//:__subpackages__"],

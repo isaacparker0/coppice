@@ -3,7 +3,8 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__parsing::{Span, parse_file};
+use compiler__parsing::parse_file;
+use compiler__source::Span;
 
 #[derive(Parser)]
 #[command(version)]

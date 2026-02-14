@@ -22,3 +22,11 @@
   from the function name/signature; prefer explicit names or a small enum/type.
 - Prefer self-evident data types. Avoid opaque composite shapes when a named
   struct makes intent explicit.
+- Organize code by clear responsibility boundaries, not convenience.
+- Keep module boundaries and dependency directions consistent with concept
+  ownership.
+- Depend on stable interfaces/data models, not implementation internals.
+- Optimize for refactorability: small explicit boundaries, narrow public
+  surfaces, and isolated side effects.
+- Favor decoupling. Small, focused modules/packages are good; do not optimize
+  for fewer files by default.

@@ -13,5 +13,9 @@ rust_library(
         "parser/types.rs",
     ],
     visibility = ["//visibility:public"],
-    deps = ["//compiler/syntax"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/source",
+        "//compiler/syntax",
+    ],
 )

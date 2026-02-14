@@ -1,11 +1,10 @@
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "syntax",
+    name = "source",
     srcs = [
-        "ast.rs",
         "lib.rs",
+        "span.rs",
     ],
     visibility = ["//:__subpackages__"],
-    deps = ["//compiler/source"],
 )

@@ -1,6 +1,7 @@
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
+use compiler__diagnostics::Diagnostic;
+use compiler__source::Span;
 use compiler__syntax::{ConstantDeclaration, DocComment, Expression, File, Visibility};
-use compiler__syntax::{Diagnostic, Span};
 
 mod declarations;
 mod expressions;

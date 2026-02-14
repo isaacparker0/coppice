@@ -1,5 +1,5 @@
 use crate::lexer::Symbol;
-use compiler__syntax::Span;
+use compiler__source::Span;
 use compiler__syntax::{TypeName, TypeNameAtom};
 
 use super::Parser;

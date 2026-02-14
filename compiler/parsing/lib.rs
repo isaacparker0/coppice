@@ -1,6 +1,8 @@
 mod lexer;
 mod parser;
 
+use compiler__diagnostics::Diagnostic;
+
 pub use compiler__syntax::*;
 
 pub fn parse_file(source: &str) -> Result<File, Vec<Diagnostic>> {
