@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use compiler__frontend::{
+use compiler__parsing::{
     BinaryOperator, Block, ConstantDeclaration, Diagnostic, Expression, File, FunctionDeclaration,
     MatchArm, MatchPattern, MethodDeclaration, Span, Statement, StructLiteralField,
     TypeDeclaration, TypeDeclarationKind, TypeName, UnaryOperator,

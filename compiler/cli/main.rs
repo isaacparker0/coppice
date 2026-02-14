@@ -3,7 +3,7 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__frontend::{Span, parse_file};
+use compiler__parsing::{Span, parse_file};
 
 #[derive(Parser)]
 #[command(version)]
@@ -32,7 +32,7 @@ fn main() {
 
     match parse_file(&source) {
         Ok(file) => {
-            let diagnostics = compiler__middle::check_file(&file);
+            let diagnostics = compiler__analysis::check_file(&file);
             if diagnostics.is_empty() {
                 println!("ok");
             } else {
