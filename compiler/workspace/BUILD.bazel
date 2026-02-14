@@ -1,0 +1,21 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library", "rust_test")
+
+rust_library(
+    name = "workspace",
+    srcs = [
+        "discovery.rs",
+        "lib.rs",
+        "types.rs",
+    ],
+    visibility = ["//:__subpackages__"],
+    deps = ["//compiler/source"],
+)
+
+rust_test(
+    name = "workspace_test",
+    srcs = ["discovery_test.rs"],
+    deps = [
+        ":workspace",
+        "//compiler/source",
+    ],
+)

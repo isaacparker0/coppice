@@ -4,6 +4,8 @@ rust_library(
     name = "source",
     srcs = [
         "lib.rs",
+        "path_order.rs",
+        "source_file.rs",
         "span.rs",
     ],
     visibility = ["//:__subpackages__"],
