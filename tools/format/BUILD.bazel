@@ -15,6 +15,7 @@ rust_binary(
     data = [
         ":taplo_tool",
         "@buildifier_prebuilt//:buildifier",
+        "@go_sdk//:bin/gofmt",
         "@multitool//tools/deno",
         "@multitool//tools/keep-sorted",
         "@multitool//tools/shfmt",
@@ -23,6 +24,7 @@ rust_binary(
     rustc_env = {
         "BUILDIFIER": "$(rlocationpath @buildifier_prebuilt//:buildifier)",
         "DENO": "$(rlocationpath @multitool//tools/deno)",
+        "GOFMT": "$(rlocationpath @go_sdk//:bin/gofmt)",
         "KEEP_SORTED": "$(rlocationpath @multitool//tools/keep-sorted)",
         "RUSTFMT": "$(rlocationpath @rules_rust//rust/toolchain:current_rustfmt_toolchain)",
         "SHFMT": "$(rlocationpath @multitool//tools/shfmt)",

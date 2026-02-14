@@ -26,6 +26,7 @@ enum Mode {
 #[derive(Copy, Clone)]
 enum Tool {
     Deno,
+    Gofmt,
     Rustfmt,
     Shfmt,
     Buildifier,
@@ -59,7 +60,7 @@ enum FormatterOutcome {
     Failure,
 }
 
-const FORMATTERS: [Formatter; 7] = [
+const FORMATTERS: [Formatter; 8] = [
     Formatter {
         name: "JSON",
         tool: Tool::Deno,
@@ -73,6 +74,13 @@ const FORMATTERS: [Formatter; 7] = [
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
         selector: FileSelector::Extensions(&["md"]),
+    },
+    Formatter {
+        name: "Go",
+        tool: Tool::Gofmt,
+        check_args: &["-d"],
+        fix_args: &["-w"],
+        selector: FileSelector::Extensions(&["go"]),
     },
     Formatter {
         name: "Rust",
@@ -127,6 +135,7 @@ fn main() -> ExitCode {
             name: formatter.name,
             bin: match formatter.tool {
                 Tool::Deno => tools.deno.clone(),
+                Tool::Gofmt => tools.gofmt.clone(),
                 Tool::Rustfmt => tools.rustfmt.clone(),
                 Tool::Shfmt => tools.shfmt.clone(),
                 Tool::Buildifier => tools.buildifier.clone(),
@@ -284,6 +293,7 @@ fn main() -> ExitCode {
 
 struct Tools {
     deno: PathBuf,
+    gofmt: PathBuf,
     rustfmt: PathBuf,
     shfmt: PathBuf,
     buildifier: PathBuf,
@@ -299,6 +309,7 @@ fn read_tools_from_build() -> Tools {
 
     Tools {
         deno: rlocation_from(&runfiles, env!("DENO"), "DENO"),
+        gofmt: rlocation_from(&runfiles, env!("GOFMT"), "GOFMT"),
         rustfmt: rlocation_from(&runfiles, env!("RUSTFMT"), "RUSTFMT"),
         shfmt: rlocation_from(&runfiles, env!("SHFMT"), "SHFMT"),
         buildifier: rlocation_from(&runfiles, env!("BUILDIFIER"), "BUILDIFIER"),
