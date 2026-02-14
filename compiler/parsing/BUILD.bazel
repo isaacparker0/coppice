@@ -7,7 +7,12 @@ rust_library(
         "diagnostics.rs",
         "lexer.rs",
         "lib.rs",
-        "parser.rs",
+        "parser/declarations.rs",
+        "parser/expressions.rs",
+        "parser/mod.rs",
+        "parser/recovery.rs",
+        "parser/statements.rs",
+        "parser/types.rs",
     ],
     visibility = ["//visibility:public"],
 )
