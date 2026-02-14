@@ -1,4 +1,4 @@
-mod typecheck;
+mod type_checker;
 mod types;
 
-pub use typecheck::check_file;
+pub use type_checker::check_file;
