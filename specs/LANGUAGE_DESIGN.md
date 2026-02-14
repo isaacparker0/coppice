@@ -504,15 +504,31 @@ only place `export` is allowed.
 One import form only: fully qualified package path plus explicit member list. No
 relative imports. No glob imports. No conditional imports.
 
+Import paths are always workspace-root-relative. There is no file-relative or
+directory-relative resolution.
+
+Import paths denote package directory paths (directories containing
+`PACKAGE.coppice`). `PACKAGE.coppice` itself is never written in import syntax.
+
 ```
 import platform/auth { Token, parse }
 import platform/auth/oauth { GoogleClient }
 import std/fmt { printLine as print }
+import external/registry/uuid { V7 }
 
 // import ../auth          ← compile error
 // import platform/*       ← compile error
 // import platform/auth    ← compile error (missing explicit members)
 ```
+
+Reserved top-level import prefixes:
+
+- `std/` for standard library.
+- `external/` for third-party dependencies.
+
+First-party package paths must not start with reserved prefixes.
+
+Import declarations must appear before top-level declarations in each file.
 
 ### Visibility
 
@@ -525,6 +541,12 @@ Two visibility axes:
 - Struct members:
   - No modifier — type-private (accessible only inside methods on that type).
   - `public` — accessible anywhere the type itself is accessible.
+
+`public` is contextual by declaration kind:
+
+- On top-level declarations: visible from any file in the same package.
+- On struct members: accessible wherever values of that type are accessible.
+- Diagnostics must name the contextual meaning in each error.
 
 ```
 // auth/token.coppice
@@ -539,7 +561,8 @@ public function validate(t: Token) -> bool {   // package-visible function
 }
 ```
 
-Test files (`*.test.coppice`) follow normal import and visibility rules.
+Test files (`*.test.coppice`) may import library symbols per normal visibility
+rules, but may not declare `public` symbols and are not importable.
 
 ### Intra-Package Access
 
@@ -767,6 +790,12 @@ Built into the compiler, not a separate tool.
 - `coppice check .` — type-check only, no codegen. Used by LSP for real-time
   feedback. Target: <100ms incremental.
 
+Command invocation policy:
+
+- Commands are run from workspace root.
+- Invoking from outside workspace root is an error unless workspace root is
+  explicitly provided.
+
 ---
 
 ## Compilation
@@ -814,7 +843,8 @@ Gazelle plugin logic:
    - include `PACKAGE.coppice` manifest in package metadata.
 3. Collect `*.bin.coppice` files → `lang0_binary` targets.
 4. Collect `*.test.coppice` files → `lang0_test` targets.
-5. Parse `import` statements and map import path to target deps.
+5. Parse `import` statements and map workspace-root-relative import path to
+   target deps.
 
 No heuristics. No configuration file. No import resolution algorithm.
 

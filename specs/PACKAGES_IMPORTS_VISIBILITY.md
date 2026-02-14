@@ -31,6 +31,8 @@ The model intentionally prefers explicitness over minimal boilerplate.
    subdirectories that do not contain their own `PACKAGE.coppice`.
 3. **Symbol**: top-level declaration (type, function, constant).
 4. **External**: from a different package path.
+5. **Workspace root**: the root directory of the current Coppice workspace.
+6. **First-party package path**: a workspace-root-relative package path.
 
 ---
 
@@ -60,6 +62,13 @@ A directory is a package if and only if it contains `PACKAGE.coppice`.
 
 Without a nested `PACKAGE.coppice`, subdirectory files belong to the parent
 package.
+
+All Coppice commands are evaluated relative to workspace root. Invoking
+`coppice` commands outside workspace root is a compile-time error unless a
+workspace root is explicitly provided by CLI flag.
+
+Any `.coppice` source file not owned by any package (no ancestor
+`PACKAGE.coppice` up to workspace root) is a compile error.
 
 ### Example
 
@@ -140,13 +149,19 @@ import package/path { Member, OtherMember, TypeName as Alias }
 
 ### Constraints
 
-1. `package/path` is always a fully qualified package path.
-2. Import list must be explicit named members.
-3. Alias is optional and only per member (`as`).
-4. Relative imports are forbidden.
-5. Glob imports are forbidden.
-6. Namespace/default imports are forbidden.
-7. Inline fully-qualified symbol usage is forbidden.
+1. `package/path` is always a fully qualified, workspace-root-relative package
+   path.
+2. `package/path` denotes the package directory path (the directory containing
+   `PACKAGE.coppice`).
+3. `PACKAGE.coppice` itself is never written in import syntax.
+4. Import list must be explicit named members.
+5. Alias is optional and only per member (`as`).
+6. Relative imports are forbidden.
+7. Glob imports are forbidden.
+8. Namespace/default imports are forbidden.
+9. Inline fully-qualified symbol usage is forbidden.
+10. Import declarations must appear before all top-level declarations in a
+    source file.
 
 ### Consequence
 
@@ -166,6 +181,13 @@ Visibility is split across two declaration kinds with one keyword:
 2. **Struct members** (fields, methods):
    - default: type-private (accessible only inside methods on that type)
    - `public`: accessible anywhere the type is accessible
+
+`public` is intentionally contextual by declaration kind:
+
+1. On top-level declarations it means visible from any file in the same package.
+2. On struct members it means accessible wherever values of that type are
+   accessible.
+3. Diagnostics must state which contextual meaning applies.
 
 ### Intent
 
@@ -217,7 +239,12 @@ Note: `export` is only valid in `PACKAGE.coppice`.
    aliased.
 2. Ambiguous local names between imports and local declarations are compile
    errors.
-3. Multiple packages with same trailing segment are irrelevant; identity is full
+3. `public` top-level declarations share one package import namespace across
+   kinds (`type`, `function`, constant). Duplicate `public` names in one package
+   are compile errors, including cross-file duplicates.
+4. File-private top-level declarations may reuse names across files because they
+   are not importable.
+5. Multiple packages with same trailing segment are irrelevant; identity is full
    package path, not final segment.
 
 ---
@@ -250,14 +277,16 @@ Third-party imports use the same syntax and resolver model:
 
 ```lang
 import std/json { decode }
-import third_party/uuid { V7 }
+import external/registry/uuid { V7 }
 ```
 
 Policy:
 
 1. No URL/network imports.
 2. Resolver maps external package paths to build-system-pinned dependencies.
-3. Language semantics do not distinguish first-party vs third-party import
+3. Top-level path prefixes `std/` and `external/` are reserved.
+4. First-party package paths must not start with reserved prefixes.
+5. Language semantics do not distinguish first-party vs third-party import
    syntax.
 
 This preserves one import model and hermetic builds.

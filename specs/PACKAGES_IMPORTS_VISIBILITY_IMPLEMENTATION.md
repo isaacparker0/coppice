@@ -165,6 +165,7 @@ Tasks:
 2. Validate package invariants:
    - no orphan source files outside any package (policy decision: error).
    - one manifest per package root directory.
+   - command invocation must resolve a workspace root deterministically.
 3. Build `PackageNode` set with deterministic path-based IDs.
 
 Exit criteria:
@@ -222,6 +223,8 @@ Tasks:
 
 1. Per-package declaration collector:
    - detect duplicate symbol names across package files.
+   - enforce one shared import namespace for package-visible (`public`)
+     top-level symbols across kinds (`type`, `function`, constant).
    - enforce top-level file-private/package-visible modifiers.
    - enforce member type-private/public modifiers.
 2. Manifest export resolver:
@@ -334,8 +337,11 @@ Goals:
 Tasks:
 
 1. CLI:
-   - `check <path>` accepts file or package directory.
+   - `check <path>` accepts file or package directory, relative to workspace
+     root.
    - if file path is provided, resolve owning package and check package.
+   - invocation outside workspace root is an error unless workspace root is
+     explicitly provided.
 2. Fixture runner:
    - remove hardcoded `input/main.coppice`.
    - run check against `input/` package root.
@@ -461,21 +467,6 @@ Recommended merge policy:
 
 1. Merge per milestone.
 2. No milestone merges with red diagnostics suite.
-
----
-
-## Open Decisions to Lock Before Coding
-
-1. Policy for `.coppice` files outside any package root:
-   - recommended: hard error.
-2. Import placement:
-   - recommended: imports must appear before declarations.
-3. Alias requirement on collisions:
-   - recommended: hard error unless explicit alias disambiguates.
-4. Re-export syntax shape:
-   - member-list-only form (`export { A, B }`) with no source path operand.
-
-These should be resolved in spec text before implementation begins.
 
 ---
 
