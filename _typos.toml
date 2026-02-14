@@ -1,3 +1,9 @@
+[default]
+extend-ignore-identifiers-re = [
+  # Rust syn AST enum variant name.
+  "Paren",
+]
+
 [default.extend-words]
 # Commonly used abbreviations, banned per styleguide.
 alnum = "alphanumeric"

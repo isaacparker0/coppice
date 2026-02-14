@@ -1,0 +1,12 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+# gazelle:generation_mode update_only
+
+rust_library(
+    name = "deleted_file",
+    srcs = [
+        "deleted_module.rs",
+        "lib.rs",
+    ],
+    visibility = ["//:__subpackages__"],
+)

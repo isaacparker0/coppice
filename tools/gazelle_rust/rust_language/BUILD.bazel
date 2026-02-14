@@ -1,0 +1,26 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rust_language",
+    srcs = [
+        "external_crates.go",
+        "generate.go",
+        "lang.go",
+        "parser.go",
+        "resolve.go",
+    ],
+    data = ["//tools/gazelle_rust/rust_parser:main"],
+    importpath = "lang0/tools/gazelle_rust/rust_language",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tools/gazelle_rust/proto:go_proto",
+        "@gazelle//config",
+        "@gazelle//label",
+        "@gazelle//language",
+        "@gazelle//repo",
+        "@gazelle//resolve",
+        "@gazelle//rule",
+        "@org_golang_google_protobuf//proto",
+        "@rules_go//go/runfiles",
+    ],
+)

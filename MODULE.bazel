@@ -1,7 +1,10 @@
 module(name = "lang0")
 
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "rules_go", version = "0.60.0")
+bazel_dep(name = "protobuf", version = "33.4")
 bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.5.4")
+bazel_dep(name = "gazelle", version = "0.47.0")
 
 register_toolchains(
     "@toolchains_llvm_bootstrapped//toolchain:all",
@@ -14,6 +17,7 @@ single_version_override(
     patches = ["//patches:rules_rust.patch"],
 )
 
+bazel_dep(name = "rules_rust_prost", version = "0.68.1")
 bazel_dep(name = "rules_rs", version = "0.0.27")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
@@ -44,3 +48,17 @@ bazel_dep(name = "rules_multitool", version = "1.11.1")
 multitool = use_extension("@rules_multitool//multitool:extension.bzl", "multitool")
 multitool.hub(lockfile = "//:multitool.lock.json")
 use_repo(multitool, "multitool")
+
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(
+    name = "go_sdk",
+    version = "1.26.0",
+)
+use_repo(go_sdk, "go_sdk")
+
+go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
+go_deps.from_file(go_mod = "//:go.mod")
+use_repo(
+    go_deps,
+    "org_golang_google_protobuf",
+)

@@ -1,0 +1,14 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+# gazelle:generation_mode update_only
+
+rust_library(
+    name = "library_with_modules",
+    srcs = [
+        "helpers/inner.rs",
+        "helpers/mod.rs",
+        "lib.rs",
+        "utils.rs",
+    ],
+    visibility = ["//:__subpackages__"],
+)

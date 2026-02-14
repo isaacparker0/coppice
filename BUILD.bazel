@@ -1,4 +1,7 @@
+load("@gazelle//:def.bzl", "gazelle", "gazelle_binary")
 load("@rules_rust//cargo:defs.bzl", "extract_cargo_lints")
+
+# gazelle:generation_mode update_only
 
 extract_cargo_lints(
     name = "cargo_lints",
@@ -10,4 +13,18 @@ alias(
     name = "format",
     actual = "//tools/format:main",
     visibility = ["//visibility:public"],
+)
+
+gazelle_binary(
+    name = "gazelle_multilang",
+    languages = [
+        "@gazelle//language/go",
+        "//tools/gazelle_rust/rust_language",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+gazelle(
+    name = "gazelle",
+    gazelle = ":gazelle_multilang",
 )

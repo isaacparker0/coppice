@@ -1,0 +1,8 @@
+load("//tools/bazel/macros:rust.bzl", "rust_test")
+
+# gazelle:generation_mode update_only
+
+rust_test(
+    name = "added_test_file_test",
+    srcs = ["foo_test.rs"],
+)

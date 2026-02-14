@@ -1,0 +1,11 @@
+load("//tools/bazel/macros:rust.bzl", "rust_binary", "rust_test")
+
+rust_binary(
+    name = "main",
+    srcs = ["main.rs"],
+)
+
+rust_test(
+    name = "subpackage_test",
+    srcs = ["subpackage_test.rs"],
+)

@@ -1,0 +1,8 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "pkg_b",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = ["//pkg_a"],
+)

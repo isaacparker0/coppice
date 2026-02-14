@@ -1,0 +1,30 @@
+load("//tools/bazel/macros:rust.bzl", "rust_binary", "rust_library", "rust_test")
+
+rust_library(
+    name = "rust_parser",
+    srcs = [
+        "lib.rs",
+        "parser.rs",
+    ],
+    visibility = ["//tools/gazelle_rust:__subpackages__"],
+    deps = ["@crates//:syn"],
+)
+
+rust_binary(
+    name = "main",
+    srcs = ["main.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":rust_parser",
+        "//tools/gazelle_rust/proto:rust_proto",
+        "@crates//:clap",
+        "@rules_rust_prost//private/3rdparty/crates:prost",
+    ],
+)
+
+rust_test(
+    name = "rust_parser_test",
+    srcs = ["parser_test.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = [":rust_parser"],
+)

@@ -10,6 +10,7 @@ path = "placeholder.rs"
 
 [dependencies]
 clap = { version = "^4.5.58", features = ["derive"] }
+syn = { version = "^2.0.115", features = ["full", "parsing", "visit"] }
 
 [lints.rust]
 # Our crate names use double underscore as path separator.

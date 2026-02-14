@@ -1,0 +1,22 @@
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_rust_prost//:defs.bzl", "rust_prost_library")
+
+proto_library(
+    name = "gazelle_rust_proto",
+    srcs = ["messages.proto"],
+    visibility = ["//visibility:public"],
+)
+
+rust_prost_library(
+    name = "rust_proto",
+    proto = ":gazelle_rust_proto",
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "go_proto",
+    importpath = "lang0/tools/gazelle_rust/proto",
+    proto = ":gazelle_rust_proto",
+    visibility = ["//visibility:public"],
+)

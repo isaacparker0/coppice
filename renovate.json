@@ -19,7 +19,8 @@
         "bazel-module",
         "cargo",
         "custom.regex",
-        "github-actions"
+        "github-actions",
+        "gomod"
     ],
     "customManagers": [
         {
@@ -61,6 +62,17 @@
                 ],
                 "fileFilters": ["multitool.lock.json"],
                 "executionMode": "update"
+            }
+        },
+        {
+            "matchManagers": ["gomod"],
+            "postUpgradeTasks": {
+                "commands": [
+                    "bazel run @rules_go//go -- mod tidy",
+                    "bazel mod tidy"
+                ],
+                "fileFilters": ["go.mod", "go.sum", "MODULE.bazel"],
+                "executionMode": "branch"
             }
         }
     ]

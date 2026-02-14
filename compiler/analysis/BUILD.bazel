@@ -8,7 +8,5 @@ rust_library(
         "types.rs",
     ],
     visibility = ["//visibility:public"],
-    deps = [
-        "//compiler/parsing",
-    ],
+    deps = ["//compiler/parsing"],
 )

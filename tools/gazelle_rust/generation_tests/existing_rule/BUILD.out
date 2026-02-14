@@ -1,0 +1,8 @@
+load("//tools/bazel/macros:rust.bzl", "rust_binary")
+
+# gazelle:generation_mode update_only
+
+rust_binary(
+    name = "main",
+    srcs = ["main.rs"],
+)
