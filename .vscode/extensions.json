@@ -1,6 +1,7 @@
 {
     "recommendations": [
         "bazelbuild.vscode-bazel",
+        "golang.go",
         "rust-lang.rust-analyzer"
     ]
 }

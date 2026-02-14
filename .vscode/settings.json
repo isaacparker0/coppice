@@ -1,5 +1,8 @@
 {
     "editor.rulers": [80],
+    "go.toolsEnvVars": {
+        "GOPACKAGESDRIVER": "${workspaceFolder}/bin/gopackagesdriver"
+    },
     "rust-analyzer.inlayHints.chainingHints.enable": false,
     "rust-analyzer.inlayHints.closingBraceHints.enable": false,
     "rust-analyzer.inlayHints.parameterHints.enable": false,
