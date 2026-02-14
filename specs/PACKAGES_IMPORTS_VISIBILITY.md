@@ -4,7 +4,7 @@
 
 Draft. This document defines the intended language design for multi-file
 programs, package boundaries, import syntax, visibility, and dependency
-resolution in coppice.
+resolution in Coppice.
 
 This spec is normative for syntax and semantics in this area.
 
@@ -266,7 +266,7 @@ This preserves one import model and hermetic builds.
 
 ### A) Package-wide implicit visibility (Go-like)
 
-Rejected for coppice goals:
+Rejected for Coppice goals:
 
 1. Too implicit for file readability.
 2. Hidden cross-file dependencies.

@@ -6,7 +6,7 @@ Draft. Companion to `specs/PACKAGES_IMPORTS_VISIBILITY.md`.
 
 This document defines an implementation plan for introducing multi-file
 compilation, package manifests, explicit imports, visibility enforcement, and
-package-level dependency checking in coppice.
+package-level dependency checking in Coppice.
 
 ---
 

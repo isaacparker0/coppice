@@ -42,15 +42,15 @@ code participates in the build.
 This is somewhat novel in its completeness, but not in its ingredients. Go's
 `_test.go` changes compilation semantics based on filename; Rust's `main.rs` vs
 `lib.rs` determines whether a crate produces a binary or a library; TypeScript's
-`.d.ts` files are parsed under a different model. The precedent exists — coppice
+`.d.ts` files are parsed under a different model. The precedent exists — Coppice
 simply commits to it as a unified, primary mechanism rather than a one-off
 exception.
 
-The usual counterarguments do not apply under coppice's constraints. We do not
+The usual counterarguments do not apply under Coppice's constraints. We do not
 support dual-use "importable and runnable" files, so the Python-style `__main__`
 convenience is intentionally excluded. We explicitly value build-system
 determinism over build-time ambiguity, so "target type is a build config" is the
-wrong model for coppice. And tooling friction is not a barrier here because the
+wrong model for Coppice. And tooling friction is not a barrier here because the
 language and its toolchain are built together from the start.
 
 This fully committed stance reinforces the core principles: one canonical way to
@@ -1007,14 +1007,14 @@ The compiler is written in Rust. Self-hosting (rewriting the compiler in
 coppice) is a non-goal for the foreseeable future.
 
 Rust is an excellent language for writing compilers — enums for AST nodes,
-pattern matching, strong type system. coppice targets backend services, not
+pattern matching, strong type system. Coppice targets backend services, not
 compiler internals. Using Rust for the compiler is the right tool for the job,
 not a compromise.
 
 Self-hosting becomes worth considering only when:
 
 - The language spec is stable (not changing weekly).
-- coppice has proven itself on other large codebases.
+- Coppice has proven itself on other large codebases.
 - The bootstrap chain can be maintained (CI builds version N from version N-1).
 - There's a credibility or contributor-onboarding reason to do it.
 
