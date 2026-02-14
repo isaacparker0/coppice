@@ -4,7 +4,7 @@ Every fixture uses a three-level layout:
 
 ```
 tests/diagnostics/<area>/<feature>/<case>/
-  input/main.lang0
+  input/main.coppice
   expect.txt
 ```
 
@@ -21,7 +21,7 @@ tests/diagnostics/<area>/<feature>/<case>/
 
 ## Content rules
 
-- Each fixture is self-contained and uses a single file: `input/main.lang0`.
+- Each fixture is self-contained and uses a single file: `input/main.coppice`.
 - `minimal_valid` is the only success case for a feature and should cover all
   valid sub-kinds for that feature in one file.
 - `expect.txt` starts with `# exit: <code>` and the exact expected output after

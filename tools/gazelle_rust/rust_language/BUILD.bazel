@@ -10,7 +10,7 @@ go_library(
         "resolve.go",
     ],
     data = ["//tools/gazelle_rust/rust_parser:main"],
-    importpath = "lang0/tools/gazelle_rust/rust_language",
+    importpath = "coppice/tools/gazelle_rust/rust_language",
     visibility = ["//visibility:public"],
     deps = [
         "//tools/gazelle_rust/proto:go_proto",

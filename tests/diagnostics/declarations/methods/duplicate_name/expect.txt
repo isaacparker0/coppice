@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:6:14: error: duplicate method 'User.idValue'
+input/main.coppice:6:14: error: duplicate method 'User.idValue'
       function idValue(self) -> int64 {
                ^

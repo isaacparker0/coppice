@@ -80,7 +80,7 @@ result := some_function(
 ## Why not semicolons?
 
 Rust uses semicolons to distinguish expressions from statements — the last
-expression in a block (without `;`) is the implicit return value. lang0 has
+expression in a block (without `;`) is the implicit return value. coppice has
 explicit `return`, so this use case doesn't apply. Semicolons would be pure
 visual noise carrying no semantic weight.
 
@@ -93,7 +93,7 @@ Trailing dots are ugly and break reading flow.
 
 ## Why the two-sided rule works
 
-The key insight: in lang0, only **identifiers** and **statement keywords** can
+The key insight: in coppice, only **identifiers** and **statement keywords** can
 start a valid statement. No operator, no `(`, no `[`, no `-`, no literal can
 begin a statement.
 
@@ -130,6 +130,6 @@ This eliminates the classic semicolon-free ambiguities:
 - **JavaScript:** Parser-level ASI (automatic semicolon insertion) that tries to
   parse, then backtracks. Widely considered a mistake.
 
-lang0's approach is closest to Go's but uses a two-sided check (last token AND
+coppice's approach is closest to Go's but uses a two-sided check (last token AND
 next token) instead of one-sided (last token only), gaining formatting
 flexibility without adding ambiguity.

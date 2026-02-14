@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:14: error: unexpected '=' in expression
+input/main.coppice:2:14: error: unexpected '=' in expression
       return 1 = 2
                ^

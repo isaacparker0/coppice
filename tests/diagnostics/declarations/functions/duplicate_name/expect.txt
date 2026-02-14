@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:5:10: error: duplicate function 'foo'
+input/main.coppice:5:10: error: duplicate function 'foo'
   function foo() -> int64 {
            ^

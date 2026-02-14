@@ -57,9 +57,9 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     let output = Command::new(compiler)
         .arg("check")
         // Currently all fixture tests are single file, so we hardcode the
-        // assumption of `input/main.lang0`. In the future when we support
+        // assumption of `input/main.coppice`. In the future when we support
         // multi-file fixtures this will need to change.
-        .arg("input/main.lang0")
+        .arg("input/main.coppice")
         .current_dir(runfiles_directory.join(case_path))
         .output()
         .unwrap();

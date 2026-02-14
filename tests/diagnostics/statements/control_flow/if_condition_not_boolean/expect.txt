@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:8: error: if condition must be boolean
+input/main.coppice:2:8: error: if condition must be boolean
       if 1 {
          ^

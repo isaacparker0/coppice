@@ -11,7 +11,7 @@ import (
 	"github.com/bazelbuild/rules_go/go/runfiles"
 	"google.golang.org/protobuf/proto"
 
-	messages "lang0/tools/gazelle_rust/proto"
+	messages "coppice/tools/gazelle_rust/proto"
 )
 
 // Parser manages IPC with the Rust parser binary.
@@ -28,7 +28,7 @@ func NewParser() *Parser {
 		log.Fatal(err)
 	}
 
-	path, err := r.Rlocation("lang0/tools/gazelle_rust/rust_parser/main")
+	path, err := r.Rlocation("coppice/tools/gazelle_rust/rust_parser/main")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:3:5: error: unreachable code
+input/main.coppice:3:5: error: unreachable code
       return 1
       ^

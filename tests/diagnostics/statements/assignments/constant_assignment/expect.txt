@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:4:5: error: cannot assign to constant 'ANSWER'
+input/main.coppice:4:5: error: cannot assign to constant 'ANSWER'
       ANSWER = 2
       ^

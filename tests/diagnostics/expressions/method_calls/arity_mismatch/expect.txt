@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:10:21: error: expected 1 arguments, got 0
+input/main.coppice:10:21: error: expected 1 arguments, got 0
       return user.plus()
                       ^

@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:9: error: unknown type 'foo'
+input/main.coppice:2:9: error: unknown type 'foo'
       id: foo,
           ^

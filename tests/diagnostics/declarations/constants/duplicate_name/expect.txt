@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:1: error: duplicate constant 'FOO'
+input/main.coppice:2:1: error: duplicate constant 'FOO'
   FOO := 2
   ^

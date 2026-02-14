@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:6:9: error: match pattern type 'boolean' is not in target type
+input/main.coppice:6:9: error: match pattern type 'boolean' is not in target type
           boolean => 0
           ^

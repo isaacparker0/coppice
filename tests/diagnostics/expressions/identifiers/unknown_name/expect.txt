@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:12: error: unknown name 'x'
+input/main.coppice:2:12: error: unknown name 'x'
       return x
              ^

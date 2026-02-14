@@ -42,15 +42,15 @@ code participates in the build.
 This is somewhat novel in its completeness, but not in its ingredients. Go's
 `_test.go` changes compilation semantics based on filename; Rust's `main.rs` vs
 `lib.rs` determines whether a crate produces a binary or a library; TypeScript's
-`.d.ts` files are parsed under a different model. The precedent exists — lang0
+`.d.ts` files are parsed under a different model. The precedent exists — coppice
 simply commits to it as a unified, primary mechanism rather than a one-off
 exception.
 
-The usual counterarguments do not apply under lang0's constraints. We do not
+The usual counterarguments do not apply under coppice's constraints. We do not
 support dual-use "importable and runnable" files, so the Python-style `__main__`
 convenience is intentionally excluded. We explicitly value build-system
 determinism over build-time ambiguity, so "target type is a build config" is the
-wrong model for lang0. And tooling friction is not a barrier here because the
+wrong model for coppice. And tooling friction is not a barrier here because the
 language and its toolchain are built together from the start.
 
 This fully committed stance reinforces the core principles: one canonical way to
@@ -457,31 +457,31 @@ returning recoverable errors in function signatures.
 
 ### Package Definition
 
-A directory is a package if and only if it contains a `PACKAGE.lang0` file.
+A directory is a package if and only if it contains a `PACKAGE.coppice` file.
 Without one, a subdirectory's files belong to the parent package.
 
 ```
 platform/
   auth/
-    PACKAGE.lang0           # makes auth/ a package
-    token.lang0             # library file in auth package
-    password.lang0          # library file in auth package
-    server.bin.lang0        # binary entrypoint file in auth package
-    token.test.lang0        # test file in auth package
+    PACKAGE.coppice           # makes auth/ a package
+    token.coppice             # library file in auth package
+    password.coppice          # library file in auth package
+    server.bin.coppice        # binary entrypoint file in auth package
+    token.test.coppice        # test file in auth package
     crypto/
-      encrypt.lang0         # NO PACKAGE.lang0 → still part of auth package
-      hash.lang0
+      encrypt.coppice         # NO PACKAGE.coppice → still part of auth package
+      hash.coppice
     oauth/
-      PACKAGE.lang0         # makes oauth/ its own package
-      google.lang0
+      PACKAGE.coppice         # makes oauth/ its own package
+      google.coppice
 ```
 
-### PACKAGE.lang0
+### PACKAGE.coppice
 
 Contains only a doc comment and `public import` declarations. No code.
 
 ```
-// platform/auth/PACKAGE.lang0
+// platform/auth/PACKAGE.coppice
 
 // Package auth provides authentication and authorization.
 
@@ -512,10 +512,10 @@ Three levels:
 
 - No modifier — file-private.
 - `public` — package-visible (importable by other files in the same package).
-- External visibility — requires `public` plus re-export in `PACKAGE.lang0`.
+- External visibility — requires `public` plus re-export in `PACKAGE.coppice`.
 
 ```
-// auth/token.lang0
+// auth/token.coppice
 
 public type Token :: struct {        // package-visible, re-exportable
     public user_id: i64         // visible on the struct externally
@@ -527,7 +527,7 @@ public function validate(t: Token) -> bool {   // package-visible function
 }
 ```
 
-Test files (`*.test.lang0`) follow normal import and visibility rules.
+Test files (`*.test.coppice`) follow normal import and visibility rules.
 
 ### Intra-Package Access
 
@@ -536,10 +536,10 @@ implicitly; they import package-visible (`public`) symbols explicitly using the
 same import form as everywhere else.
 
 ```
-// auth/token.lang0
+// auth/token.coppice
 public function validate(t: Token) -> bool { ... }
 
-// auth/password.lang0
+// auth/password.coppice
 import platform/auth { validate, Token }
 
 function check(pw: string, t: Token) -> bool {
@@ -547,7 +547,7 @@ function check(pw: string, t: Token) -> bool {
     ...
 }
 
-// auth/crypto/encrypt.lang0
+// auth/crypto/encrypt.coppice
 function encrypt(data: string) -> string { ... }   // file-private
 ```
 
@@ -557,22 +557,22 @@ function encrypt(data: string) -> string { ... }   // file-private
 
 ### Test Files
 
-Tests live in separate `*.test.lang0` files. Same directory as the source.
+Tests live in separate `*.test.coppice` files. Same directory as the source.
 `public` declarations are forbidden in test files, and test files are not
 importable.
 
 ```
 auth/
-  token.lang0
-  token.test.lang0
-  password.lang0
-  password.test.lang0
+  token.coppice
+  token.test.coppice
+  password.coppice
+  password.test.coppice
 ```
 
 ### Syntax
 
 ```
-// token.test.lang0
+// token.test.coppice
 
 group Token.parse {
     test "handles valid JWT" {
@@ -621,7 +621,7 @@ No assertion libraries. No `assertEqual`, `expect().toBe()`. Just `assert`.
 Functions. No framework, no decorators, no dependency injection.
 
 ```
-// testutil/auth.lang0 (with PACKAGE.lang0 exporting these)
+// testutil/auth.coppice (with PACKAGE.coppice exporting these)
 
 public function make_token(user_id: i64) -> Token {
     return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)
@@ -629,7 +629,7 @@ public function make_token(user_id: i64) -> Token {
 ```
 
 ```
-// token.test.lang0
+// token.test.coppice
 import testutil/auth { make_token }
 
 test "token contains user id" {
@@ -644,9 +644,9 @@ Cleanup is handled by deterministic resource cleanup (ARC + destructors). No
 ### Test Output
 
 ```
-$ lang0 test platform/auth/
+$ coppice test platform/auth/
 
-platform/auth/token.test.lang0
+platform/auth/token.test.coppice
   Token.parse
     ok   handles valid JWT (1ms)
     ok   rejects malformed input (0ms)
@@ -658,7 +658,7 @@ platform/auth/token.test.lang0
     assert status matches TokenExpired
            |      |
            OK     TokenExpired
-    at: token.test.lang0:28
+    at: token.test.coppice:28
 
 3 passed, 1 failed
 ```
@@ -722,19 +722,19 @@ No syntax alternatives. No feature overlaps.
 Single binary. All capabilities built in.
 
 ```
-lang0 build .        # compile (strict: rejects unformatted code)
-lang0 build --draft  # auto-fix then compile (development mode)
-lang0 check .        # type-check only, no codegen (fastest feedback)
-lang0 fix .          # auto-fix all fixable issues
-lang0 fmt .          # format only (subset of fix)
-lang0 test .         # run tests
-lang0 lsp            # language server
-lang0 doc .          # generate documentation
+coppice build .        # compile (strict: rejects unformatted code)
+coppice build --draft  # auto-fix then compile (development mode)
+coppice check .        # type-check only, no codegen (fastest feedback)
+coppice fix .          # auto-fix all fixable issues
+coppice fmt .          # format only (subset of fix)
+coppice test .         # run tests
+coppice lsp            # language server
+coppice doc .          # generate documentation
 ```
 
 ### Fix Mode
 
-`lang0 fix` auto-corrects everything with exactly one correct fix:
+`coppice fix` auto-corrects everything with exactly one correct fix:
 
 - Formatting, import sorting, unused import removal, missing trailing commas,
   wrong naming convention (rename across file), unnecessary type annotations.
@@ -749,10 +749,10 @@ Built into the compiler, not a separate tool.
 
 ### Build Modes
 
-- `lang0 build .` — strict. Rejects unfixed code. Used in CI.
-- `lang0 build --draft .` — runs `fix` implicitly before compiling. Used during
-  development.
-- `lang0 check .` — type-check only, no codegen. Used by LSP for real-time
+- `coppice build .` — strict. Rejects unfixed code. Used in CI.
+- `coppice build --draft .` — runs `fix` implicitly before compiling. Used
+  during development.
+- `coppice check .` — type-check only, no codegen. Used by LSP for real-time
   feedback. Target: <100ms incremental.
 
 ---
@@ -795,13 +795,13 @@ mechanically derived.
 
 Gazelle plugin logic:
 
-1. Walk directory tree. A directory with `PACKAGE.lang0` is a package target.
+1. Walk directory tree. A directory with `PACKAGE.coppice` is a package target.
 2. Collect package files under that root:
-   - `*.lang0` excluding `*.bin.lang0`, `*.test.lang0`, and `PACKAGE.lang0` as
-     library source files.
-   - include `PACKAGE.lang0` manifest in package metadata.
-3. Collect `*.bin.lang0` files → `lang0_binary` targets.
-4. Collect `*.test.lang0` files → `lang0_test` targets.
+   - `*.coppice` excluding `*.bin.coppice`, `*.test.coppice`, and
+     `PACKAGE.coppice` as library source files.
+   - include `PACKAGE.coppice` manifest in package metadata.
+3. Collect `*.bin.coppice` files → `lang0_binary` targets.
+4. Collect `*.test.coppice` files → `lang0_test` targets.
 5. Parse `import` statements and map import path to target deps.
 
 No heuristics. No configuration file. No import resolution algorithm.
@@ -809,17 +809,17 @@ No heuristics. No configuration file. No import resolution algorithm.
 ### Target Mapping
 
 ```
-# One package root (with PACKAGE.lang0) = one lang0_library target
+# One package root (with PACKAGE.coppice) = one lang0_library target
 
 lang0_library(
     name = "auth",
     srcs = [
-        "token.lang0",
-        "password.lang0",
-        "crypto/encrypt.lang0",     # subdir without PACKAGE.lang0
-        "crypto/hash.lang0",
+        "token.coppice",
+        "password.coppice",
+        "crypto/encrypt.coppice",     # subdir without PACKAGE.coppice
+        "crypto/hash.coppice",
     ],
-    manifest = "PACKAGE.lang0",
+    manifest = "PACKAGE.coppice",
     deps = [
         "//platform/auth/oauth",
         "@lang0_std//time",
@@ -829,15 +829,15 @@ lang0_library(
 
 lang0_binary(
     name = "auth_server",
-    src = "server.bin.lang0",
+    src = "server.bin.coppice",
     deps = [":auth"],
 )
 
 lang0_test(
     name = "auth_test",
     srcs = [
-        "token.test.lang0",
-        "password.test.lang0",
+        "token.test.coppice",
+        "password.test.coppice",
     ],
     deps = [":auth"],
 )
@@ -857,7 +857,7 @@ lang0_test(
 - File-level compilation units → granular action caching.
 - Deterministic output → remote cache hits across machines.
 - No hidden dependencies → build graph is correct by construction.
-- `PACKAGE.lang0` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
+- `PACKAGE.coppice` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
   Gazelle plugin logic deterministic and small.
 - No transitive header includes, no implicit prelude (or a fixed one) → `deps`
   is minimal and precise.
@@ -1003,18 +1003,18 @@ the same `Encoder`/`Decoder` interface.
 
 ## Self-Hosting
 
-The compiler is written in Rust. Self-hosting (rewriting the compiler in lang0)
-is a non-goal for the foreseeable future.
+The compiler is written in Rust. Self-hosting (rewriting the compiler in
+coppice) is a non-goal for the foreseeable future.
 
 Rust is an excellent language for writing compilers — enums for AST nodes,
-pattern matching, strong type system. lang0 targets backend services, not
+pattern matching, strong type system. coppice targets backend services, not
 compiler internals. Using Rust for the compiler is the right tool for the job,
 not a compromise.
 
 Self-hosting becomes worth considering only when:
 
 - The language spec is stable (not changing weekly).
-- lang0 has proven itself on other large codebases.
+- coppice has proven itself on other large codebases.
 - The bootstrap chain can be maintained (CI builds version N from version N-1).
 - There's a credibility or contributor-onboarding reason to do it.
 

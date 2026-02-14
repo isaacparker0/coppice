@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:1:1: error: expected keyword 'type' before type declaration
+input/main.coppice:1:1: error: expected keyword 'type' before type declaration
   User :: struct { id: int64 }
   ^

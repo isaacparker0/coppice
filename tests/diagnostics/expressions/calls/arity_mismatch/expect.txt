@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:6:15: error: expected 2 arguments, got 1
+input/main.coppice:6:15: error: expected 2 arguments, got 1
       return add(1)
                 ^

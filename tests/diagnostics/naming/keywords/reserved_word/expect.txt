@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:1:10: error: reserved keyword 'mut' cannot be used as an identifier
+input/main.coppice:1:10: error: reserved keyword 'mut' cannot be used as an identifier
   function mut() -> int64 {
            ^

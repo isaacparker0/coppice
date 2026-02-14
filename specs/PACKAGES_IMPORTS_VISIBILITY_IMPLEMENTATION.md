@@ -6,7 +6,7 @@ Draft. Companion to `specs/PACKAGES_IMPORTS_VISIBILITY.md`.
 
 This document defines an implementation plan for introducing multi-file
 compilation, package manifests, explicit imports, visibility enforcement, and
-package-level dependency checking in lang0.
+package-level dependency checking in coppice.
 
 ---
 
@@ -15,7 +15,7 @@ package-level dependency checking in lang0.
 In scope:
 
 1. Multi-file package compilation.
-2. `PACKAGE.lang0` parsing and validation.
+2. `PACKAGE.coppice` parsing and validation.
 3. New top-level `import` syntax in source files.
 4. File/package/external visibility enforcement.
 5. Package graph construction and cycle diagnostics.
@@ -41,7 +41,7 @@ Current compiler constraints that drive the migration design:
 3. Typechecker entrypoint is single-file: `check_file(file: &File)`.
 4. Symbol tables are flat maps keyed by name within one file context.
 5. CLI `check` takes a single file path.
-6. Diagnostics fixtures hardcode `input/main.lang0` per case.
+6. Diagnostics fixtures hardcode `input/main.coppice` per case.
 
 Implication: this is a structural refactor, not an additive feature toggle.
 
@@ -67,8 +67,8 @@ Planned compile pipeline for `check <path>`:
 1. **Workspace Discovery**
    - Determine package root and file set.
 2. **Lex/Parse**
-   - Parse all `.lang0` files in each package.
-   - Parse `PACKAGE.lang0` manifest syntax.
+   - Parse all `.coppice` files in each package.
+   - Parse `PACKAGE.coppice` manifest syntax.
 3. **Package Graph Build**
    - Build package nodes and import dependency edges.
 4. **Cycle Detection**
@@ -76,7 +76,7 @@ Planned compile pipeline for `check <path>`:
 5. **Declaration Collection**
    - Build per-package symbol tables from all source files.
 6. **Export Table Build**
-   - Build external API table from `PACKAGE.lang0` re-exports.
+   - Build external API table from `PACKAGE.coppice` re-exports.
 7. **Import Resolution + Visibility Validation**
    - Resolve each file import against package tables.
 8. **Typecheck**
@@ -151,14 +151,14 @@ Exit criteria:
 
 Goals:
 
-1. Discover packages using `PACKAGE.lang0`.
+1. Discover packages using `PACKAGE.coppice`.
 2. Associate each source file with exactly one package.
 3. Classify file role by suffix.
 
 Tasks:
 
 1. Directory walker:
-   - locate all `PACKAGE.lang0`
+   - locate all `PACKAGE.coppice`
    - assign descendant files to nearest ancestor package root unless shadowed by
      nested package.
    - assign `FileRole` based on filename suffix.
@@ -180,7 +180,7 @@ Exit criteria:
 Goals:
 
 1. Parse canonical file imports.
-2. Parse strict `PACKAGE.lang0` re-export declarations.
+2. Parse strict `PACKAGE.coppice` re-export declarations.
 3. Add file-role semantic validation on declarations.
 
 Tasks:
@@ -194,13 +194,13 @@ Tasks:
    - parse `public import source/module { ... }`.
    - reject non-comment non-`public import` tokens.
 4. File-role validation (post-parse, pre-resolver):
-   - `*.bin.lang0` must declare exactly one `main`.
+   - `*.bin.coppice` must declare exactly one `main`.
    - `main` must have no params and no return value.
    - `main` must be file-private (not `public`).
-   - `*.bin.lang0` must not contain any `public` declarations.
-   - `*.lang0` (library) must not declare `main`.
-   - `*.test.lang0` must not declare `main`.
-   - `*.test.lang0` must not contain any `public` declarations.
+   - `*.bin.coppice` must not contain any `public` declarations.
+   - `*.coppice` (library) must not declare `main`.
+   - `*.test.coppice` must not declare `main`.
+   - `*.test.coppice` must not contain any `public` declarations.
 
 Exit criteria:
 
@@ -259,7 +259,7 @@ Exit criteria:
 
 1. Fixtures for unknown package imports.
 2. Fixtures for simple and multi-node import cycles.
-3. Fixtures for illegal imports of `.bin.lang0` and `.test.lang0`.
+3. Fixtures for illegal imports of `.bin.coppice` and `.test.coppice`.
 
 ---
 
@@ -276,7 +276,7 @@ Tasks:
    - only `public` symbols importable from other files.
 2. External imports:
    - symbol must be `public`.
-   - symbol must be exported in `PACKAGE.lang0`.
+   - symbol must be exported in `PACKAGE.coppice`.
 3. Validate alias collisions and imported-name collisions.
 4. Build per-file import environment (name -> symbol binding).
 
@@ -336,7 +336,7 @@ Tasks:
    - `check <path>` accepts file or package directory.
    - if file path is provided, resolve owning package and check package.
 2. Fixture runner:
-   - remove hardcoded `input/main.lang0`.
+   - remove hardcoded `input/main.coppice`.
    - run check against `input/` package root.
    - allow multi-file fixture trees.
 3. Update `tests/diagnostics/README.md` rules to include multi-file fixture
@@ -399,14 +399,14 @@ Representative fixture cases:
 6. external import of non-public symbol.
 7. cycle of length 2 and 3.
 8. duplicate imports without alias.
-9. invalid `PACKAGE.lang0` code content.
-10. `.bin.lang0` missing `main`.
-11. `.bin.lang0` `main` signature mismatch.
+9. invalid `PACKAGE.coppice` code content.
+10. `.bin.coppice` missing `main`.
+11. `.bin.coppice` `main` signature mismatch.
 12. `main` declared in library file.
-13. `public` declaration in `.bin.lang0`.
-14. `public` declaration in `.test.lang0`.
-15. import of `.bin.lang0` file.
-16. import of `.test.lang0` file.
+13. `public` declaration in `.bin.coppice`.
+14. `public` declaration in `.test.coppice`.
+15. import of `.bin.coppice` file.
+16. import of `.test.coppice` file.
 
 ## Regression Tests
 
@@ -465,7 +465,7 @@ Recommended merge policy:
 
 ## Open Decisions to Lock Before Coding
 
-1. Policy for `.lang0` files outside any package root:
+1. Policy for `.coppice` files outside any package root:
    - recommended: hard error.
 2. Import placement:
    - recommended: imports must appear before declarations.
@@ -483,7 +483,7 @@ These should be resolved in spec text before implementation begins.
 Start with M1 and M2 in one branch:
 
 1. Land package discovery + IDs + deterministic ordering.
-2. Land parser support for source imports and strict `PACKAGE.lang0`.
+2. Land parser support for source imports and strict `PACKAGE.coppice`.
 3. Add parser/discovery fixtures before touching typechecker logic.
 
 This minimizes blast radius while proving the structural model early.

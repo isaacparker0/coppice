@@ -4,7 +4,7 @@
 
 Draft. This document defines the intended language design for multi-file
 programs, package boundaries, import syntax, visibility, and dependency
-resolution in lang0.
+resolution in coppice.
 
 This spec is normative for syntax and semantics in this area.
 
@@ -26,9 +26,9 @@ The model intentionally prefers explicitness over minimal boilerplate.
 
 ## Terminology
 
-1. **File**: a `.lang0` source file.
-2. **Package**: a directory containing `PACKAGE.lang0`, plus source files in
-   subdirectories that do not contain their own `PACKAGE.lang0`.
+1. **File**: a `.coppice` source file.
+2. **Package**: a directory containing `PACKAGE.coppice`, plus source files in
+   subdirectories that do not contain their own `PACKAGE.coppice`.
 3. **Symbol**: top-level declaration (type, function, constant).
 4. **External**: from a different package path.
 
@@ -44,9 +44,9 @@ files, a single canonical structure, and deterministic build graph mapping.
 
 File roles:
 
-1. **Library file**: `*.lang0` excluding `.bin.lang0` and `.test.lang0`.
-2. **Binary entrypoint file**: `*.bin.lang0`.
-3. **Test file**: `*.test.lang0`.
+1. **Library file**: `*.coppice` excluding `.bin.coppice` and `.test.coppice`.
+2. **Binary entrypoint file**: `*.bin.coppice`.
+3. **Test file**: `*.test.coppice`.
 
 Role is determined by filename only; contents do not change role.
 
@@ -56,9 +56,9 @@ Role is determined by filename only; contents do not change role.
 
 ### Rule
 
-A directory is a package if and only if it contains `PACKAGE.lang0`.
+A directory is a package if and only if it contains `PACKAGE.coppice`.
 
-Without a nested `PACKAGE.lang0`, subdirectory files belong to the parent
+Without a nested `PACKAGE.coppice`, subdirectory files belong to the parent
 package.
 
 ### Example
@@ -66,14 +66,14 @@ package.
 ```text
 platform/
   auth/
-    PACKAGE.lang0
-    token.lang0
-    password.lang0
+    PACKAGE.coppice
+    token.coppice
+    password.coppice
     crypto/
-      hash.lang0
+      hash.coppice
     oauth/
-      PACKAGE.lang0
-      google.lang0
+      PACKAGE.coppice
+      google.coppice
 ```
 
 In this layout:
@@ -85,18 +85,18 @@ In this layout:
 
 ## File Suffix and Package Manifest
 
-1. All language files use `.lang0`.
-2. Package manifests are named `PACKAGE.lang0`.
-3. `PACKAGE.lang0` allows only:
+1. All language files use `.coppice`.
+2. Package manifests are named `PACKAGE.coppice`.
+3. `PACKAGE.coppice` allows only:
    - comments/doc comments
    - `public import ...` declarations used as re-exports
-4. Any executable code or declarations in `PACKAGE.lang0` is a compile error.
+4. Any executable code or declarations in `PACKAGE.coppice` is a compile error.
 
 ---
 
 ## Binary Entrypoints
 
-Rules for `*.bin.lang0`:
+Rules for `*.bin.coppice`:
 
 1. Must declare exactly one `main` function.
 2. `main` must have no parameters and no return value.
@@ -110,7 +110,7 @@ Violations are compile errors anchored to the offending declaration or import.
 
 ## Library Files
 
-Rules for `*.lang0` (non-bin, non-test):
+Rules for `*.coppice` (non-bin, non-test):
 
 1. Must not declare `main`.
 2. Any `main` in a library file is a compile error.
@@ -119,7 +119,7 @@ Rules for `*.lang0` (non-bin, non-test):
 
 ## Test Files
 
-Rules for `*.test.lang0`:
+Rules for `*.test.coppice`:
 
 1. Must not declare `main`.
 2. No `public` declarations are allowed.
@@ -163,13 +163,13 @@ Visibility has three tiers:
    same package via explicit import.
 3. **Externally exported**: declaration is visible to other packages only if:
    - declaration is `public` in source file
-   - declaration is re-exported in `PACKAGE.lang0`
+   - declaration is re-exported in `PACKAGE.coppice`
 
 ### Intent
 
 1. Default keeps local implementation details private.
 2. `public` enables internal package composition without exposing API.
-3. `PACKAGE.lang0` defines the package's external contract.
+3. `PACKAGE.coppice` defines the package's external contract.
 
 ---
 
@@ -178,18 +178,18 @@ Visibility has three tiers:
 For `import A/B { X }` in file `f`:
 
 1. Resolver locates package `A/B`.
-2. Imports from `*.bin.lang0` or `*.test.lang0` files are illegal.
+2. Imports from `*.bin.coppice` or `*.test.coppice` files are illegal.
 3. If `f` is in package `A/B`:
    - `X` must be package-visible (`public`) in some file of `A/B`.
    - file-private symbols are not importable.
 4. If `f` is in a different package:
    - `X` must be `public`.
-   - `X` must be re-exported by `A/B/PACKAGE.lang0`.
+   - `X` must be re-exported by `A/B/PACKAGE.coppice`.
 5. Missing or inaccessible symbols are compile errors with source span.
 
 ---
 
-## Re-export Syntax in `PACKAGE.lang0`
+## Re-export Syntax in `PACKAGE.coppice`
 
 Canonical form:
 
@@ -205,7 +205,7 @@ Semantics:
 4. Duplicate exports are compile errors.
 5. Re-export target ambiguity is a compile error.
 
-Note: `public import` is only valid in `PACKAGE.lang0`.
+Note: `public import` is only valid in `PACKAGE.coppice`.
 
 ---
 
@@ -266,7 +266,7 @@ This preserves one import model and hermetic builds.
 
 ### A) Package-wide implicit visibility (Go-like)
 
-Rejected for lang0 goals:
+Rejected for coppice goals:
 
 1. Too implicit for file readability.
 2. Hidden cross-file dependencies.
@@ -318,9 +318,9 @@ missing import insertion where unambiguous.
 ## Implementation Notes (Non-Normative)
 
 1. Keep parser file-local; add top-level import AST nodes.
-2. Add package graph builder (discover `PACKAGE.lang0`, assign files to
+2. Add package graph builder (discover `PACKAGE.coppice`, assign files to
    package).
-3. Add package export table from `PACKAGE.lang0`.
+3. Add package export table from `PACKAGE.coppice`.
 4. Add resolver pass before typechecking.
 5. Typecheck against resolved package symbol environment, not single file only.
 6. Extend diagnostics fixture harness from single-file assumption to

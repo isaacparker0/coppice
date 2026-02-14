@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:5: error: unused variable 'x'
+input/main.coppice:2:5: error: unused variable 'x'
       x := 1
       ^

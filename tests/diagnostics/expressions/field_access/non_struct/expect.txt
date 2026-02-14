@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:3:14: error: cannot access field 'y' on non-struct type int64
+input/main.coppice:3:14: error: cannot access field 'y' on non-struct type int64
       return x.y
                ^

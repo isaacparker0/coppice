@@ -15,7 +15,7 @@ bazel test //...
 ### Run the CLI
 
 ```bash
-bazel run //compiler/cli:main --run_in_cwd -- check path/to/file.lang0
+bazel run //compiler/cli:main --run_in_cwd -- check path/to/file.coppice
 ```
 
 ### Update diagnostic test snapshots

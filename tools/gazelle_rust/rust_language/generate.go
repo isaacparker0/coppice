@@ -10,7 +10,7 @@ import (
 	"github.com/bazelbuild/bazel-gazelle/language"
 	"github.com/bazelbuild/bazel-gazelle/rule"
 
-	messages "lang0/tools/gazelle_rust/proto"
+	messages "coppice/tools/gazelle_rust/proto"
 )
 
 // Metadata about a generated rule for use during resolution.

@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:11: error: abort message must be string
+input/main.coppice:2:11: error: abort message must be string
       abort(1)
             ^

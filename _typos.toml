@@ -1,7 +1,7 @@
 [default]
-extend-ignore-identifiers-re = [
+extend-ignore-re = [
   # Rust syn AST enum variant name.
-  "Paren",
+  "Expr::Paren",
 ]
 
 [default.extend-words]

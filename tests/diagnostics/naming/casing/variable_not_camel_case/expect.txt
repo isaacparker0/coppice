@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:5: error: variable name must be camelCase
+input/main.coppice:2:5: error: variable name must be camelCase
       BadVar := 1
       ^

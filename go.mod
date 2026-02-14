@@ -1,4 +1,4 @@
-module lang0
+module coppice
 
 go 1.26.0
 

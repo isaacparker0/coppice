@@ -16,7 +16,7 @@ rust_prost_library(
 
 go_proto_library(
     name = "go_proto",
-    importpath = "lang0/tools/gazelle_rust/proto",
+    importpath = "coppice/tools/gazelle_rust/proto",
     proto = ":gazelle_rust_proto",
     visibility = ["//visibility:public"],
 )

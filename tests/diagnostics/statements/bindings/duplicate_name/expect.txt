@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:3:5: error: duplicate binding 'x'
+input/main.coppice:3:5: error: duplicate binding 'x'
       x := 2
       ^

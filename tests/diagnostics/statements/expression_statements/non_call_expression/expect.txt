@@ -1,4 +1,4 @@
 # exit: 1
-input/main.lang0:2:7: error: expression statements must be calls
+input/main.coppice:2:7: error: expression statements must be calls
       1 + 2
         ^
