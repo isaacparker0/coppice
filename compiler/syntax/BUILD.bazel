@@ -1,0 +1,11 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "syntax",
+    srcs = [
+        "ast.rs",
+        "diagnostics.rs",
+        "lib.rs",
+    ],
+    visibility = ["//:__subpackages__"],
+)

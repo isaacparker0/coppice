@@ -1,6 +1,6 @@
-use crate::ast::{Block, Statement};
-use crate::diagnostics::Span;
 use crate::lexer::{Keyword, Symbol};
+use compiler__syntax::Span;
+use compiler__syntax::{Block, Statement};
 
 use super::{ExpressionSpan, Parser};
 

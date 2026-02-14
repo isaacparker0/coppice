@@ -1,10 +1,7 @@
-mod ast;
-mod diagnostics;
 mod lexer;
 mod parser;
 
-pub use ast::*;
-pub use diagnostics::{Diagnostic, Span};
+pub use compiler__syntax::*;
 
 pub fn parse_file(source: &str) -> Result<File, Vec<Diagnostic>> {
     let mut lexer = lexer::Lexer::new(source);

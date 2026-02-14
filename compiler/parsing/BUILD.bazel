@@ -3,8 +3,6 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "parsing",
     srcs = [
-        "ast.rs",
-        "diagnostics.rs",
         "lexer.rs",
         "lib.rs",
         "parser/declarations.rs",
@@ -15,4 +13,5 @@ rust_library(
         "parser/types.rs",
     ],
     visibility = ["//visibility:public"],
+    deps = ["//compiler/syntax"],
 )

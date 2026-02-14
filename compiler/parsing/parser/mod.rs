@@ -1,6 +1,6 @@
-use crate::ast::{ConstantDeclaration, DocComment, Expression, File, Visibility};
-use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
+use compiler__syntax::{ConstantDeclaration, DocComment, Expression, File, Visibility};
+use compiler__syntax::{Diagnostic, Span};
 
 mod declarations;
 mod expressions;

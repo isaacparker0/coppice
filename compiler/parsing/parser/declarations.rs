@@ -1,9 +1,9 @@
-use crate::ast::{
+use crate::lexer::{Keyword, Symbol};
+use compiler__syntax::Span;
+use compiler__syntax::{
     ConstantDeclaration, DocComment, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
     ParameterDeclaration, TypeDeclaration, TypeDeclarationKind, Visibility,
 };
-use crate::diagnostics::Span;
-use crate::lexer::{Keyword, Symbol};
 
 use super::{ExpressionSpan, Parser};
 

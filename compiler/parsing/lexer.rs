@@ -1,4 +1,4 @@
-use crate::diagnostics::{Diagnostic, Span};
+use compiler__syntax::{Diagnostic, Span};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keyword {

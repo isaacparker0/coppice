@@ -1,5 +1,5 @@
 use super::TypeChecker;
-use compiler__parsing::Span;
+use compiler__syntax::Span;
 
 impl TypeChecker<'_> {
     pub(super) fn check_type_name(&mut self, name: &str, span: &Span) {

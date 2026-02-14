@@ -1,9 +1,9 @@
-use crate::ast::{
+use crate::lexer::{Keyword, Symbol, TokenKind};
+use compiler__syntax::Span;
+use compiler__syntax::{
     BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName, TypeNameAtom,
     UnaryOperator,
 };
-use crate::diagnostics::Span;
-use crate::lexer::{Keyword, Symbol, TokenKind};
 
 use super::{ExpressionSpan, Parser};
 

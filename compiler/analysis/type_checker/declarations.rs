@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use compiler__parsing::{
+use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
 

@@ -1,4 +1,4 @@
-use compiler__parsing::{BinaryOperator, Block, Expression, MatchArm};
+use compiler__syntax::{BinaryOperator, Block, Expression, MatchArm};
 
 use crate::types::Type;
 

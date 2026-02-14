@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::types::Type;
-use compiler__parsing::{
+use compiler__syntax::{
     Block, Expression, FunctionDeclaration, MethodDeclaration, Statement, TypeDeclaration,
     TypeDeclarationKind,
 };

@@ -1,6 +1,6 @@
-use crate::ast::{TypeName, TypeNameAtom};
-use crate::diagnostics::Span;
 use crate::lexer::Symbol;
+use compiler__syntax::Span;
+use compiler__syntax::{TypeName, TypeNameAtom};
 
 use super::Parser;
 
