@@ -457,99 +457,98 @@ returning recoverable errors in function signatures.
 
 ### Package Definition
 
-A directory is a package if and only if it contains a `PACKAGE.lang` file.
+A directory is a package if and only if it contains a `PACKAGE.lang0` file.
 Without one, a subdirectory's files belong to the parent package.
 
 ```
 platform/
   auth/
-    PACKAGE.lang            # makes auth/ a package
-    token.lang              # part of auth
-    password.lang           # part of auth
+    PACKAGE.lang0           # makes auth/ a package
+    token.lang0             # library file in auth package
+    password.lang0          # library file in auth package
+    server.bin.lang0        # binary entrypoint file in auth package
+    token.test.lang0        # test file in auth package
     crypto/
-      encrypt.lang          # NO PACKAGE.lang → part of auth, just organized in subdir
-      hash.lang
+      encrypt.lang0         # NO PACKAGE.lang0 → still part of auth package
+      hash.lang0
     oauth/
-      PACKAGE.lang          # makes oauth/ its own package
-      google.lang
+      PACKAGE.lang0         # makes oauth/ its own package
+      google.lang0
 ```
 
-### PACKAGE.lang
+### PACKAGE.lang0
 
 Contains only a doc comment and `public import` declarations. No code.
 
 ```
-// platform/auth/PACKAGE.lang
+// platform/auth/PACKAGE.lang0
 
 // Package auth provides authentication and authorization.
 
-public import token { Token, parse }
-public import password { hash, verify }
+public import auth { Token, parse, hash, verify }
 ```
 
-These relative imports re-export selected symbols as the package's public API.
-This is the only place `public import` and relative imports are allowed.
+`public import` re-exports selected symbols as the package's external API. This
+is the only place `public import` is allowed.
 
 ### Imports
 
-Fully qualified. Always. No relative imports (except in PACKAGE.lang). No glob
-imports. No conditional imports.
+One import form only: fully qualified package path plus explicit member list. No
+relative imports. No glob imports. No conditional imports.
 
 ```
-import platform/auth
-import platform/auth/oauth
-import std/fmt
+import platform/auth { Token, parse }
+import platform/auth/oauth { GoogleClient }
+import std/fmt { printLine as print }
 
 // import ../auth          ← compile error
 // import platform/*       ← compile error
+// import platform/auth    ← compile error (missing explicit members)
 ```
 
 ### Visibility
 
-Two levels:
+Three levels:
 
-- `public` — visible to importers of this package (controlled by PACKAGE.lang).
-- No modifier — visible within the package (all files in the same package).
+- No modifier — file-private.
+- `public` — package-visible (importable by other files in the same package).
+- External visibility — requires `public` plus re-export in `PACKAGE.lang0`.
 
 ```
-// auth/token.lang
+// auth/token.lang0
 
-public type Token :: struct {        // re-exportable via PACKAGE.lang
+public type Token :: struct {        // package-visible, re-exportable
     public user_id: i64         // visible on the struct externally
-    signature: string           // package-internal field
+    signature: string           // file-private field
 }
 
-function validate(t: Token) -> bool {   // package-internal function
+public function validate(t: Token) -> bool {   // package-visible function
     ...
 }
 ```
 
-Test files (`_test.lang`) can access all package-internal symbols.
+Test files (`*.test.lang0`) follow normal import and visibility rules.
 
 ### Intra-Package Access
 
-All files within a package (including files in subdirectories without
-`PACKAGE.lang`) can see each other's symbols freely. No `public` needed for
-intra-package use.
+Intra-package usage is explicit. Files do not see sibling declarations
+implicitly; they import package-visible (`public`) symbols explicitly using the
+same import form as everywhere else.
 
 ```
-// auth/token.lang
-function validate(t: Token) -> bool { ... }
+// auth/token.lang0
+public function validate(t: Token) -> bool { ... }
 
-// auth/password.lang
+// auth/password.lang0
+import platform/auth { validate, Token }
+
 function check(pw: string, t: Token) -> bool {
     validate(t)    // fine — same package
     ...
 }
 
-// auth/crypto/encrypt.lang (no PACKAGE.lang → part of auth)
-function encrypt(data: string) -> string { ... }
-
-// auth/token.lang
-function seal(t: Token) -> string {
-    encrypt(t.signature)    // fine — crypto/ files are part of auth package
-    ...
-}
+// auth/crypto/encrypt.lang0
+function encrypt(data: string) -> string { ... }   // file-private
 ```
 
 ---
@@ -558,23 +557,22 @@ function seal(t: Token) -> string {
 
 ### Test Files
 
-Tests live in separate `_test.lang` files. Same directory as the source. The
-compiler rejects `test` blocks in non-test files.
+Tests live in separate `*.test.lang0` files. Same directory as the source.
+`public` declarations are forbidden in test files, and test files are not
+importable.
 
 ```
 auth/
-  token.lang
-  token_test.lang
-  password.lang
-  password_test.lang
+  token.lang0
+  token.test.lang0
+  password.lang0
+  password.test.lang0
 ```
-
-Test files can access all package-internal symbols.
 
 ### Syntax
 
 ```
-// token_test.lang
+// token.test.lang0
 
 group Token.parse {
     test "handles valid JWT" {
@@ -623,7 +621,7 @@ No assertion libraries. No `assertEqual`, `expect().toBe()`. Just `assert`.
 Functions. No framework, no decorators, no dependency injection.
 
 ```
-// testutil/auth.lang (with PACKAGE.lang exporting these)
+// testutil/auth.lang0 (with PACKAGE.lang0 exporting these)
 
 public function make_token(user_id: i64) -> Token {
     return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)
@@ -631,11 +629,11 @@ public function make_token(user_id: i64) -> Token {
 ```
 
 ```
-// token_test.lang
-import testutil/auth
+// token.test.lang0
+import testutil/auth { make_token }
 
 test "token contains user id" {
-    token := auth.make_token(42)
+    token := make_token(42)
     assert token.user_id == 42
 }
 ```
@@ -646,9 +644,9 @@ Cleanup is handled by deterministic resource cleanup (ARC + destructors). No
 ### Test Output
 
 ```
-$ yourlang test platform/auth/
+$ lang0 test platform/auth/
 
-platform/auth/token_test.lang
+platform/auth/token.test.lang0
   Token.parse
     ok   handles valid JWT (1ms)
     ok   rejects malformed input (0ms)
@@ -660,7 +658,7 @@ platform/auth/token_test.lang
     assert status matches TokenExpired
            |      |
            OK     TokenExpired
-    at: token_test.lang:28
+    at: token.test.lang0:28
 
 3 passed, 1 failed
 ```
@@ -724,19 +722,19 @@ No syntax alternatives. No feature overlaps.
 Single binary. All capabilities built in.
 
 ```
-yourlang build .        # compile (strict: rejects unformatted code)
-yourlang build --draft  # auto-fix then compile (development mode)
-yourlang check .        # type-check only, no codegen (fastest feedback)
-yourlang fix .          # auto-fix all fixable issues
-yourlang fmt .          # format only (subset of fix)
-yourlang test .         # run tests
-yourlang lsp            # language server
-yourlang doc .          # generate documentation
+lang0 build .        # compile (strict: rejects unformatted code)
+lang0 build --draft  # auto-fix then compile (development mode)
+lang0 check .        # type-check only, no codegen (fastest feedback)
+lang0 fix .          # auto-fix all fixable issues
+lang0 fmt .          # format only (subset of fix)
+lang0 test .         # run tests
+lang0 lsp            # language server
+lang0 doc .          # generate documentation
 ```
 
 ### Fix Mode
 
-`yourlang fix` auto-corrects everything with exactly one correct fix:
+`lang0 fix` auto-corrects everything with exactly one correct fix:
 
 - Formatting, import sorting, unused import removal, missing trailing commas,
   wrong naming convention (rename across file), unnecessary type annotations.
@@ -751,10 +749,10 @@ Built into the compiler, not a separate tool.
 
 ### Build Modes
 
-- `yourlang build .` — strict. Rejects unfixed code. Used in CI.
-- `yourlang build --draft .` — runs `fix` implicitly before compiling. Used
-  during development.
-- `yourlang check .` — type-check only, no codegen. Used by LSP for real-time
+- `lang0 build .` — strict. Rejects unfixed code. Used in CI.
+- `lang0 build --draft .` — runs `fix` implicitly before compiling. Used during
+  development.
+- `lang0 check .` — type-check only, no codegen. Used by LSP for real-time
   feedback. Target: <100ms incremental.
 
 ---
@@ -769,7 +767,9 @@ ever needed.
 
 ### Compilation Units
 
-File-level. Each `.lang` file compiles independently. Enables:
+Parsing is file-level and independent. Typechecking and visibility resolution
+are package-level. This preserves granular incremental work while keeping
+cross-file semantics explicit and deterministic.
 
 - Granular caching (change one file, recompile one file).
 - Parallelism (files compile in parallel).
@@ -795,41 +795,49 @@ mechanically derived.
 
 Gazelle plugin logic:
 
-1. Walk directory tree. A directory with `PACKAGE.lang` is a target.
-2. Collect all `.lang` files in the directory and subdirectories without their
-   own `PACKAGE.lang` → `srcs`.
-3. Collect `_test.lang` files → separate `yourlang_test` target.
-4. Parse `import` statements → `deps`.
-5. Map `import platform/foo/bar` → `//platform/foo/bar`.
+1. Walk directory tree. A directory with `PACKAGE.lang0` is a package target.
+2. Collect package files under that root:
+   - `*.lang0` excluding `*.bin.lang0`, `*.test.lang0`, and `PACKAGE.lang0` as
+     library source files.
+   - include `PACKAGE.lang0` manifest in package metadata.
+3. Collect `*.bin.lang0` files → `lang0_binary` targets.
+4. Collect `*.test.lang0` files → `lang0_test` targets.
+5. Parse `import` statements and map import path to target deps.
 
 No heuristics. No configuration file. No import resolution algorithm.
 
 ### Target Mapping
 
 ```
-# One directory (with PACKAGE.lang) = one yourlang_library target
+# One package root (with PACKAGE.lang0) = one lang0_library target
 
-yourlang_library(
+lang0_library(
     name = "auth",
     srcs = [
-        "PACKAGE.lang",
-        "token.lang",
-        "password.lang",
-        "crypto/encrypt.lang",     # subdir without PACKAGE.lang
-        "crypto/hash.lang",
+        "token.lang0",
+        "password.lang0",
+        "crypto/encrypt.lang0",     # subdir without PACKAGE.lang0
+        "crypto/hash.lang0",
     ],
+    manifest = "PACKAGE.lang0",
     deps = [
         "//platform/auth/oauth",
-        "@yourlang_std//time",
+        "@lang0_std//time",
     ],
     visibility = ["//visibility:public"],
 )
 
-yourlang_test(
+lang0_binary(
+    name = "auth_server",
+    src = "server.bin.lang0",
+    deps = [":auth"],
+)
+
+lang0_test(
     name = "auth_test",
     srcs = [
-        "token_test.lang",
-        "password_test.lang",
+        "token.test.lang0",
+        "password.test.lang0",
     ],
     deps = [":auth"],
 )
@@ -849,7 +857,8 @@ yourlang_test(
 - File-level compilation units → granular action caching.
 - Deterministic output → remote cache hits across machines.
 - No hidden dependencies → build graph is correct by construction.
-- `PACKAGE.lang` as manifest → Gazelle plugin is trivial (~200 lines).
+- `PACKAGE.lang0` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
+  Gazelle plugin logic deterministic and small.
 - No transitive header includes, no implicit prelude (or a fixed one) → `deps`
   is minimal and precise.
 
