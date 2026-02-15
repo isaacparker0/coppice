@@ -27,7 +27,11 @@ pub struct CheckedTarget {
 
 pub enum CheckFileError {
     ReadSource { path: String, error: io::Error },
+    InvalidWorkspaceRoot { path: String, error: io::Error },
+    WorkspaceRootNotDirectory { path: String },
+    WorkspaceRootMissingManifest { path: String },
     InvalidCheckTarget,
+    TargetOutsideWorkspace,
     PackageNotFound,
     WorkspaceDiscoveryFailed(Vec<DiscoveryError>),
 }
@@ -40,21 +44,71 @@ struct ParsedUnit {
 }
 
 pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
+    check_file_with_workspace_root(path, None)
+}
+
+pub fn check_file_with_workspace_root(
+    path: &str,
+    workspace_root_override: Option<&str>,
+) -> Result<CheckedTarget, CheckFileError> {
+    let current_directory =
+        std::env::current_dir().map_err(|error| CheckFileError::ReadSource {
+            path: ".".to_string(),
+            error,
+        })?;
+    let workspace_root_display =
+        workspace_root_override.map_or_else(|| ".".to_string(), std::string::ToString::to_string);
+    let workspace_root = if let Some(root) = workspace_root_override {
+        let parsed_root = PathBuf::from(root);
+        if parsed_root.is_absolute() {
+            parsed_root
+        } else {
+            current_directory.join(parsed_root)
+        }
+    } else {
+        current_directory
+    };
+    let workspace_root_metadata =
+        fs::metadata(&workspace_root).map_err(|error| CheckFileError::InvalidWorkspaceRoot {
+            path: workspace_root_display.clone(),
+            error,
+        })?;
+    if !workspace_root_metadata.is_dir() {
+        return Err(CheckFileError::WorkspaceRootNotDirectory {
+            path: workspace_root_display.clone(),
+        });
+    }
+    if !workspace_root.join("PACKAGE.coppice").is_file() {
+        return Err(CheckFileError::WorkspaceRootMissingManifest {
+            path: workspace_root_display,
+        });
+    }
+
     let target_path = PathBuf::from(path);
-    let metadata = fs::metadata(&target_path).map_err(|error| CheckFileError::ReadSource {
-        path: path.to_string(),
-        error,
-    })?;
+    let absolute_target_path = if target_path.is_absolute() {
+        target_path.clone()
+    } else {
+        workspace_root.join(&target_path)
+    };
+    let metadata =
+        fs::metadata(&absolute_target_path).map_err(|error| CheckFileError::ReadSource {
+            path: path.to_string(),
+            error,
+        })?;
     if !metadata.is_file() && !metadata.is_dir() {
         return Err(CheckFileError::InvalidCheckTarget);
     }
-    let diagnostic_display_base = if metadata.is_dir() {
-        target_path.clone()
-    } else {
-        target_path.parent().unwrap_or(Path::new("")).to_path_buf()
-    };
+    if !absolute_target_path.starts_with(&workspace_root) {
+        return Err(CheckFileError::TargetOutsideWorkspace);
+    }
 
-    let workspace_root = find_package_root(&target_path).ok_or(CheckFileError::PackageNotFound)?;
+    let diagnostic_display_base = workspace_root.clone();
+
+    if metadata.is_file()
+        && find_owning_package_root(&workspace_root, &absolute_target_path).is_none()
+    {
+        return Err(CheckFileError::PackageNotFound);
+    }
     let workspace =
         discover_workspace(&workspace_root).map_err(CheckFileError::WorkspaceDiscoveryFailed)?;
 
@@ -177,14 +231,14 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
     })
 }
 
-fn find_package_root(target_path: &Path) -> Option<PathBuf> {
-    if target_path.is_dir() {
-        return Some(target_path.to_path_buf());
-    }
+fn find_owning_package_root(workspace_root: &Path, target_path: &Path) -> Option<PathBuf> {
     let mut directory = target_path.parent()?.to_path_buf();
     loop {
         if directory.join("PACKAGE.coppice").is_file() {
             return Some(directory);
+        }
+        if directory == workspace_root {
+            return None;
         }
         match directory.parent() {
             Some(parent) => {

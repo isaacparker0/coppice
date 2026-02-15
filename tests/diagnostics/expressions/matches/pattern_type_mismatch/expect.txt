@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:26: error: matches pattern type 'boolean' is not in target type
+lib.coppice:2:26: error: matches pattern type 'boolean' is not in target type
       return value matches boolean
                            ^

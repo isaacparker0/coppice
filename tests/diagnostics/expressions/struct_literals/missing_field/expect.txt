@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:4:10: error: missing field 'y' in Point literal
+lib.coppice:4:10: error: missing field 'y' in Point literal
       p := Point { x: 1 }
            ^

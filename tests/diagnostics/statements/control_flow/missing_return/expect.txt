@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:1:37: error: missing return in function body
+lib.coppice:1:37: error: missing return in function body
   function maybe(x: boolean) -> int64 {
                                       ^

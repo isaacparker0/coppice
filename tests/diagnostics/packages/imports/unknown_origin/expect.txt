@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:1:1: error: import path must start with import origin 'workspace', 'std/', or 'external/'
+main.coppice:1:1: error: import path must start with import origin 'workspace', 'std/', or 'external/'
   import vendor/uuid { V7 }
   ^

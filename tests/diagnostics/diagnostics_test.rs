@@ -63,8 +63,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     );
     let output = Command::new(compiler)
         .arg("check")
-        .arg("input")
-        .current_dir(&case_directory)
+        .current_dir(&input_directory)
         .output()
         .unwrap();
 

@@ -1,4 +1,4 @@
 # exit: 1
-input/PACKAGE.coppice:1:11: error: exported symbol 'Token' must be declared public
+PACKAGE.coppice:1:11: error: exported symbol 'Token' must be declared public
   exports { Token }
             ^

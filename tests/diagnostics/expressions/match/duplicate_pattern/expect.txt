@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:7:9: error: duplicate match arm for type 'int64'
+lib.coppice:7:9: error: duplicate match arm for type 'int64'
           int64 => 2
           ^

@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:11: error: abort message must be string
+lib.coppice:2:11: error: abort message must be string
       abort(1)
             ^

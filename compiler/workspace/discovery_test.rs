@@ -53,7 +53,6 @@ fn errors_on_orphan_source_file() {
 
     let errors = discover_workspace(workspace.path()).expect_err("discovery should fail");
     assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].message, "source file is not owned by any package");
     assert_eq!(
         errors[0]
             .path

@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:1:1: error: exports declarations are only allowed in PACKAGE.coppice
+lib.coppice:1:1: error: exports declarations are only allowed in PACKAGE.coppice
   exports { Token }
   ^

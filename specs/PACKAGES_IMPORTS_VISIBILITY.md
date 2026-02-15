@@ -68,6 +68,13 @@ All Coppice commands are evaluated relative to workspace root. Invoking
 `coppice` commands outside workspace root is a compile-time error unless a
 workspace root is explicitly provided by CLI flag.
 
+Workspace root validity:
+
+1. Default workspace root is current working directory.
+2. CLI may override with `--workspace-root <path>`.
+3. A workspace root is valid only if `PACKAGE.coppice` exists at that root.
+4. If workspace root is invalid, command fails before package discovery.
+
 Any `.coppice` source file not owned by any package (no ancestor
 `PACKAGE.coppice` up to workspace root) is a compile error.
 
@@ -85,6 +92,7 @@ Rationale:
 1. preserves one compilation/dependency model (package-centered)
 2. keeps mapping to Bazel package targets deterministic
 3. avoids introducing a second "standalone file mode" with different semantics
+4. keeps workspace scope explicit and reviewable
 
 ### Example
 

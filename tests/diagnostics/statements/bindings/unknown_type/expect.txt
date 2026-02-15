@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:8: error: unknown type 'foo'
+lib.coppice:2:8: error: unknown type 'foo'
       x: foo := 1
          ^

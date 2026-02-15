@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:1:6: error: type name must be PascalCase
+lib.coppice:1:6: error: type name must be PascalCase
   type userProfile :: struct {
        ^

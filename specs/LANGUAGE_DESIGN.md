@@ -822,13 +822,24 @@ Built into the compiler, not a separate tool.
 Command invocation policy:
 
 - Commands are run from workspace root.
-- Invoking from outside workspace root is an error unless workspace root is
-  explicitly provided.
-- `check <path>` accepts a file or directory path.
+- Workspace root is explicit:
+  - default: current working directory
+  - override: `--workspace-root <path>`
+- A valid workspace root must contain `PACKAGE.coppice` at its root.
+- Invoking with an invalid workspace root is a compile-time error.
+- `check` (no path) is canonical and equivalent to `check .`.
+- `check <path>` accepts a file or directory path resolved relative to workspace
+  root.
 - If `<path>` is a source file (including `.bin.coppice`/`.test.coppice`), the
   compiler resolves its owning package and checks that package.
 - If a source file has no owning package, `check` fails with a package ownership
   error.
+
+Intent:
+
+- one canonical default (`check`)
+- explicit workspace boundary (no implicit root searching)
+- deterministic build graph scope
 
 ---
 

@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:16: error: not operator requires boolean operand
+lib.coppice:2:16: error: not operator requires boolean operand
       return not 1
                  ^

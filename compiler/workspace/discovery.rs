@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use compiler__source::{FileId, FileRole, SourceFile, compare_paths};
@@ -102,7 +103,16 @@ fn collect_workspace_entries(
     for entry in entries {
         let mut file_type = entry.file_type()?;
         if file_type.is_symlink() {
-            let metadata = fs::metadata(entry.path())?;
+            let metadata = match fs::metadata(entry.path()) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    // Ignore dangling symlinks while walking the workspace tree.
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error);
+                }
+            };
             file_type = metadata.file_type();
         }
 

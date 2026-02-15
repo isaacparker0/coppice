@@ -1,4 +1,4 @@
 # exit: 1
-input/two.coppice:1:8: error: duplicate package-visible symbol 'token'
+two.coppice:1:8: error: duplicate package-visible symbol 'token'
   public function token() -> nil {
          ^

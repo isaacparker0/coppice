@@ -15,7 +15,15 @@ bazel test //...
 ### Run the CLI
 
 ```bash
-bazel run //compiler/cli:main --run_in_cwd -- check path/to/file.coppice
+bazel run --run_in_cwd //compiler/cli:main -- \
+  --workspace-root path/to/workspace \
+  check
+```
+
+```bash
+bazel run --run_in_cwd //compiler/cli:main -- \
+  --workspace-root path/to/workspace \
+  check path/inside/workspace/file.coppice
 ```
 
 ### Update diagnostic test snapshots

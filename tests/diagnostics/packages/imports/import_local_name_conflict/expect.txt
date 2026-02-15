@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:3:6: error: top-level declaration 'Token' conflicts with imported name
+main.coppice:3:6: error: top-level declaration 'Token' conflicts with imported name
   type Token :: struct {}
        ^

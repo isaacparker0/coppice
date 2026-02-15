@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:5: error: variable name must be camelCase
+lib.coppice:2:5: error: variable name must be camelCase
       __value := 1
       ^

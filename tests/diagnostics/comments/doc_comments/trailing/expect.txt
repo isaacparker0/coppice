@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:4:1: error: doc comment must document a declaration
+lib.coppice:4:1: error: doc comment must document a declaration
   /// Trailing docs are invalid.
   ^

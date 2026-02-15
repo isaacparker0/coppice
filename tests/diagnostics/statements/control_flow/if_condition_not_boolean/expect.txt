@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:8: error: if condition must be boolean
+lib.coppice:2:8: error: if condition must be boolean
       if 1 {
          ^

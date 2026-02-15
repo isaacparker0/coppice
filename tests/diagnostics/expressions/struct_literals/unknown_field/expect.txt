@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:4:29: error: unknown field 'y' on Point
+lib.coppice:4:29: error: unknown field 'y' on Point
       _point := Point { x: 1, y: 1 }
                               ^

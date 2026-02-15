@@ -1,4 +1,4 @@
 # exit: 1
-input/PACKAGE.coppice:1:1: error: PACKAGE.coppice may only contain exports declarations
+PACKAGE.coppice:1:1: error: PACKAGE.coppice may only contain exports declarations
   ANSWER := 42
   ^

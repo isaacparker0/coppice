@@ -1,4 +1,4 @@
 # exit: 1
-input/lib.coppice:2:5: error: expected expression
+lib.coppice:2:5: error: expected expression
       return
       ^

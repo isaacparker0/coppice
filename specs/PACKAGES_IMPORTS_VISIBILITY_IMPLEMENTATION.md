@@ -66,7 +66,11 @@ Each phase must keep compiler behavior deterministic and testable.
 Planned compile pipeline for `check <path>`:
 
 1. **Workspace Discovery**
-   - Determine package root and file set.
+   - Resolve workspace root:
+     - default current working directory
+     - optional `--workspace-root <path>` override
+   - Validate workspace root (`PACKAGE.coppice` must exist at root).
+   - Determine package/file set under workspace root.
 2. **Lex/Parse**
    - Parse all `.coppice` files in each package.
    - Parse `PACKAGE.coppice` manifest syntax.
@@ -340,18 +344,24 @@ Goals:
 Tasks:
 
 1. CLI:
+   - `check` is canonical and equivalent to `check .`.
    - `check <path>` accepts file or package directory, relative to workspace
      root.
    - if file path is provided (including `.bin.coppice` and `.test.coppice`),
      resolve owning package and check package.
    - if no owning package exists (no ancestor `PACKAGE.coppice`), emit a
      package-ownership compile error.
-   - invocation outside workspace root is an error unless workspace root is
-     explicitly provided.
+   - default workspace root is current working directory.
+   - optional `--workspace-root <path>` overrides workspace root.
+   - workspace root must contain `PACKAGE.coppice` at root; otherwise emit a
+     clear workspace-root error before package discovery.
+   - invocation outside workspace root is an error unless path is rebased via
+     explicit workspace root.
 2. Fixture runner:
    - remove hardcoded `input/main.coppice`.
-   - run check against `input/` package root.
+   - run compiler from `input/` as cwd and invoke `check`.
    - allow multi-file fixture trees.
+   - require `input/PACKAGE.coppice` as explicit fixture workspace root marker.
 3. Update `tests/diagnostics/README.md` rules to include multi-file fixture
    structure.
 

@@ -1,0 +1,2 @@
+# exit: 1
+.: error: not a Coppice workspace root (missing PACKAGE.coppice)

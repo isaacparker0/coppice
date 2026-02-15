@@ -2,28 +2,32 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__driver::{CheckFileError, check_file};
+use compiler__driver::{CheckFileError, check_file_with_workspace_root};
 use compiler__source::Span;
 
 #[derive(Parser)]
 #[command(version)]
 struct CommandLine {
+    #[arg(long, global = true)]
+    workspace_root: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand)]
 enum Command {
-    Check { path: String },
+    Check { path: Option<String> },
 }
 
 fn main() {
     let command_line = CommandLine::parse();
+    let workspace_root = command_line.workspace_root.as_deref();
     let path = match command_line.command {
-        Command::Check { path } => path,
+        Command::Check { path } => path.unwrap_or_else(|| ".".to_string()),
     };
 
-    match check_file(&path) {
+    match check_file_with_workspace_root(&path, workspace_root) {
         Ok(checked_target) => {
             if checked_target.diagnostics.is_empty() {
                 println!("ok");
@@ -43,8 +47,24 @@ fn main() {
             eprintln!("{path}: error: {error}");
             process::exit(1);
         }
+        Err(CheckFileError::InvalidWorkspaceRoot { path, error }) => {
+            eprintln!("{path}: error: invalid workspace root: {error}");
+            process::exit(1);
+        }
+        Err(CheckFileError::WorkspaceRootNotDirectory { path }) => {
+            eprintln!("{path}: error: workspace root must be a directory");
+            process::exit(1);
+        }
+        Err(CheckFileError::WorkspaceRootMissingManifest { path }) => {
+            eprintln!("{path}: error: not a Coppice workspace root (missing PACKAGE.coppice)");
+            process::exit(1);
+        }
         Err(CheckFileError::InvalidCheckTarget) => {
             eprintln!("{path}: error: expected a file or directory path");
+            process::exit(1);
+        }
+        Err(CheckFileError::TargetOutsideWorkspace) => {
+            eprintln!("{path}: error: target is outside the current workspace root");
             process::exit(1);
         }
         Err(CheckFileError::PackageNotFound) => {
