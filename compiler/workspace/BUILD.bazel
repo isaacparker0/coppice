@@ -1,3 +1,4 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
 load("//tools/bazel/macros:rust.bzl", "rust_library", "rust_test")
 
 rust_library(
@@ -21,4 +22,23 @@ rust_test(
         ":workspace",
         "//compiler/source",
     ],
+)
+
+dependency_enforcement_test(
+    name = "workspace_forbidden_dependencies",
+    forbidden = [
+        "//compiler/binding",
+        "//compiler/diagnostics",
+        "//compiler/driver",
+        "//compiler/exports",
+        "//compiler/file_role_rules",
+        "//compiler/package_graph",
+        "//compiler/package_symbols",
+        "//compiler/parsing",
+        "//compiler/symbols",
+        "//compiler/syntax",
+        "//compiler/typecheck",
+        "//compiler/visibility",
+    ],
+    target = ":workspace",
 )

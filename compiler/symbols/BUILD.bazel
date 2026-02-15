@@ -1,3 +1,4 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
@@ -9,4 +10,22 @@ rust_library(
         "//compiler/source",
         "//compiler/syntax",
     ],
+)
+
+dependency_enforcement_test(
+    name = "symbols_forbidden_dependencies",
+    forbidden = [
+        "//compiler/binding",
+        "//compiler/driver",
+        "//compiler/exports",
+        "//compiler/file_role_rules",
+        "//compiler/package_graph",
+        "//compiler/package_symbols",
+        "//compiler/packages",
+        "//compiler/parsing",
+        "//compiler/typecheck",
+        "//compiler/visibility",
+        "//compiler/workspace",
+    ],
+    target = ":symbols",
 )

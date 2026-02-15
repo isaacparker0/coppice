@@ -179,6 +179,41 @@ These are normative target invariants:
 
 ---
 
+## Dependency Invariant Enforcement Mechanism
+
+Dependency graph invariants are enforced with Bazel analysis-time tests:
+`dependency_enforcement_test` in
+`tools/bazel/aspects/dependency_enforcement.bzl`.
+
+Mechanism details:
+
+1. The rule applies an aspect with `attr_aspects = ["*"]` to compute transitive
+   target reachability.
+2. Each invariant declares a `target` and `forbidden` label list.
+3. Analysis fails if a forbidden label is reachable, with one concrete
+   dependency path in the failure output.
+4. There is no exception/allowlist mechanism; invariants are hard fail once
+   added.
+
+Placement policy:
+
+1. Invariants are colocated in the relevant `compiler/*/BUILD.bazel` file.
+2. Do not maintain a global registry of invariants.
+3. One target may use a single `*_forbidden_dependencies` test and grow its
+   `forbidden` list over time.
+
+Example:
+
+```starlark
+dependency_enforcement_test(
+    name = "syntax_forbidden_dependencies",
+    target = ":syntax",
+    forbidden = ["//compiler/typecheck"],
+)
+```
+
+---
+
 ## Why `package_symbols` Is Separate From `packages`
 
 `compiler/packages` owns package identity primitives (for example `PackageId`).
@@ -235,13 +270,15 @@ sufficient information and no duplication.
 
 1. Switch typecheck to semantic IR.
 2. Remove `compiler/syntax` dependency from `compiler/typecheck`.
-3. Enforce dependency invariant in BUILD/CI.
+3. Add colocated `dependency_enforcement_test` invariant and enforce in CI.
 
 ## Phase E: Enforcement
 
-1. Bazel deps enforce intended direction.
-2. Add CI guardrails preventing forbidden imports (for example
-   `typecheck -> syntax`).
+1. Encode phase-boundary invariants as colocated `dependency_enforcement_test`
+   targets.
+2. Keep CI running these invariants under `bazel test`.
+3. Add each invariant in the same change that completes the corresponding
+   migration step.
 
 ---
 
