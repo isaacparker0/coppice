@@ -1,12 +1,9 @@
-use std::fs;
-use std::path::Path;
 use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__analysis::check_file;
-use compiler__parsing::parse_file;
-use compiler__source::{FileRole, Span};
+use compiler__driver::{CheckFileError, check_file};
+use compiler__source::Span;
 
 #[derive(Parser)]
 #[command(version)]
@@ -25,35 +22,29 @@ fn main() {
     let path = match command_line.command {
         Command::Check { file } => file,
     };
-    let source = match fs::read_to_string(&path) {
-        Ok(source) => source,
-        Err(error) => {
-            eprintln!("{path}: error: {error}");
-            process::exit(1);
-        }
-    };
 
-    let Some(role) = FileRole::from_path(Path::new(&path)) else {
-        eprintln!("{path}: error: expected a .coppice source file");
-        process::exit(1);
-    };
-
-    match parse_file(&source, role) {
-        Ok(file) => {
-            let diagnostics = check_file(&file);
-            if diagnostics.is_empty() {
+    match check_file(&path) {
+        Ok(checked_file) => {
+            if checked_file.diagnostics.is_empty() {
                 println!("ok");
             } else {
-                for diagnostic in diagnostics {
-                    print_diagnostic(&path, &source, &diagnostic.message, &diagnostic.span);
+                for diagnostic in checked_file.diagnostics {
+                    print_diagnostic(
+                        &path,
+                        &checked_file.source,
+                        &diagnostic.message,
+                        &diagnostic.span,
+                    );
                 }
                 process::exit(1);
             }
         }
-        Err(diagnostics) => {
-            for diagnostic in diagnostics {
-                print_diagnostic(&path, &source, &diagnostic.message, &diagnostic.span);
-            }
+        Err(CheckFileError::ReadSource(error)) => {
+            eprintln!("{path}: error: {error}");
+            process::exit(1);
+        }
+        Err(CheckFileError::InvalidSourceFileExtension) => {
+            eprintln!("{path}: error: expected a .coppice source file");
             process::exit(1);
         }
     }

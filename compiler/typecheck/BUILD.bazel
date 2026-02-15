@@ -1,9 +1,8 @@
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "analysis",
+    name = "typecheck",
     srcs = [
-        "file_role_rules.rs",
         "lib.rs",
         "type_checker/assignability.rs",
         "type_checker/declarations.rs",

@@ -1,0 +1,12 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "file_role_rules",
+    srcs = ["lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/source",
+        "//compiler/syntax",
+    ],
+)

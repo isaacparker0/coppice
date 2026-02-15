@@ -5,8 +5,7 @@ rust_binary(
     srcs = ["main.rs"],
     visibility = ["//visibility:public"],
     deps = [
-        "//compiler/analysis",
-        "//compiler/parsing",
+        "//compiler/driver",
         "//compiler/source",
         "@crates//:clap",
     ],

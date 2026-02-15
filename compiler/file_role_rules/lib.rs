@@ -14,7 +14,7 @@ use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, V
 /// Keeping role-conditional rules in one owner pass avoids brittle cross-pass
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
-pub fn check_file_role_rules(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+pub fn check_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
     check_exports_declaration_roles(file, diagnostics);
     check_public_declaration_roles(file, diagnostics);
     check_main_function_roles(file, diagnostics);

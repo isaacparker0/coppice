@@ -1,0 +1,15 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "driver",
+    srcs = ["lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/file_role_rules",
+        "//compiler/parsing",
+        "//compiler/resolution",
+        "//compiler/source",
+        "//compiler/typecheck",
+    ],
+)
