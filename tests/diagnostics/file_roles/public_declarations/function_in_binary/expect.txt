@@ -1,0 +1,4 @@
+# exit: 1
+input/main.bin.coppice:5:8: error: public declarations are not allowed in .bin.coppice files
+  public function helper() -> nil {
+         ^

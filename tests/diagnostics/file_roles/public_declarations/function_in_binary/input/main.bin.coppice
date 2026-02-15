@@ -1,0 +1,7 @@
+function main() -> nil {
+    return nil
+}
+
+public function helper() -> nil {
+    return nil
+}

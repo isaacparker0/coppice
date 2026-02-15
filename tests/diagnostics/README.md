@@ -10,8 +10,9 @@ tests/diagnostics/<area>/<feature>/<case>/
 
 ## Layout rules
 
-1. `<area>` is a broad syntactic category (e.g. `declarations`, `statements`,
-   `expressions`, `naming`).
+1. `<area>` is a broad language subsystem (syntax or semantic policy), for
+   example `declarations`, `statements`, `expressions`, `naming`, `file_roles`,
+   `packages`.
 2. `<feature>` is the feature family under that area (e.g. `imports`,
    `control_flow`, `literals`, `bindings`).
 3. `<case>` is the scenario. Use `minimal_valid` for the canonical positive case

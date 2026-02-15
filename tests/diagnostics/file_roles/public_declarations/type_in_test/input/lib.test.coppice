@@ -1,0 +1,3 @@
+public type Helper :: struct {
+    value: int64,
+}

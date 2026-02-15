@@ -1,0 +1,5 @@
+function main() -> nil {
+    return nil
+}
+
+public ANSWER := 42

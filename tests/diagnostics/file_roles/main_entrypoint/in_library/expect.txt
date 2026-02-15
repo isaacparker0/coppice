@@ -1,0 +1,4 @@
+# exit: 1
+input/lib.coppice:1:10: error: main is only allowed in .bin.coppice files
+  function main() -> nil {
+           ^

@@ -1,0 +1,4 @@
+# exit: 1
+input/main.bin.coppice:1:1: error: .bin.coppice files must declare exactly one main function
+  function run() -> nil {
+  ^

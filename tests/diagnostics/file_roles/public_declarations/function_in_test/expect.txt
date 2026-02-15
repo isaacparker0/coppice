@@ -1,0 +1,4 @@
+# exit: 1
+input/lib.test.coppice:1:8: error: public declarations are not allowed in .test.coppice files
+  public function run() -> nil {
+         ^
