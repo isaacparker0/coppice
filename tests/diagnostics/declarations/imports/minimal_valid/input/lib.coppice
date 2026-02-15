@@ -1,1 +1,6 @@
 import workspace { Token, Session as AuthSession }
+
+type AuthState :: struct {
+    token: Token,
+    session: AuthSession
+}

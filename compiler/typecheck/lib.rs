@@ -18,11 +18,33 @@ mod type_narrowing;
 mod types;
 mod unused_bindings;
 
-pub fn check_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
-    check_parsed_file(file, diagnostics);
+#[derive(Clone)]
+pub enum ImportedSymbol {
+    Type(TypeDeclaration),
+    Function(FunctionDeclaration),
+    Constant(ConstantDeclaration),
 }
 
-fn check_parsed_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+#[derive(Clone)]
+pub struct ImportedBinding {
+    pub local_name: String,
+    pub span: Span,
+    pub symbol: ImportedSymbol,
+}
+
+pub fn check_file(
+    file: &ParsedFile,
+    imported_bindings: &[ImportedBinding],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    check_parsed_file(file, imported_bindings, diagnostics);
+}
+
+fn check_parsed_file(
+    file: &ParsedFile,
+    imported_bindings: &[ImportedBinding],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
     let mut function_declarations = Vec::new();
@@ -43,6 +65,7 @@ fn check_parsed_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
         &type_declarations,
         &constant_declarations,
         &function_declarations,
+        imported_bindings,
     );
 }
 
@@ -51,9 +74,12 @@ fn check_declarations(
     type_declarations: &[TypeDeclaration],
     constant_declarations: &[ConstantDeclaration],
     function_declarations: &[FunctionDeclaration],
+    imported_bindings: &[ImportedBinding],
 ) {
-    let mut type_checker = TypeChecker::new(diagnostics);
+    let mut type_checker = TypeChecker::new(imported_bindings, diagnostics);
+    type_checker.collect_imported_type_declarations();
     type_checker.collect_type_declarations(type_declarations);
+    type_checker.collect_imported_function_signatures();
     type_checker.collect_function_signatures(function_declarations);
     type_checker.collect_method_signatures(type_declarations);
     type_checker.check_constant_declarations(constant_declarations);
@@ -61,6 +87,7 @@ fn check_declarations(
         type_checker.check_function(function);
     }
     type_checker.check_methods(type_declarations);
+    type_checker.check_unused_imports();
 }
 
 struct VariableInfo {
@@ -74,10 +101,17 @@ struct ConstantInfo {
     value_type: Type,
 }
 
+struct ImportedBindingInfo {
+    symbol: ImportedSymbol,
+    span: Span,
+    used: bool,
+}
+
 struct TypeInfo {
     kind: TypeKind,
 }
 
+#[derive(Clone)]
 enum TypeKind {
     Struct { fields: Vec<(String, Type)> },
     Union { variants: Vec<Type> },
@@ -104,6 +138,9 @@ struct TypeChecker<'a> {
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
+    imported_constants: HashMap<String, Type>,
+    imported_functions: HashMap<String, FunctionInfo>,
+    imported_bindings: HashMap<String, ImportedBindingInfo>,
     methods: HashMap<MethodKey, MethodInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     diagnostics: &'a mut Vec<Diagnostic>,
@@ -136,16 +173,36 @@ trait StatementSpan {
 }
 
 impl<'a> TypeChecker<'a> {
-    fn new(diagnostics: &'a mut Vec<Diagnostic>) -> Self {
+    fn new(imported_bindings: &[ImportedBinding], diagnostics: &'a mut Vec<Diagnostic>) -> Self {
+        let mut imported_binding_map = HashMap::new();
+        for imported in imported_bindings {
+            imported_binding_map.insert(
+                imported.local_name.clone(),
+                ImportedBindingInfo {
+                    symbol: imported.symbol.clone(),
+                    span: imported.span.clone(),
+                    used: false,
+                },
+            );
+        }
         Self {
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: HashMap::new(),
+            imported_constants: HashMap::new(),
+            imported_functions: HashMap::new(),
+            imported_bindings: imported_binding_map,
             methods: HashMap::new(),
             scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
             loop_depth: 0,
+        }
+    }
+
+    fn mark_import_used(&mut self, name: &str) {
+        if let Some(binding) = self.imported_bindings.get_mut(name) {
+            binding.used = true;
         }
     }
 
@@ -180,6 +237,13 @@ impl<'a> TypeChecker<'a> {
         if let Some(info) = self.constants.get(name) {
             return info.value_type.clone();
         }
+        if let Some(value_type) = self.imported_constants.get(name).cloned() {
+            self.mark_import_used(name);
+            return value_type;
+        }
+        if self.imported_bindings.contains_key(name) {
+            self.mark_import_used(name);
+        }
         self.error(format!("unknown name '{name}'"), span.clone());
         Type::Unknown
     }
@@ -207,11 +271,20 @@ impl<'a> TypeChecker<'a> {
                 resolved.push(builtin);
                 continue;
             }
-            if let Some(info) = self.types.get(name) {
-                match &info.kind {
+            if let Some(kind) = self.types.get(name).map(|info| info.kind.clone()) {
+                if matches!(
+                    self.imported_bindings.get(name),
+                    Some(ImportedBindingInfo {
+                        symbol: ImportedSymbol::Type(_),
+                        ..
+                    })
+                ) {
+                    self.mark_import_used(name);
+                }
+                match kind {
                     TypeKind::Struct { .. } => resolved.push(Type::Named(name.to_string())),
                     TypeKind::Union { variants } => {
-                        resolved.push(Self::normalize_union(variants.clone()));
+                        resolved.push(Self::normalize_union(variants));
                     }
                 }
                 continue;
@@ -228,6 +301,18 @@ impl<'a> TypeChecker<'a> {
             return resolved.remove(0);
         }
         Self::normalize_union(resolved)
+    }
+
+    fn check_unused_imports(&mut self) {
+        let mut unused = Vec::new();
+        for (name, binding) in &self.imported_bindings {
+            if !binding.used {
+                unused.push((name.clone(), binding.span.clone()));
+            }
+        }
+        for (name, span) in unused {
+            self.error(format!("unused import '{name}'"), span);
+        }
     }
 }
 

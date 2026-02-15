@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::types::Type;
 use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
@@ -7,6 +8,113 @@ use compiler__syntax::{
 use super::{FunctionInfo, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind};
 
 impl TypeChecker<'_> {
+    pub(super) fn collect_imported_type_declarations(&mut self) {
+        let imported_type_bindings: Vec<(String, TypeDeclaration)> = self
+            .imported_bindings
+            .iter()
+            .filter_map(|(local_name, binding)| match &binding.symbol {
+                super::ImportedSymbol::Type(type_declaration) => {
+                    Some((local_name.clone(), type_declaration.clone()))
+                }
+                super::ImportedSymbol::Function(_) | super::ImportedSymbol::Constant(_) => None,
+            })
+            .collect();
+
+        for (local_name, type_declaration) in &imported_type_bindings {
+            if self.types.contains_key(local_name) {
+                continue;
+            }
+            let kind = match &type_declaration.kind {
+                TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
+                TypeDeclarationKind::Union { .. } => TypeKind::Union {
+                    variants: Vec::new(),
+                },
+            };
+            self.types.insert(local_name.clone(), TypeInfo { kind });
+        }
+
+        for (local_name, type_declaration) in imported_type_bindings {
+            match &type_declaration.kind {
+                TypeDeclarationKind::Struct { fields, .. } => {
+                    let mut resolved_fields = Vec::new();
+                    let mut seen = HashSet::new();
+                    for field in fields {
+                        if !seen.insert(field.name.clone()) {
+                            continue;
+                        }
+                        let field_type = self.resolve_type_name(&field.type_name);
+                        resolved_fields.push((field.name.clone(), field_type));
+                    }
+                    if let Some(info) = self.types.get_mut(&local_name) {
+                        info.kind = TypeKind::Struct {
+                            fields: resolved_fields,
+                        };
+                    }
+                }
+                TypeDeclarationKind::Union { variants } => {
+                    let mut resolved_variants = Vec::new();
+                    let mut seen = HashSet::new();
+                    for variant in variants {
+                        if variant.names.len() != 1 {
+                            continue;
+                        }
+                        let variant_type = self.resolve_type_name(variant);
+                        let key = variant_type.display();
+                        if !seen.insert(key) {
+                            continue;
+                        }
+                        resolved_variants.push(variant_type);
+                    }
+                    if let Some(info) = self.types.get_mut(&local_name) {
+                        info.kind = TypeKind::Union {
+                            variants: resolved_variants,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    pub(super) fn collect_imported_function_signatures(&mut self) {
+        let imported_function_bindings: Vec<(String, FunctionDeclaration)> = self
+            .imported_bindings
+            .iter()
+            .filter_map(|(local_name, binding)| match &binding.symbol {
+                super::ImportedSymbol::Function(function) => {
+                    Some((local_name.clone(), function.clone()))
+                }
+                super::ImportedSymbol::Type(_) | super::ImportedSymbol::Constant(_) => None,
+            })
+            .collect();
+
+        for (local_name, function) in imported_function_bindings {
+            let return_type = self.resolve_type_name(&function.return_type);
+            let mut parameter_types = Vec::new();
+            for parameter in &function.parameters {
+                parameter_types.push(self.resolve_type_name(&parameter.type_name));
+            }
+            self.imported_functions.insert(
+                local_name,
+                FunctionInfo {
+                    parameter_types,
+                    return_type,
+                },
+            );
+        }
+
+        let imported_constant_names: Vec<String> = self
+            .imported_bindings
+            .iter()
+            .filter_map(|(local_name, binding)| match &binding.symbol {
+                super::ImportedSymbol::Constant(_) => Some(local_name.clone()),
+                super::ImportedSymbol::Type(_) | super::ImportedSymbol::Function(_) => None,
+            })
+            .collect();
+        for local_name in imported_constant_names {
+            self.imported_constants.insert(local_name, Type::Unknown);
+        }
+    }
+
     pub(super) fn collect_type_declarations(&mut self, types: &[TypeDeclaration]) {
         for type_declaration in types {
             self.check_type_name(&type_declaration.name, &type_declaration.span);

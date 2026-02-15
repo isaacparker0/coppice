@@ -47,7 +47,17 @@ impl TypeChecker<'_> {
                             info.parameter_types.clone(),
                             info.return_type.clone(),
                         )
+                    } else if let Some((parameter_types, return_type)) = self
+                        .imported_functions
+                        .get(name)
+                        .map(|info| (info.parameter_types.clone(), info.return_type.clone()))
+                    {
+                        self.mark_import_used(name);
+                        (name.as_str(), parameter_types, return_type)
                     } else {
+                        if self.imported_bindings.contains_key(name) {
+                            self.mark_import_used(name);
+                        }
                         self.error(format!("unknown function '{name}'"), span.clone());
                         for argument in arguments {
                             self.check_expression(argument);

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,7 @@ use compiler__package_graph as package_graph;
 use compiler__parsing::parse_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
+use compiler__syntax::{Declaration, Visibility};
 use compiler__typecheck as typecheck;
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, discover_workspace};
@@ -205,9 +207,33 @@ pub fn check_file_with_workspace_root(
         }
     }
 
+    let imported_bindings_by_file =
+        build_typecheck_imported_bindings(&parsed_units, &resolved_imports);
+
+    let has_pre_typecheck_errors = !rendered_diagnostics.is_empty();
+    if has_pre_typecheck_errors {
+        rendered_diagnostics.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then(left.span.line.cmp(&right.span.line))
+                .then(left.span.column.cmp(&right.span.column))
+                .then(left.message.cmp(&right.message))
+        });
+        return Ok(CheckedTarget {
+            diagnostics: rendered_diagnostics,
+        });
+    }
+
     for parsed_unit in &parsed_units {
         let mut file_diagnostics = Vec::new();
-        typecheck::check_file(&parsed_unit.parsed, &mut file_diagnostics);
+        let imported_bindings = imported_bindings_by_file
+            .get(&parsed_unit.path)
+            .map_or(&[][..], Vec::as_slice);
+        typecheck::check_file(
+            &parsed_unit.parsed,
+            imported_bindings,
+            &mut file_diagnostics,
+        );
         for diagnostic in file_diagnostics {
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,
@@ -229,6 +255,91 @@ pub fn check_file_with_workspace_root(
     Ok(CheckedTarget {
         diagnostics: rendered_diagnostics,
     })
+}
+
+fn build_typecheck_imported_bindings(
+    parsed_units: &[ParsedUnit],
+    resolved_imports: &[visibility::ResolvedImport],
+) -> BTreeMap<PathBuf, Vec<typecheck::ImportedBinding>> {
+    let mut declaration_by_package_and_name: BTreeMap<(String, String), Declaration> =
+        BTreeMap::new();
+    let mut ordered_units: Vec<&ParsedUnit> = parsed_units.iter().collect();
+    ordered_units.sort_by(|left, right| {
+        left.package_path
+            .cmp(&right.package_path)
+            .then(compare_paths(&left.path, &right.path))
+    });
+
+    for unit in ordered_units {
+        if unit.parsed.role != FileRole::Library {
+            continue;
+        }
+        for declaration in &unit.parsed.declarations {
+            let (name, is_public) = match declaration {
+                Declaration::Type(type_declaration) => (
+                    &type_declaration.name,
+                    type_declaration.visibility == Visibility::Public,
+                ),
+                Declaration::Function(function_declaration) => (
+                    &function_declaration.name,
+                    function_declaration.visibility == Visibility::Public,
+                ),
+                Declaration::Constant(constant_declaration) => (
+                    &constant_declaration.name,
+                    constant_declaration.visibility == Visibility::Public,
+                ),
+                Declaration::Import(_) | Declaration::Exports(_) => {
+                    continue;
+                }
+            };
+            if !is_public {
+                continue;
+            }
+
+            declaration_by_package_and_name
+                .entry((unit.package_path.clone(), name.clone()))
+                .or_insert_with(|| declaration.clone());
+        }
+    }
+
+    let mut imported_by_file: BTreeMap<PathBuf, Vec<typecheck::ImportedBinding>> = BTreeMap::new();
+    for resolved_import in resolved_imports {
+        for binding in &resolved_import.bindings {
+            let key = (
+                resolved_import.target_package_path.clone(),
+                binding.imported_name.clone(),
+            );
+            let Some(declaration) = declaration_by_package_and_name.get(&key) else {
+                continue;
+            };
+
+            let symbol = match declaration {
+                Declaration::Type(type_declaration) => {
+                    typecheck::ImportedSymbol::Type(type_declaration.clone())
+                }
+                Declaration::Function(function_declaration) => {
+                    typecheck::ImportedSymbol::Function(function_declaration.clone())
+                }
+                Declaration::Constant(constant_declaration) => {
+                    typecheck::ImportedSymbol::Constant(constant_declaration.clone())
+                }
+                Declaration::Import(_) | Declaration::Exports(_) => {
+                    continue;
+                }
+            };
+
+            imported_by_file
+                .entry(resolved_import.source_path.clone())
+                .or_default()
+                .push(typecheck::ImportedBinding {
+                    local_name: binding.local_name.clone(),
+                    span: binding.span.clone(),
+                    symbol,
+                });
+        }
+    }
+
+    imported_by_file
 }
 
 fn find_owning_package_root(workspace_root: &Path, target_path: &Path) -> Option<PathBuf> {

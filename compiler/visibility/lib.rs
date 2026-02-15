@@ -8,6 +8,7 @@ use compiler__symbols::{PackageDiagnostic, PackageFile, SymbolsByPackage};
 use compiler__syntax::{Declaration, ImportDeclaration, ImportMember};
 
 pub struct ResolvedImportBinding {
+    pub imported_name: String,
     pub local_name: String,
     pub span: Span,
 }
@@ -132,6 +133,7 @@ fn resolve_import_declaration(
         }
 
         bindings.push(ResolvedImportBinding {
+            imported_name: name.clone(),
             local_name: import_local_name(member).to_string(),
             span: member.alias_span.clone().unwrap_or(member.span.clone()),
         });
@@ -183,6 +185,7 @@ pub fn resolved_bindings_by_file(
             .entry(import.source_path.clone())
             .or_default()
             .extend(import.bindings.iter().map(|binding| ResolvedImportBinding {
+                imported_name: binding.imported_name.clone(),
                 local_name: binding.local_name.clone(),
                 span: binding.span.clone(),
             }));
