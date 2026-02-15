@@ -1,0 +1,4 @@
+# exit: 1
+input/main.coppice:2:32: error: duplicate imported name 'Token'; use an alias
+  import workspace/lib/session { Token }
+                                 ^

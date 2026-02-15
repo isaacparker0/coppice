@@ -15,7 +15,7 @@ semantic checks get mixed into arbitrary phases.
 The immediate design goal is a precise answer to:
 
 1. What belongs in parsing?
-2. What belongs in policy/resolution/typechecking?
+2. What belongs in policy/semantic subpasses/typechecking?
 3. Why file-role checks belong in policy, not parsing.
 
 ---
@@ -32,7 +32,8 @@ Canonical compile pipeline (conceptual):
 3. **Role/Policy Analysis (pre-typecheck)**
    - Validate file-role-dependent language policy.
 4. **Semantic Analysis / Resolution**
-   - Build and validate symbol/import/export/package relationships.
+   - Build and validate symbol/import/export/package relationships via ordered
+     semantic subpasses.
 5. **Typechecking**
    - Validate expression and statement typing semantics.
 6. **Driver**
@@ -81,6 +82,23 @@ This is exactly the responsibility of `compiler/file_role_rules/lib.rs`.
 Owns symbol/package/import/export semantics requiring symbol tables and/or
 multi-file context.
 
+Semantic analysis is split into explicit ownership passes:
+
+1. **Symbol Collection** (`compiler/symbols/*`)
+   - collect per-package declared and package-visible symbol sets
+   - diagnose duplicate package-visible symbols
+2. **Export Validation** (`compiler/exports/*`)
+   - validate `PACKAGE.coppice` `exports` against collected symbols
+3. **Visibility Resolution** (`compiler/visibility/*`)
+   - resolve import package/member targets
+   - enforce import-origin and visibility rules
+4. **Package Graph Validation** (`compiler/package_graph/*`)
+   - build package dependency edges from resolved imports
+   - detect and report import cycles
+5. **Name Binding** (`compiler/binding/*`)
+   - bind resolved import local names into file-level namespace
+   - diagnose import-name and import/local declaration conflicts
+
 Examples:
 
 1. unknown imported member
@@ -88,6 +106,9 @@ Examples:
 3. external import requires symbol to be both `public` and exported
 4. duplicate package-visible names across files
 5. export table validation (`unknown`, `duplicate`, `non-public`)
+6. package import cycle detection
+7. duplicate imported local names
+8. import/local top-level name conflicts
 
 ## Typechecking
 
@@ -117,6 +138,17 @@ Use this deterministic placement rubric:
 
 If a rule seems to fit multiple phases, choose the earliest phase that has all
 required information and does not require duplicating logic elsewhere.
+
+Within semantic analysis, apply this subpass rubric:
+
+1. If rule is about declaration collection or package symbol identity:
+   **symbols**.
+2. If rule is about manifest API membership (`exports`): **exports**.
+3. If rule is about whether an import target/member is legally accessible:
+   **visibility**.
+4. If rule is about package dependency edges/cycles: **package_graph**.
+5. If rule is about local names introduced by imports/declarations and their
+   collisions: **binding**.
 
 ---
 
@@ -148,7 +180,11 @@ Practical exception:
 2. File-role policy analysis:
    - `compiler/file_role_rules/lib.rs`
 3. Semantic analysis / resolution:
-   - `compiler/resolution/*`
+   - `compiler/symbols/*`
+   - `compiler/exports/*`
+   - `compiler/visibility/*`
+   - `compiler/package_graph/*`
+   - `compiler/binding/*`
 4. Typechecking:
    - `compiler/typecheck/*`
 5. Driver:
@@ -156,3 +192,13 @@ Practical exception:
 
 This mapping is intentional and should be preserved as package/import/export
 semantics are added.
+
+Dependency direction should remain one-way:
+
+1. `symbols -> exports`
+2. `symbols + exports -> visibility`
+3. `visibility -> package_graph`
+4. `visibility + symbols -> binding`
+5. `binding + symbols -> typecheck`
+6. `driver` orchestrates pass order and diagnostics aggregation; semantic/type
+   crates must not depend on `driver`.

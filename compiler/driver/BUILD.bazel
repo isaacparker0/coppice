@@ -5,13 +5,17 @@ rust_library(
     srcs = ["lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
+        "//compiler/binding",
         "//compiler/diagnostics",
+        "//compiler/exports",
         "//compiler/file_role_rules",
+        "//compiler/package_graph",
         "//compiler/parsing",
-        "//compiler/resolution",
         "//compiler/source",
+        "//compiler/symbols",
         "//compiler/syntax",
         "//compiler/typecheck",
+        "//compiler/visibility",
         "//compiler/workspace",
     ],
 )

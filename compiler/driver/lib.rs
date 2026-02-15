@@ -2,12 +2,16 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use compiler__binding as binding;
 use compiler__diagnostics::Diagnostic;
+use compiler__exports as exports;
 use compiler__file_role_rules as file_role_rules;
+use compiler__package_graph as package_graph;
 use compiler__parsing::parse_file;
-use compiler__resolution::{self as resolution, PackageDiagnostic, PackageFile};
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
+use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
 use compiler__typecheck as typecheck;
+use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, discover_workspace};
 
 pub struct RenderedDiagnostic {
@@ -117,7 +121,25 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
             parsed: &unit.parsed,
         })
         .collect();
-    resolution::check_package(&package_files, &mut resolution_diagnostics);
+    let symbols_by_package = symbols::collect_symbols(&package_files, &mut resolution_diagnostics);
+    let exports_by_package = exports::build_exports(
+        &package_files,
+        &symbols_by_package,
+        &mut resolution_diagnostics,
+    );
+    let resolved_imports = visibility::resolve_imports(
+        &package_files,
+        &symbols_by_package,
+        &exports_by_package,
+        &mut resolution_diagnostics,
+    );
+    package_graph::check_cycles(&resolved_imports, &mut resolution_diagnostics);
+    let bindings_by_file = visibility::resolved_bindings_by_file(&resolved_imports);
+    binding::check_bindings(
+        &package_files,
+        &bindings_by_file,
+        &mut resolution_diagnostics,
+    );
     for PackageDiagnostic { path, diagnostic } in resolution_diagnostics {
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
             rendered_diagnostics.push(render_diagnostic(

@@ -1,0 +1,14 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "visibility",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/exports",
+        "//compiler/source",
+        "//compiler/symbols",
+        "//compiler/syntax",
+    ],
+)

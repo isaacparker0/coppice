@@ -11,6 +11,7 @@ pub struct ImportDeclaration {
 pub struct ImportMember {
     pub name: String,
     pub alias: Option<String>,
+    pub alias_span: Option<Span>,
     pub span: Span,
 }
 

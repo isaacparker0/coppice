@@ -70,16 +70,19 @@ impl Parser {
     fn parse_import_member(&mut self) -> Option<ImportMember> {
         let (name, name_span) = self.expect_identifier()?;
         let mut alias = None;
+        let mut alias_span = None;
         let mut end = name_span.end;
         if self.peek_is_keyword(Keyword::As) {
             self.advance();
-            let (alias_name, alias_span) = self.expect_identifier()?;
+            let (alias_name, parsed_alias_span) = self.expect_identifier()?;
             alias = Some(alias_name);
-            end = alias_span.end;
+            end = parsed_alias_span.end;
+            alias_span = Some(parsed_alias_span);
         }
         Some(ImportMember {
             name,
             alias,
+            alias_span,
             span: Span {
                 start: name_span.start,
                 end,
