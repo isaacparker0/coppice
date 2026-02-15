@@ -190,7 +190,8 @@ Tasks:
 1. Lexer:
    - add `import`, `exports`, and `as` keywords.
 2. Source parser:
-   - parse top-level `import package/path { ... }`.
+   - parse top-level `import package/path { ... }` where `package/path` is
+     import-origin-prefixed (`workspace`, `std`, `external`).
    - enforce import-before-declarations policy (recommended for clarity).
 3. Manifest parser:
    - parse `exports { ... }`.
@@ -251,9 +252,11 @@ Tasks:
 
 1. For each source file import, resolve package path.
 2. Emit unknown package diagnostics with source span.
-3. Reject imports that resolve to a binary entrypoint or test file.
-4. Build directed package graph from resolved imports.
-5. Detect and report cycles (permanent error policy).
+3. Emit unknown import origin diagnostics (`workspace`, `std`, `external` are
+   the only valid top-level import origins).
+4. Reject imports that resolve to a binary entrypoint or test file.
+5. Build directed package graph from resolved imports.
+6. Detect and report cycles (permanent error policy).
 
 Cycle diagnostic requirements:
 
@@ -263,8 +266,9 @@ Cycle diagnostic requirements:
 Exit criteria:
 
 1. Fixtures for unknown package imports.
-2. Fixtures for simple and multi-node import cycles.
-3. Fixtures for illegal imports of `.bin.coppice` and `.test.coppice`.
+2. Fixtures for unknown import origin.
+3. Fixtures for simple and multi-node import cycles.
+4. Fixtures for illegal imports of `.bin.coppice` and `.test.coppice`.
 
 ---
 

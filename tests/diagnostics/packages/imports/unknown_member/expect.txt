@@ -1,0 +1,4 @@
+# exit: 1
+input/main.coppice:1:29: error: imported symbol 'Missing' is not declared in package 'workspace/lib/auth'
+  import workspace/lib/auth { Missing }
+                              ^

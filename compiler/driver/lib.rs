@@ -29,6 +29,7 @@ pub enum CheckFileError {
 }
 
 struct ParsedUnit {
+    package_path: String,
     path: PathBuf,
     source: String,
     parsed: compiler__syntax::ParsedFile,
@@ -49,47 +50,46 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
         target_path.parent().unwrap_or(Path::new("")).to_path_buf()
     };
 
-    let package_root = find_package_root(&target_path).ok_or(CheckFileError::PackageNotFound)?;
+    let workspace_root = find_package_root(&target_path).ok_or(CheckFileError::PackageNotFound)?;
     let workspace =
-        discover_workspace(&package_root).map_err(CheckFileError::WorkspaceDiscoveryFailed)?;
-    let package = workspace
-        .packages()
-        .first()
-        .ok_or(CheckFileError::PackageNotFound)?;
-
-    let mut file_entries: Vec<(PathBuf, FileRole)> = Vec::new();
-    file_entries.push((package.manifest_path.clone(), FileRole::PackageManifest));
-    for source_file in &package.source_files {
-        file_entries.push((
-            source_file.workspace_relative_path.clone(),
-            source_file.role,
-        ));
-    }
-    file_entries.sort_by(|left, right| compare_paths(&left.0, &right.0));
+        discover_workspace(&workspace_root).map_err(CheckFileError::WorkspaceDiscoveryFailed)?;
 
     let mut rendered_diagnostics = Vec::new();
     let mut parsed_units = Vec::new();
-    for (relative_path, role) in file_entries {
-        let absolute_path = package_root.join(&relative_path);
-        let source =
-            fs::read_to_string(&absolute_path).map_err(|error| CheckFileError::ReadSource {
-                path: display_path(&absolute_path),
-                error,
-            })?;
-        match parse_file(&source, role) {
-            Ok(parsed) => parsed_units.push(ParsedUnit {
-                path: relative_path,
-                source,
-                parsed,
-            }),
-            Err(diagnostics) => {
-                for diagnostic in diagnostics {
-                    rendered_diagnostics.push(render_diagnostic(
-                        &diagnostic_display_base,
-                        &relative_path,
-                        &source,
-                        diagnostic,
-                    ));
+    for package in workspace.packages() {
+        let mut file_entries: Vec<(PathBuf, FileRole)> = Vec::new();
+        file_entries.push((package.manifest_path.clone(), FileRole::PackageManifest));
+        for source_file in &package.source_files {
+            file_entries.push((
+                source_file.workspace_relative_path.clone(),
+                source_file.role,
+            ));
+        }
+        file_entries.sort_by(|left, right| compare_paths(&left.0, &right.0));
+
+        for (relative_path, role) in file_entries {
+            let absolute_path = workspace_root.join(&relative_path);
+            let source =
+                fs::read_to_string(&absolute_path).map_err(|error| CheckFileError::ReadSource {
+                    path: display_path(&absolute_path),
+                    error,
+                })?;
+            match parse_file(&source, role) {
+                Ok(parsed) => parsed_units.push(ParsedUnit {
+                    package_path: package.package_path.clone(),
+                    path: relative_path,
+                    source,
+                    parsed,
+                }),
+                Err(diagnostics) => {
+                    for diagnostic in diagnostics {
+                        rendered_diagnostics.push(render_diagnostic(
+                            &diagnostic_display_base,
+                            &relative_path,
+                            &source,
+                            diagnostic,
+                        ));
+                    }
                 }
             }
         }
@@ -98,7 +98,6 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
     for parsed_unit in &parsed_units {
         let mut file_diagnostics = Vec::new();
         file_role_rules::check_file(&parsed_unit.parsed, &mut file_diagnostics);
-        typecheck::check_file(&parsed_unit.parsed, &mut file_diagnostics);
         for diagnostic in file_diagnostics {
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,
@@ -113,6 +112,7 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
     let package_files: Vec<PackageFile<'_>> = parsed_units
         .iter()
         .map(|unit| PackageFile {
+            package_path: &unit.package_path,
             path: &unit.path,
             parsed: &unit.parsed,
         })
@@ -123,6 +123,19 @@ pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,
                 &path,
+                &parsed_unit.source,
+                diagnostic,
+            ));
+        }
+    }
+
+    for parsed_unit in &parsed_units {
+        let mut file_diagnostics = Vec::new();
+        typecheck::check_file(&parsed_unit.parsed, &mut file_diagnostics);
+        for diagnostic in file_diagnostics {
+            rendered_diagnostics.push(render_diagnostic(
+                &diagnostic_display_base,
+                &parsed_unit.path,
                 &parsed_unit.source,
                 diagnostic,
             ));

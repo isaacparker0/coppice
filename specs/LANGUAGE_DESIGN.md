@@ -520,29 +520,37 @@ not a file-local export statement and not a barrel forwarding module.
 One import form only: fully qualified package path plus explicit member list. No
 relative imports. No glob imports. No conditional imports.
 
-Import paths are always workspace-root-relative. There is no file-relative or
+Import paths are always import-origin-prefixed. There is no file-relative or
 directory-relative resolution.
 
-Import paths denote package directory paths (directories containing
-`PACKAGE.coppice`). `PACKAGE.coppice` itself is never written in import syntax.
+Valid path forms:
+
+- `workspace` (workspace-root package)
+- `workspace/<first-party-package-path>`
+- `std/<stdlib-package-path>`
+- `external/<registry-package-path>`
+
+`workspace` denotes the workspace-root package. `workspace/<...>` denotes a
+first-party package directory containing `PACKAGE.coppice`. `PACKAGE.coppice`
+itself is never written in import syntax.
 
 ```
-import platform/auth { Token, parse }
-import platform/auth/oauth { GoogleClient }
+import workspace/platform/auth { Token, parse }
+import workspace/platform/auth/oauth { GoogleClient }
+import workspace { AppConfig }
 import std/fmt { printLine as print }
 import external/registry/uuid { V7 }
 
 // import ../auth          ← compile error
-// import platform/*       ← compile error
-// import platform/auth    ← compile error (missing explicit members)
+// import workspace/*      ← compile error
+// import workspace/auth   ← compile error (missing explicit members)
 ```
 
-Reserved top-level import prefixes:
+Reserved top-level import origin prefixes:
 
-- `std/` for standard library.
-- `external/` for third-party dependencies.
-
-First-party package paths must not start with reserved prefixes.
+- `workspace` for first-party workspace packages.
+- `std` for standard library.
+- `external` for third-party dependencies.
 
 Import declarations must appear before top-level declarations in each file.
 
@@ -596,7 +604,7 @@ not import symbols; `exports { ... }` resolves members against package-level
 public function validate(t: Token) -> bool { ... }
 
 // auth/password.coppice
-import platform/auth { validate, Token }
+import workspace/platform/auth { validate, Token }
 
 function check(pw: string, t: Token) -> bool {
     validate(t)    // fine — same package
@@ -869,7 +877,7 @@ Gazelle plugin logic:
    - include `PACKAGE.coppice` manifest in package metadata.
 3. Collect `*.bin.coppice` files → `lang0_binary` targets.
 4. Collect `*.test.coppice` files → `lang0_test` targets.
-5. Parse `import` statements and map workspace-root-relative import path to
+5. Parse `import` statements and map import-origin-prefixed import path to
    target deps.
 
 No heuristics. No configuration file. No import resolution algorithm.

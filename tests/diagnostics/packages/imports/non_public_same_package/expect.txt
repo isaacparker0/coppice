@@ -1,0 +1,4 @@
+# exit: 1
+input/main.coppice:1:20: error: imported symbol 'helper' in package 'workspace' must be declared public
+  import workspace { helper }
+                     ^

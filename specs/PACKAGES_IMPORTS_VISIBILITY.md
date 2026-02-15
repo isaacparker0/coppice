@@ -32,7 +32,8 @@ The model intentionally prefers explicitness over minimal boilerplate.
 3. **Symbol**: top-level declaration (type, function, constant).
 4. **External**: from a different package path.
 5. **Workspace root**: the root directory of the current Coppice workspace.
-6. **First-party package path**: a workspace-root-relative package path.
+6. **Import package path**: an import-origin-prefixed package path used in
+   `import` declarations.
 
 ---
 
@@ -164,20 +165,31 @@ Violations are compile errors anchored to the offending declaration or import.
 import package/path { Member, OtherMember, TypeName as Alias }
 ```
 
+Where `package/path` is always one of:
+
+1. `workspace` (workspace-root package)
+2. `workspace/<first-party-package-path>`
+3. `std/<stdlib-package-path>`
+4. `external/<registry-package-path>`
+
 ### Constraints
 
-1. `package/path` is always a fully qualified, workspace-root-relative package
-   path.
-2. `package/path` denotes the package directory path (the directory containing
-   `PACKAGE.coppice`).
-3. `PACKAGE.coppice` itself is never written in import syntax.
-4. Import list must be explicit named members.
-5. Alias is optional and only per member (`as`).
-6. Relative imports are forbidden.
-7. Glob imports are forbidden.
-8. Namespace/default imports are forbidden.
-9. Inline fully-qualified symbol usage is forbidden.
-10. Import declarations must appear before all top-level declarations in a
+1. `package/path` must begin with a reserved import origin prefix:
+   - `workspace`
+   - `std`
+   - `external`
+2. `workspace` denotes the workspace-root package.
+3. `workspace/<first-party-package-path>` denotes a first-party package
+   directory containing `PACKAGE.coppice`.
+4. `std/<...>` and `external/<...>` are resolver-owned package spaces.
+5. `PACKAGE.coppice` itself is never written in import syntax.
+6. Import list must be explicit named members.
+7. Alias is optional and only per member (`as`).
+8. Relative imports are forbidden.
+9. Glob imports are forbidden.
+10. Namespace/default imports are forbidden.
+11. Inline fully-qualified symbol usage is forbidden.
+12. Import declarations must appear before all top-level declarations in a
     source file.
 
 ### Consequence
@@ -221,16 +233,16 @@ another file always requires an explicit `import`.
 
 ## Import Resolution Rules
 
-For `import A/B { X }` in file `f`:
+For `import P { X }` in file `f`:
 
-1. Resolver locates package `A/B`.
+1. Resolver locates package `P`.
 2. Imports from `*.bin.coppice` or `*.test.coppice` files are illegal.
-3. If `f` is in package `A/B`:
-   - `X` must be package-visible (`public`) in some file of `A/B`.
+3. If `f` is in package `P`:
+   - `X` must be package-visible (`public`) in some file of `P`.
    - file-private symbols are not importable.
 4. If `f` is in a different package:
    - `X` must be `public`.
-   - `X` must be listed by `exports` in `A/B/PACKAGE.coppice`.
+   - `X` must be listed by `exports` in the target package manifest.
 5. Missing or inaccessible symbols are compile errors with source span.
 
 ---
@@ -299,11 +311,13 @@ This yields deterministic and hermetic build graph derivation.
 
 ---
 
-## Third-Party Imports
+## Import Origins
 
-Third-party imports use the same syntax and resolver model:
+All imports use the same syntax and resolver model:
 
 ```lang
+import workspace/platform/auth { Token, parse }
+import workspace { AppConfig }
 import std/json { decode }
 import external/registry/uuid { V7 }
 ```
@@ -311,10 +325,16 @@ import external/registry/uuid { V7 }
 Policy:
 
 1. No URL/network imports.
-2. Resolver maps external package paths to build-system-pinned dependencies.
-3. Top-level path prefixes `std/` and `external/` are reserved.
-4. First-party package paths must not start with reserved prefixes.
-5. Language semantics do not distinguish first-party vs third-party import
+2. Resolver maps:
+   - `workspace` and `workspace/<...>` to first-party packages in the current
+     workspace.
+   - `std/<...>` to standard library packages.
+   - `external/<...>` to build-system-pinned third-party dependencies.
+3. Top-level import origin prefixes `workspace`, `std`, and `external` are
+   reserved.
+4. First-party package directory names do not alter import origin semantics;
+   first-party imports are always expressed through the `workspace` origin.
+5. Language semantics do not distinguish first-party vs standard vs third-party
    syntax.
 
 This preserves one import model and hermetic builds.

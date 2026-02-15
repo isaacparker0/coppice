@@ -1,1 +1,1 @@
-import platform/auth { Token, Session as AuthSession }
+import workspace { Token, Session as AuthSession }
