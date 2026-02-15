@@ -13,19 +13,40 @@ mod assignability;
 mod declarations;
 mod expressions;
 mod naming_rules;
-mod package_symbols;
 mod statements;
 mod type_narrowing;
 mod types;
 mod unused_bindings;
 
-pub use package_symbols::{
-    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary, TypedPublicSymbolTable,
-    build_typed_public_symbol_table,
-};
 pub use types::Type;
 
+#[derive(Clone)]
 pub struct TypedFunctionSignature {
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
+}
+
+#[derive(Clone)]
+pub enum ImportedTypeShape {
+    Struct {
+        fields: Vec<(String, Type)>,
+        methods: Vec<ImportedMethodSignature>,
+    },
+    Union {
+        variants: Vec<Type>,
+    },
+}
+
+#[derive(Clone)]
+pub struct ImportedTypeDeclaration {
+    pub name: String,
+    pub kind: ImportedTypeShape,
+}
+
+#[derive(Clone)]
+pub struct ImportedMethodSignature {
+    pub name: String,
+    pub self_mutable: bool,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
 }
@@ -43,8 +64,8 @@ pub struct FileTypecheckSummary {
 
 #[derive(Clone)]
 pub enum ImportedSymbol {
-    Type(TypeDeclaration),
-    Function(FunctionDeclaration),
+    Type(ImportedTypeDeclaration),
+    Function(TypedFunctionSignature),
     Constant(Type),
 }
 

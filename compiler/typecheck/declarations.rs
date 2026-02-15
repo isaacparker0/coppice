@@ -4,16 +4,19 @@ use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
 
-use super::{FunctionInfo, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind};
+use super::{
+    FunctionInfo, ImportedTypeDeclaration, ImportedTypeShape, MethodInfo, MethodKey, TypeChecker,
+    TypeInfo, TypeKind, TypedFunctionSignature,
+};
 
 struct ImportedTypeBinding {
     local_name: String,
-    type_declaration: TypeDeclaration,
+    type_declaration: ImportedTypeDeclaration,
 }
 
 struct ImportedFunctionBinding {
     local_name: String,
-    function_declaration: FunctionDeclaration,
+    signature: TypedFunctionSignature,
 }
 
 impl TypeChecker<'_> {
@@ -35,8 +38,8 @@ impl TypeChecker<'_> {
                 continue;
             }
             let kind = match &imported_binding.type_declaration.kind {
-                TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
-                TypeDeclarationKind::Union { .. } => TypeKind::Union {
+                ImportedTypeShape::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
+                ImportedTypeShape::Union { .. } => TypeKind::Union {
                     variants: Vec::new(),
                 },
             };
@@ -46,15 +49,14 @@ impl TypeChecker<'_> {
 
         for imported_binding in imported_type_bindings {
             match &imported_binding.type_declaration.kind {
-                TypeDeclarationKind::Struct { fields, .. } => {
+                ImportedTypeShape::Struct { fields, .. } => {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
-                    for field in fields {
-                        if !seen.insert(field.name.clone()) {
+                    for (field_name, field_type) in fields {
+                        if !seen.insert(field_name.clone()) {
                             continue;
                         }
-                        let field_type = self.resolve_type_name(&field.type_name);
-                        resolved_fields.push((field.name.clone(), field_type));
+                        resolved_fields.push((field_name.clone(), field_type.clone()));
                     }
                     if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
                         info.kind = TypeKind::Struct {
@@ -62,19 +64,15 @@ impl TypeChecker<'_> {
                         };
                     }
                 }
-                TypeDeclarationKind::Union { variants } => {
+                ImportedTypeShape::Union { variants } => {
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
-                        if variant.names.len() != 1 {
-                            continue;
-                        }
-                        let variant_type = self.resolve_type_name(variant);
-                        let key = variant_type.display();
+                        let key = variant.display();
                         if !seen.insert(key) {
                             continue;
                         }
-                        resolved_variants.push(variant_type);
+                        resolved_variants.push(variant.clone());
                     }
                     if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
                         info.kind = TypeKind::Union {
@@ -91,26 +89,20 @@ impl TypeChecker<'_> {
             .imported_bindings
             .iter()
             .filter_map(|(local_name, binding)| match &binding.symbol {
-                super::ImportedSymbol::Function(function) => Some(ImportedFunctionBinding {
+                super::ImportedSymbol::Function(signature) => Some(ImportedFunctionBinding {
                     local_name: local_name.clone(),
-                    function_declaration: function.clone(),
+                    signature: signature.clone(),
                 }),
                 super::ImportedSymbol::Type(_) | super::ImportedSymbol::Constant(_) => None,
             })
             .collect();
 
         for imported_binding in imported_function_bindings {
-            let return_type =
-                self.resolve_type_name(&imported_binding.function_declaration.return_type);
-            let mut parameter_types = Vec::new();
-            for parameter in &imported_binding.function_declaration.parameters {
-                parameter_types.push(self.resolve_type_name(&parameter.type_name));
-            }
             self.imported_functions.insert(
                 imported_binding.local_name,
                 FunctionInfo {
-                    parameter_types,
-                    return_type,
+                    parameter_types: imported_binding.signature.parameter_types,
+                    return_type: imported_binding.signature.return_type,
                 },
             );
         }
@@ -130,8 +122,7 @@ impl TypeChecker<'_> {
             .collect();
 
         for imported_binding in imported_type_bindings {
-            let TypeDeclarationKind::Struct { methods, .. } =
-                &imported_binding.type_declaration.kind
+            let ImportedTypeShape::Struct { methods, .. } = &imported_binding.type_declaration.kind
             else {
                 continue;
             };
@@ -145,19 +136,12 @@ impl TypeChecker<'_> {
                     continue;
                 }
 
-                let return_type = self.resolve_type_name(&method.return_type);
-                let mut parameter_types = Vec::new();
-                for parameter in &method.parameters {
-                    let value_type = self.resolve_type_name(&parameter.type_name);
-                    parameter_types.push(value_type);
-                }
-
                 self.methods.insert(
                     method_key,
                     MethodInfo {
                         self_mutable: method.self_mutable,
-                        parameter_types,
-                        return_type,
+                        parameter_types: method.parameter_types.clone(),
+                        return_type: method.return_type.clone(),
                     },
                 );
             }

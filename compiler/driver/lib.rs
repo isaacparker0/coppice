@@ -8,13 +8,15 @@ use compiler__diagnostics::Diagnostic;
 use compiler__exports as exports;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_graph as package_graph;
+use compiler__package_symbols::{
+    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
+    build_typed_public_symbol_table,
+};
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
-use compiler__typecheck::{
-    self as typecheck, PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
-};
+use compiler__typecheck::{self as typecheck};
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
 
@@ -250,7 +252,7 @@ pub fn check_target_with_workspace_root(
     let typecheck_resolved_imports =
         build_typecheck_resolved_imports(&resolved_imports, &package_id_by_path);
     let typed_public_symbol_table =
-        typecheck::build_typed_public_symbol_table(&package_units, &typecheck_resolved_imports);
+        build_typed_public_symbol_table(&package_units, &typecheck_resolved_imports);
     let imported_bindings_by_file =
         typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
 

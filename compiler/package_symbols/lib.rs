@@ -4,11 +4,13 @@ use std::path::{Path, PathBuf};
 use compiler__packages::PackageId;
 use compiler__source::{FileRole, Span, compare_paths};
 use compiler__syntax::{
-    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, MatchPattern,
-    ParameterDeclaration, ParsedFile, TypeDeclaration, TypeName, TypeNameAtom, Visibility,
+    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, MatchPattern, ParsedFile,
+    TypeDeclaration, TypeDeclarationKind, TypeName, Visibility,
 };
-
-use crate::{ImportedBinding, ImportedSymbol, Type, TypedSymbol, analyze_package_unit};
+use compiler__typecheck::{
+    ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
+    ImportedTypeShape, Type, TypedFunctionSignature, TypedSymbol, analyze_package_unit,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct PublicSymbolId(usize);
@@ -791,10 +793,13 @@ fn build_imported_bindings_by_file(
 
             let symbol = match typed_symbol {
                 TypedPublicSymbol::Type(type_declaration) => {
-                    ImportedSymbol::Type(type_declaration.clone())
+                    ImportedSymbol::Type(imported_type_declaration_with_aliases(
+                        type_declaration,
+                        &local_type_name_by_declared_type_name,
+                    ))
                 }
                 TypedPublicSymbol::Function(function_declaration) => {
-                    ImportedSymbol::Function(rewrite_function_signature_type_aliases(
+                    ImportedSymbol::Function(imported_function_signature_with_aliases(
                         function_declaration,
                         &local_type_name_by_declared_type_name,
                     ))
@@ -818,59 +823,116 @@ fn build_imported_bindings_by_file(
     imported_by_file
 }
 
-fn rewrite_function_signature_type_aliases(
-    function_declaration: &FunctionDeclaration,
+fn imported_type_declaration_with_aliases(
+    type_declaration: &TypeDeclaration,
     local_type_name_by_declared_type_name: &HashMap<String, String>,
-) -> FunctionDeclaration {
-    let parameters = function_declaration
-        .parameters
-        .iter()
-        .map(|parameter| ParameterDeclaration {
-            name: parameter.name.clone(),
-            span: parameter.span.clone(),
-            type_name: rewrite_type_name_aliases(
-                &parameter.type_name,
-                local_type_name_by_declared_type_name,
-            ),
-        })
-        .collect();
+) -> ImportedTypeDeclaration {
+    let kind = match &type_declaration.kind {
+        TypeDeclarationKind::Struct { fields, methods } => {
+            let typed_fields = fields
+                .iter()
+                .map(|field| {
+                    (
+                        field.name.clone(),
+                        rewrite_type_name_aliases_to_type(
+                            &field.type_name,
+                            local_type_name_by_declared_type_name,
+                        ),
+                    )
+                })
+                .collect();
+            let typed_methods = methods
+                .iter()
+                .map(|method| ImportedMethodSignature {
+                    name: method.name.clone(),
+                    self_mutable: method.self_mutable,
+                    parameter_types: method
+                        .parameters
+                        .iter()
+                        .map(|parameter| {
+                            rewrite_type_name_aliases_to_type(
+                                &parameter.type_name,
+                                local_type_name_by_declared_type_name,
+                            )
+                        })
+                        .collect(),
+                    return_type: rewrite_type_name_aliases_to_type(
+                        &method.return_type,
+                        local_type_name_by_declared_type_name,
+                    ),
+                })
+                .collect();
+            ImportedTypeShape::Struct {
+                fields: typed_fields,
+                methods: typed_methods,
+            }
+        }
+        TypeDeclarationKind::Union { variants } => ImportedTypeShape::Union {
+            variants: variants
+                .iter()
+                .map(|variant| {
+                    rewrite_type_name_aliases_to_type(
+                        variant,
+                        local_type_name_by_declared_type_name,
+                    )
+                })
+                .collect(),
+        },
+    };
 
-    FunctionDeclaration {
-        name: function_declaration.name.clone(),
-        name_span: function_declaration.name_span.clone(),
-        visibility: function_declaration.visibility,
-        parameters,
-        return_type: rewrite_type_name_aliases(
-            &function_declaration.return_type,
-            local_type_name_by_declared_type_name,
-        ),
-        body: function_declaration.body.clone(),
-        doc: function_declaration.doc.clone(),
-        span: function_declaration.span.clone(),
+    ImportedTypeDeclaration {
+        name: type_declaration.name.clone(),
+        kind,
     }
 }
 
-fn rewrite_type_name_aliases(
-    type_name: &TypeName,
+fn imported_function_signature_with_aliases(
+    function_declaration: &FunctionDeclaration,
     local_type_name_by_declared_type_name: &HashMap<String, String>,
-) -> TypeName {
-    let names = type_name
-        .names
+) -> TypedFunctionSignature {
+    let parameter_types = function_declaration
+        .parameters
         .iter()
-        .map(|atom| {
-            let name = local_type_name_by_declared_type_name
-                .get(&atom.name)
-                .cloned()
-                .unwrap_or_else(|| atom.name.clone());
-            TypeNameAtom {
-                name,
-                span: atom.span.clone(),
-            }
+        .map(|parameter| {
+            rewrite_type_name_aliases_to_type(
+                &parameter.type_name,
+                local_type_name_by_declared_type_name,
+            )
         })
         .collect();
 
-    TypeName {
-        names,
-        span: type_name.span.clone(),
+    TypedFunctionSignature {
+        parameter_types,
+        return_type: rewrite_type_name_aliases_to_type(
+            &function_declaration.return_type,
+            local_type_name_by_declared_type_name,
+        ),
+    }
+}
+
+fn rewrite_type_name_aliases_to_type(
+    type_name: &TypeName,
+    local_type_name_by_declared_type_name: &HashMap<String, String>,
+) -> Type {
+    if type_name.names.is_empty() {
+        return Type::Unknown;
+    }
+    let name = local_type_name_by_declared_type_name
+        .get(&type_name.names[0].name)
+        .cloned()
+        .unwrap_or_else(|| type_name.names[0].name.clone());
+    if let Some(value_type) = builtin_type_from_name(&name) {
+        return value_type;
+    }
+    Type::Named(name)
+}
+
+fn builtin_type_from_name(name: &str) -> Option<Type> {
+    match name {
+        "int64" => Some(Type::Integer64),
+        "boolean" => Some(Type::Boolean),
+        "string" => Some(Type::String),
+        "nil" => Some(Type::Nil),
+        _ => None,
     }
 }

@@ -1,0 +1,13 @@
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "package_symbols",
+    srcs = ["lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/packages",
+        "//compiler/source",
+        "//compiler/syntax",
+        "//compiler/typecheck",
+    ],
+)
