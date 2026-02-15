@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
 use compiler__syntax::{Declaration, Visibility};
 use compiler__typecheck as typecheck;
 use compiler__visibility as visibility;
-use compiler__workspace::{DiscoveryError, discover_workspace};
+use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
 
 pub struct RenderedDiagnostic {
     pub path: String,
@@ -113,10 +113,21 @@ pub fn check_file_with_workspace_root(
     }
     let workspace =
         discover_workspace(&workspace_root).map_err(CheckFileError::WorkspaceDiscoveryFailed)?;
+    let scoped_package_paths = scoped_package_paths_for_target(
+        &workspace,
+        &workspace_root,
+        &absolute_target_path,
+        &metadata,
+    )?;
+    let scope_is_workspace = scoped_package_paths.is_none();
 
     let mut rendered_diagnostics = Vec::new();
     let mut parsed_units = Vec::new();
     for package in workspace.packages() {
+        let package_in_scope = scope_is_workspace
+            || scoped_package_paths
+                .as_ref()
+                .is_some_and(|scoped| scoped.contains(&package.package_path));
         let mut file_entries: Vec<(PathBuf, FileRole)> = Vec::new();
         file_entries.push((package.manifest_path.clone(), FileRole::PackageManifest));
         for source_file in &package.source_files {
@@ -142,13 +153,15 @@ pub fn check_file_with_workspace_root(
                     parsed,
                 }),
                 Err(diagnostics) => {
-                    for diagnostic in diagnostics {
-                        rendered_diagnostics.push(render_diagnostic(
-                            &diagnostic_display_base,
-                            &relative_path,
-                            &source,
-                            diagnostic,
-                        ));
+                    if package_in_scope {
+                        for diagnostic in diagnostics {
+                            rendered_diagnostics.push(render_diagnostic(
+                                &diagnostic_display_base,
+                                &relative_path,
+                                &source,
+                                diagnostic,
+                            ));
+                        }
                     }
                 }
             }
@@ -156,6 +169,13 @@ pub fn check_file_with_workspace_root(
     }
 
     for parsed_unit in &parsed_units {
+        if !scope_is_workspace
+            && !scoped_package_paths
+                .as_ref()
+                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
+        {
+            continue;
+        }
         let mut file_diagnostics = Vec::new();
         file_role_rules::check_file(&parsed_unit.parsed, &mut file_diagnostics);
         for diagnostic in file_diagnostics {
@@ -198,6 +218,13 @@ pub fn check_file_with_workspace_root(
     );
     for PackageDiagnostic { path, diagnostic } in resolution_diagnostics {
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
+            if !scope_is_workspace
+                && !scoped_package_paths
+                    .as_ref()
+                    .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
+            {
+                continue;
+            }
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,
                 &path,
@@ -225,6 +252,13 @@ pub fn check_file_with_workspace_root(
     }
 
     for parsed_unit in &parsed_units {
+        if !scope_is_workspace
+            && !scoped_package_paths
+                .as_ref()
+                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
+        {
+            continue;
+        }
         let mut file_diagnostics = Vec::new();
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
@@ -340,6 +374,64 @@ fn build_typecheck_imported_bindings(
     }
 
     imported_by_file
+}
+
+fn scoped_package_paths_for_target(
+    workspace: &Workspace,
+    workspace_root: &Path,
+    absolute_target_path: &Path,
+    target_metadata: &fs::Metadata,
+) -> Result<Option<BTreeSet<String>>, CheckFileError> {
+    if absolute_target_path == workspace_root {
+        return Ok(None);
+    }
+
+    let owning_package_root = if target_metadata.is_file() {
+        find_owning_package_root(workspace_root, absolute_target_path)
+    } else {
+        find_owning_package_root_for_directory(workspace_root, absolute_target_path)
+    };
+    let Some(owning_package_root) = owning_package_root else {
+        return Err(CheckFileError::PackageNotFound);
+    };
+
+    let owning_package_path = relative_package_path(workspace_root, &owning_package_root)
+        .ok_or(CheckFileError::PackageNotFound)?;
+    if workspace.package_by_path(&owning_package_path).is_none() {
+        return Err(CheckFileError::PackageNotFound);
+    }
+
+    let mut scoped = BTreeSet::new();
+    scoped.insert(owning_package_path);
+    Ok(Some(scoped))
+}
+
+fn find_owning_package_root_for_directory(
+    workspace_root: &Path,
+    target_directory: &Path,
+) -> Option<PathBuf> {
+    let mut directory = target_directory.to_path_buf();
+    loop {
+        if directory.join("PACKAGE.coppice").is_file() {
+            return Some(directory);
+        }
+        if directory == workspace_root {
+            return None;
+        }
+        match directory.parent() {
+            Some(parent) => directory = parent.to_path_buf(),
+            None => return None,
+        }
+    }
+}
+
+fn relative_package_path(workspace_root: &Path, package_root: &Path) -> Option<String> {
+    let relative = package_root.strip_prefix(workspace_root).ok()?;
+    let key = path_to_key(relative);
+    if key == "." || key.is_empty() {
+        return Some(String::new());
+    }
+    Some(key)
 }
 
 fn find_owning_package_root(workspace_root: &Path, target_path: &Path) -> Option<PathBuf> {
