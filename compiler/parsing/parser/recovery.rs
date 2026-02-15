@@ -74,7 +74,7 @@ impl Parser {
     pub(super) fn synchronize(&mut self) {
         while !self.at_eof() {
             if self.peek_is_keyword(Keyword::Import)
-                || self.peek_is_keyword(Keyword::Export)
+                || self.peek_is_keyword(Keyword::Exports)
                 || self.peek_is_keyword(Keyword::Type)
                 || self.peek_is_keyword(Keyword::Function)
             {

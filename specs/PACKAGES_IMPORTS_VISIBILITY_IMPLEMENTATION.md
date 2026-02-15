@@ -37,7 +37,8 @@ Current compiler constraints that drive the migration design:
 
 1. Parsing is file-local:
    `parse_file(source: &str) -> Result<File, Vec<Diagnostic>>`.
-2. AST assumes declarations-only file top-level (no import nodes).
+2. AST has file-local import/exports declaration nodes, but no package-level
+   semantic model.
 3. Typechecker entrypoint is single-file: `check_file(file: &File)`.
 4. Symbol tables are flat maps keyed by name within one file context.
 5. CLI `check` takes a single file path.
@@ -76,7 +77,7 @@ Planned compile pipeline for `check <path>`:
 5. **Declaration Collection**
    - Build per-package symbol tables from all source files.
 6. **Export Table Build**
-   - Build external API table from `PACKAGE.coppice` re-exports.
+   - Build external API table from `PACKAGE.coppice` `exports` declarations.
 7. **Import Resolution + Visibility Validation**
    - Resolve each file import against package tables.
 8. **Typecheck**
@@ -100,11 +101,11 @@ Planned compile pipeline for `check <path>`:
 
 Introduce a dedicated manifest AST:
 
-1. `PackageManifest { reexports: Vec<ExportDeclaration> }`
-2. `ExportDeclaration { members, span }`
+1. `PackageManifest { exports: Vec<ExportsDeclaration> }`
+2. `ExportsDeclaration { members, span }`
 
 Manifest parser should be separate from normal source parser to enforce strict
-grammar (comments + `export` only).
+grammar (comments + `exports` only).
 
 ## Middle-Layer IR Structures
 
@@ -181,19 +182,19 @@ Exit criteria:
 Goals:
 
 1. Parse canonical file imports.
-2. Parse strict `PACKAGE.coppice` re-export declarations.
+2. Parse strict `PACKAGE.coppice` `exports` declarations.
 3. Add file-role semantic validation on declarations.
 
 Tasks:
 
 1. Lexer:
-   - add `import` and `as` keywords.
+   - add `import`, `exports`, and `as` keywords.
 2. Source parser:
    - parse top-level `import package/path { ... }`.
    - enforce import-before-declarations policy (recommended for clarity).
 3. Manifest parser:
-   - parse `export { ... }`.
-   - reject non-comment non-`export` tokens.
+   - parse `exports { ... }`.
+   - reject non-comment non-`exports` tokens.
 4. File-role validation (post-parse, pre-resolver):
    - `*.bin.coppice` must declare exactly one `main`.
    - `main` must have no params and no return value.
@@ -228,14 +229,14 @@ Tasks:
    - enforce top-level file-private/package-visible modifiers.
    - enforce member type-private/public modifiers.
 2. Manifest export resolver:
-   - resolve each re-export member to package symbol.
+   - resolve each exported member to package symbol.
    - ensure exported symbol is `public`.
    - reject duplicates and unknown symbols.
 
 Exit criteria:
 
 1. Diagnostics fixtures for duplicate package-level names across files.
-2. Fixtures for invalid re-exports.
+2. Fixtures for invalid `exports` declarations.
 
 ---
 
@@ -280,14 +281,14 @@ Tasks:
    - only `public` symbols importable from other files.
 2. External imports:
    - symbol must be `public`.
-   - symbol must be exported in `PACKAGE.coppice`.
+   - symbol must be listed in `PACKAGE.coppice` `exports`.
 3. Validate alias collisions and imported-name collisions.
 4. Build per-file import environment (name -> symbol binding).
 
 Exit criteria:
 
 1. Fixtures for file-private access denial.
-2. Fixtures for missing export denial.
+2. Fixtures for missing package API member denial.
 3. Fixtures for import alias/name conflicts.
 
 ---

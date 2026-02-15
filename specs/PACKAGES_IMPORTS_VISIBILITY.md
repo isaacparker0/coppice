@@ -98,7 +98,7 @@ In this layout:
 2. Package manifests are named `PACKAGE.coppice`.
 3. `PACKAGE.coppice` allows only:
    - comments/doc comments
-   - `export ...` declarations used as re-exports
+   - `exports ...` declarations that define package external API members
 4. Any executable code or declarations in `PACKAGE.coppice` is a compile error.
 
 ---
@@ -175,19 +175,24 @@ Visibility is split across two declaration kinds with one keyword:
 
 1. **Top-level declarations** (`type`, `function`, constants):
    - default: file-private
-   - `public`: package-visible (importable from other files in same package)
+   - `public`: package-visible (eligible to be imported from other files in the
+     same package)
    - externally visible only if `public` and listed in `PACKAGE.coppice` via
-     `export`
+     `exports`
 2. **Struct members** (fields, methods):
    - default: type-private (accessible only inside methods on that type)
    - `public`: accessible anywhere the type is accessible
 
 `public` is intentionally contextual by declaration kind:
 
-1. On top-level declarations it means visible from any file in the same package.
+1. On top-level declarations it means import-eligible from other files in the
+   same package.
 2. On struct members it means accessible wherever values of that type are
    accessible.
 3. Diagnostics must state which contextual meaning applies.
+
+No file has implicit cross-file name visibility. Accessing declarations from
+another file always requires an explicit `import`.
 
 ### Intent
 
@@ -208,28 +213,34 @@ For `import A/B { X }` in file `f`:
    - file-private symbols are not importable.
 4. If `f` is in a different package:
    - `X` must be `public`.
-   - `X` must be re-exported by `A/B/PACKAGE.coppice`.
+   - `X` must be listed by `exports` in `A/B/PACKAGE.coppice`.
 5. Missing or inaccessible symbols are compile errors with source span.
 
 ---
 
-## Re-export Syntax in `PACKAGE.coppice`
+## Package API Syntax in `PACKAGE.coppice`
 
 Canonical form:
 
 ```lang
-export { SymbolA, SymbolB }
+exports { SymbolA, SymbolB }
 ```
 
 Semantics:
 
 1. Listed symbols are resolved in the current package symbol table.
 2. Listed symbols become part of the package external API.
-3. Re-exporting a non-`public` declaration is a compile error.
-4. Duplicate exports are compile errors.
+3. Listing a non-`public` declaration is a compile error.
+4. Duplicate exported members are compile errors.
 5. Unknown symbols are compile errors.
 
-Note: `export` is only valid in `PACKAGE.coppice`.
+Note: `exports` is only valid in `PACKAGE.coppice`. `PACKAGE.coppice` is a
+declarative manifest and does not use imports; exported members resolve against
+package-level `public` declarations. The keyword `export` is invalid.
+
+Keyword intent: `exports` is plural by design to emphasize that
+`PACKAGE.coppice` is a declarative package API table, not a file-local export
+statement or a barrel forwarding file.
 
 ---
 

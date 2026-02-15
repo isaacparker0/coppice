@@ -486,18 +486,21 @@ platform/
 
 ### PACKAGE.coppice
 
-Contains only a doc comment and `export` declarations. No code.
+Contains only a doc comment and `exports` declarations. No code.
 
 ```
 // platform/auth/PACKAGE.coppice
 
 // Package auth provides authentication and authorization.
 
-export { Token, parse, hash, verify }
+exports { Token, parse, hash, verify }
 ```
 
-`export` re-exports selected symbols as the package's external API. This is the
-only place `export` is allowed.
+`exports` declares selected symbols as the package's external API. This is the
+only place `exports` is allowed. The keyword `export` is invalid.
+
+The plural keyword is intentional: `PACKAGE.coppice` is a declarative API table,
+not a file-local export statement and not a barrel forwarding module.
 
 ### Imports
 
@@ -537,21 +540,22 @@ Two visibility axes:
 - Top-level declarations:
   - No modifier — file-private.
   - `public` — package-visible (importable by other files in the same package).
-  - External visibility — requires `public` plus `export` in `PACKAGE.coppice`.
+  - External visibility — requires `public` plus `exports` in `PACKAGE.coppice`.
 - Struct members:
   - No modifier — type-private (accessible only inside methods on that type).
   - `public` — accessible anywhere the type itself is accessible.
 
 `public` is contextual by declaration kind:
 
-- On top-level declarations: visible from any file in the same package.
+- On top-level declarations: eligible to be imported from other files in the
+  same package.
 - On struct members: accessible wherever values of that type are accessible.
 - Diagnostics must name the contextual meaning in each error.
 
 ```
 // auth/token.coppice
 
-public type Token :: struct {        // package-visible, re-exportable
+public type Token :: struct {        // package-visible, can be listed in exports
     public user_id: i64         // visible on the struct externally
     signature: string           // type-private field
 }
@@ -566,9 +570,13 @@ rules, but may not declare `public` symbols and are not importable.
 
 ### Intra-Package Access
 
-Intra-package usage is explicit. Files do not see sibling declarations
-implicitly; they import package-visible (`public`) symbols explicitly using the
-same import form as everywhere else.
+Intra-package usage is explicit for code files. Files do not see sibling
+declarations implicitly; they import package-visible (`public`) symbols
+explicitly using the same import form as other code files.
+
+`PACKAGE.coppice` is a declarative manifest, not a normal code scope. It does
+not import symbols; `exports { ... }` resolves members against package-level
+`public` declarations.
 
 ```
 // auth/token.coppice
@@ -656,7 +664,7 @@ No assertion libraries. No `assertEqual`, `expect().toBe()`. Just `assert`.
 Functions. No framework, no decorators, no dependency injection.
 
 ```
-// testutil/auth.coppice (with PACKAGE.coppice exporting these)
+// testutil/auth.coppice (with PACKAGE.coppice listing these in exports)
 
 public function make_token(user_id: i64) -> Token {
     return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)

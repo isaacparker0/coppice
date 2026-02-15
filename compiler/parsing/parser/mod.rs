@@ -105,9 +105,9 @@ impl Parser {
                 } else {
                     self.synchronize();
                 }
-            } else if self.peek_is_keyword(Keyword::Export) {
-                if let Some(export_declaration) = self.parse_export_declaration() {
-                    declarations.push(Declaration::Export(export_declaration));
+            } else if self.peek_is_keyword(Keyword::Exports) {
+                if let Some(exports_declaration) = self.parse_exports_declaration() {
+                    declarations.push(Declaration::Exports(exports_declaration));
                 } else {
                     self.synchronize();
                 }

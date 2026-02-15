@@ -1,4 +1,4 @@
-export { Token }
+exports { Token }
 
 function main() -> nil {
     return nil

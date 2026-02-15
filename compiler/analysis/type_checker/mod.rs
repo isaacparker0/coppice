@@ -30,7 +30,7 @@ pub(crate) fn check_parsed_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnos
             Declaration::Function(function_declaration) => {
                 function_declarations.push(function_declaration.clone());
             }
-            Declaration::Import(_) | Declaration::Export(_) => {}
+            Declaration::Import(_) | Declaration::Exports(_) => {}
         }
     }
     check_declarations(

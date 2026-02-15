@@ -15,29 +15,30 @@ use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, V
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
 pub fn check_file_role_rules(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
-    check_export_declaration_roles(file, diagnostics);
+    check_exports_declaration_roles(file, diagnostics);
     check_public_declaration_roles(file, diagnostics);
     check_main_function_roles(file, diagnostics);
 }
 
-fn check_export_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
     for declaration in &file.declarations {
-        if file.role == FileRole::PackageManifest && !matches!(declaration, Declaration::Export(_))
+        if file.role == FileRole::PackageManifest && !matches!(declaration, Declaration::Exports(_))
         {
             if is_main_function_declaration(declaration) {
                 // `main` has a dedicated role diagnostic.
                 continue;
             }
             diagnostics.push(Diagnostic::new(
-                "PACKAGE.coppice may only contain export declarations",
+                "PACKAGE.coppice may only contain exports declarations",
                 declaration_span(declaration).clone(),
             ));
             continue;
         }
 
-        if file.role != FileRole::PackageManifest && matches!(declaration, Declaration::Export(_)) {
+        if file.role != FileRole::PackageManifest && matches!(declaration, Declaration::Exports(_))
+        {
             diagnostics.push(Diagnostic::new(
-                "export declarations are only allowed in PACKAGE.coppice",
+                "exports declarations are only allowed in PACKAGE.coppice",
                 declaration_span(declaration).clone(),
             ));
         }
@@ -164,7 +165,7 @@ fn fallback_file_span(file: &ParsedFile) -> Span {
 fn declaration_span(declaration: &Declaration) -> &Span {
     match declaration {
         Declaration::Import(import_declaration) => &import_declaration.span,
-        Declaration::Export(export_declaration) => &export_declaration.span,
+        Declaration::Exports(exports_declaration) => &exports_declaration.span,
         Declaration::Type(type_declaration) => &type_declaration.span,
         Declaration::Constant(constant_declaration) => &constant_declaration.span,
         Declaration::Function(function_declaration) => &function_declaration.span,

@@ -1,4 +1,0 @@
-# exit: 1
-input/lib.test.coppice:1:1: error: export declarations are only allowed in PACKAGE.coppice
-  export { Token }
-  ^

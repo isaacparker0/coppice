@@ -15,13 +15,13 @@ pub struct ImportMember {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExportDeclaration {
-    pub members: Vec<ExportMember>,
+pub struct ExportsDeclaration {
+    pub members: Vec<ExportsMember>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ExportMember {
+pub struct ExportsMember {
     pub name: String,
     pub span: Span,
 }
@@ -35,7 +35,7 @@ pub struct ParsedFile {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     Import(ImportDeclaration),
-    Export(ExportDeclaration),
+    Exports(ExportsDeclaration),
     Type(TypeDeclaration),
     Constant(ConstantDeclaration),
     Function(FunctionDeclaration),
