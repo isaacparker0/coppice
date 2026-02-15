@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:7:17: error: unknown method 'User.missing'
+input/lib.coppice:7:17: error: unknown method 'User.missing'
       return user.missing()
                   ^

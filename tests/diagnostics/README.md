@@ -21,7 +21,12 @@ tests/diagnostics/<area>/<feature>/<case>/
 
 ## Content rules
 
-- Each fixture is self-contained and uses a single file: `input/main.coppice`.
+- Each fixture is self-contained and should use a clear role-oriented default
+  filename under `input/`: prefer `lib.coppice` for library/general cases,
+  `lib.test.coppice` for test-role cases, `main.bin.coppice` for binary-role
+  cases, and `PACKAGE.coppice` for manifest-role cases; these are defaults for
+  clarity, not hard constraints, and multi-file fixtures may use other
+  filenames/layouts as needed.
 - `minimal_valid` is the only success case for a feature and should cover all
   valid sub-kinds for that feature in one file.
 - `expect.txt` starts with `# exit: <code>` and the exact expected output after

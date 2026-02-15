@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:1:1: error: constant name must be UPPER_SNAKE_CASE
+input/lib.coppice:1:1: error: constant name must be UPPER_SNAKE_CASE
   apiVersion := "v1"
   ^

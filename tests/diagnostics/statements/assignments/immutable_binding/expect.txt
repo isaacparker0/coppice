@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:3:5: error: cannot assign to immutable binding 'x'
+input/lib.coppice:3:5: error: cannot assign to immutable binding 'x'
       x = 2
       ^

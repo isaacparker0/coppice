@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:1:1: error: doc comment must document a declaration
+input/lib.coppice:1:1: error: doc comment must document a declaration
   /// This should not attach because of a blank line.
   ^

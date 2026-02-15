@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:2:12: error: equality operators require same type
+input/lib.coppice:2:12: error: equality operators require same type
       return 1 != true
              ^

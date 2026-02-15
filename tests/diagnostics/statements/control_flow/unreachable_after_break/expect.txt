@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:4:9: error: unreachable code
+input/lib.coppice:4:9: error: unreachable code
           return 1
           ^

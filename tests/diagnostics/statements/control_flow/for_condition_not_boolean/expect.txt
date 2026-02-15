@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:2:9: error: for condition must be boolean
+input/lib.coppice:2:9: error: for condition must be boolean
       for 1 {
           ^

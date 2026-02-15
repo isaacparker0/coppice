@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:7:19: error: match arm type mismatch: expected int64, got string
+input/lib.coppice:7:19: error: match arm type mismatch: expected int64, got string
           string => "nope"
                     ^

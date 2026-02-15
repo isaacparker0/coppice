@@ -1,4 +1,4 @@
 # exit: 1
-input/main.coppice:2:12: error: return type mismatch: expected int64, got boolean
+input/lib.coppice:2:12: error: return type mismatch: expected int64, got boolean
       return true
              ^
