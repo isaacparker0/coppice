@@ -3,16 +3,15 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "typecheck",
     srcs = [
+        "assignability.rs",
+        "declarations.rs",
+        "expressions.rs",
         "lib.rs",
-        "type_checker/assignability.rs",
-        "type_checker/declarations.rs",
-        "type_checker/expressions.rs",
-        "type_checker/mod.rs",
-        "type_checker/naming_rules.rs",
-        "type_checker/statements.rs",
-        "type_checker/type_narrowing.rs",
-        "type_checker/unused_bindings.rs",
+        "naming_rules.rs",
+        "statements.rs",
+        "type_narrowing.rs",
         "types.rs",
+        "unused_bindings.rs",
     ],
     visibility = ["//visibility:public"],
     deps = [

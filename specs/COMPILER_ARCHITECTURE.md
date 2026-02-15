@@ -150,7 +150,7 @@ Practical exception:
 3. Semantic analysis / resolution:
    - `compiler/resolution/*`
 4. Typechecking:
-   - `compiler/typecheck/type_checker/*`
+   - `compiler/typecheck/*`
 5. Driver:
    - `compiler/driver/*`
 
