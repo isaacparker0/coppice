@@ -1,0 +1,4 @@
+# exit: 1
+input/lib.coppice:5:1: error: import declarations must appear before top-level declarations
+  import platform/auth { Token }
+  ^

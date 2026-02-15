@@ -1,0 +1,5 @@
+function helper() -> nil {
+    return nil
+}
+
+import platform/auth { Token }

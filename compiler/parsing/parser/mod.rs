@@ -41,6 +41,7 @@ impl Parser {
 
     fn parse_declarations(&mut self) -> Vec<Declaration> {
         let mut declarations = Vec::new();
+        let mut saw_non_import_declaration = false;
         while !self.at_eof() {
             self.skip_statement_terminators();
             let mut doc = self.parse_leading_doc_comment_block();
@@ -60,6 +61,7 @@ impl Parser {
                 doc = None;
             }
             if self.peek_is_keyword(Keyword::Public) {
+                saw_non_import_declaration = true;
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
                     if let Some(type_declaration) = self.parse_type_declaration(visibility, doc) {
@@ -95,29 +97,40 @@ impl Parser {
                 if let Some(type_declaration) =
                     self.parse_type_declaration(Visibility::Private, doc)
                 {
+                    saw_non_import_declaration = true;
                     declarations.push(Declaration::Type(type_declaration));
                 } else {
+                    saw_non_import_declaration = true;
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Import) {
                 if let Some(import_declaration) = self.parse_import_declaration() {
+                    if saw_non_import_declaration {
+                        self.error(
+                            "import declarations must appear before top-level declarations",
+                            import_declaration.span.clone(),
+                        );
+                    }
                     declarations.push(Declaration::Import(import_declaration));
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Exports) {
+                saw_non_import_declaration = true;
                 if let Some(exports_declaration) = self.parse_exports_declaration() {
                     declarations.push(Declaration::Exports(exports_declaration));
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Function) {
+                saw_non_import_declaration = true;
                 if let Some(function_declaration) = self.parse_function(Visibility::Private, doc) {
                     declarations.push(Declaration::Function(function_declaration));
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
+                saw_non_import_declaration = true;
                 if let Some(doc) = doc {
                     self.error("doc comment must document a declaration", doc.span);
                 }
@@ -126,6 +139,7 @@ impl Parser {
                 self.advance();
                 self.synchronize();
             } else if self.peek_is_identifier() {
+                saw_non_import_declaration = true;
                 if let Some(constant_declaration) =
                     self.parse_constant_declaration(Visibility::Private)
                 {
@@ -137,6 +151,7 @@ impl Parser {
                     self.synchronize();
                 }
             } else {
+                saw_non_import_declaration = true;
                 if let Some(doc) = doc {
                     self.error("doc comment must document a declaration", doc.span);
                 }
