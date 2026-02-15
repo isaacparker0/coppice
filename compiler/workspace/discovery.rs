@@ -34,7 +34,7 @@ pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<Discov
     let mut source_paths_by_package_root: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
     for source_path in source_paths {
         let role = FileRole::from_path(&source_path).expect("source path must be .coppice");
-        if role == FileRole::Manifest {
+        if role == FileRole::PackageManifest {
             continue;
         }
         let source_directory = source_path.parent().unwrap_or(Path::new(""));
@@ -127,7 +127,9 @@ fn collect_workspace_entries(
             continue;
         };
         source_paths.push(child_relative_path.clone());
-        if role == FileRole::Manifest && !package_roots.insert(relative_directory.to_path_buf()) {
+        if role == FileRole::PackageManifest
+            && !package_roots.insert(relative_directory.to_path_buf())
+        {
             errors.push(DiscoveryError::new(
                 "duplicate PACKAGE.coppice in package root",
                 Some(child_relative_path),

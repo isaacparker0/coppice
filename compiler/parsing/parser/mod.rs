@@ -1,10 +1,15 @@
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 use compiler__diagnostics::Diagnostic;
+use compiler__source::FileRole;
 use compiler__source::Span;
-use compiler__syntax::{ConstantDeclaration, DocComment, Expression, LibraryFile, Visibility};
+use compiler__syntax::{
+    ConstantDeclaration, Declaration, DocComment, Expression, ParsedFile, Visibility,
+};
 
 mod declarations;
+mod exports;
 mod expressions;
+mod imports;
 mod recovery;
 mod statements;
 mod types;
@@ -28,10 +33,14 @@ impl Parser {
         self.diagnostics
     }
 
-    pub fn parse_library_file(&mut self) -> LibraryFile {
-        let mut types = Vec::new();
-        let mut constants = Vec::new();
-        let mut functions = Vec::new();
+    pub fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
+        let declarations = self.parse_declarations();
+
+        ParsedFile { role, declarations }
+    }
+
+    fn parse_declarations(&mut self) -> Vec<Declaration> {
+        let mut declarations = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
             let mut doc = self.parse_leading_doc_comment_block();
@@ -54,24 +63,23 @@ impl Parser {
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
                     if let Some(type_declaration) = self.parse_type_declaration(visibility, doc) {
-                        types.push(type_declaration);
+                        declarations.push(Declaration::Type(type_declaration));
                     } else {
                         self.synchronize();
                     }
                 } else if self.peek_is_keyword(Keyword::Function) {
                     if let Some(function_declaration) = self.parse_function(visibility, doc) {
-                        functions.push(function_declaration);
+                        declarations.push(Declaration::Function(function_declaration));
                     } else {
                         self.synchronize();
                     }
                 } else if self.peek_is_identifier() {
                     if let Some(constant_declaration) = self.parse_constant_declaration(visibility)
                     {
-                        let constant_declaration = ConstantDeclaration {
+                        declarations.push(Declaration::Constant(ConstantDeclaration {
                             doc,
                             ..constant_declaration
-                        };
-                        constants.push(constant_declaration);
+                        }));
                     } else {
                         self.synchronize();
                     }
@@ -87,13 +95,25 @@ impl Parser {
                 if let Some(type_declaration) =
                     self.parse_type_declaration(Visibility::Private, doc)
                 {
-                    types.push(type_declaration);
+                    declarations.push(Declaration::Type(type_declaration));
+                } else {
+                    self.synchronize();
+                }
+            } else if self.peek_is_keyword(Keyword::Import) {
+                if let Some(import_declaration) = self.parse_import_declaration() {
+                    declarations.push(Declaration::Import(import_declaration));
+                } else {
+                    self.synchronize();
+                }
+            } else if self.peek_is_keyword(Keyword::Export) {
+                if let Some(export_declaration) = self.parse_export_declaration() {
+                    declarations.push(Declaration::Export(export_declaration));
                 } else {
                     self.synchronize();
                 }
             } else if self.peek_is_keyword(Keyword::Function) {
                 if let Some(function_declaration) = self.parse_function(Visibility::Private, doc) {
-                    functions.push(function_declaration);
+                    declarations.push(Declaration::Function(function_declaration));
                 } else {
                     self.synchronize();
                 }
@@ -109,11 +129,10 @@ impl Parser {
                 if let Some(constant_declaration) =
                     self.parse_constant_declaration(Visibility::Private)
                 {
-                    let constant_declaration = ConstantDeclaration {
+                    declarations.push(Declaration::Constant(ConstantDeclaration {
                         doc,
                         ..constant_declaration
-                    };
-                    constants.push(constant_declaration);
+                    }));
                 } else {
                     self.synchronize();
                 }
@@ -126,11 +145,7 @@ impl Parser {
                 self.synchronize();
             }
         }
-        LibraryFile {
-            types,
-            constants,
-            functions,
-        }
+        declarations
     }
 
     fn parse_visibility(&mut self) -> Visibility {

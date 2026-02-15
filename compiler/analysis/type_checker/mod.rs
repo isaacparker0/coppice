@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use compiler__diagnostics::Diagnostic;
 use compiler__source::Span;
-use compiler__syntax::{Expression, LibraryFile, Statement, TypeName};
+use compiler__syntax::{
+    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, ParsedFile, Statement,
+    TypeDeclaration, TypeName,
+};
 
 use crate::types::{Type, type_from_name};
 
@@ -14,19 +17,45 @@ mod statements;
 mod type_narrowing;
 mod unused_bindings;
 
-#[must_use]
-pub fn check_library_file(file: &LibraryFile) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    let mut type_checker = TypeChecker::new(&mut diagnostics);
-    type_checker.collect_type_declarations(&file.types);
-    type_checker.collect_function_signatures(&file.functions);
-    type_checker.collect_method_signatures(&file.types);
-    type_checker.check_constant_declarations(&file.constants);
-    for function in &file.functions {
+pub(crate) fn check_parsed_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+    let mut type_declarations = Vec::new();
+    let mut constant_declarations = Vec::new();
+    let mut function_declarations = Vec::new();
+    for declaration in &file.declarations {
+        match declaration {
+            Declaration::Type(type_declaration) => type_declarations.push(type_declaration.clone()),
+            Declaration::Constant(constant_declaration) => {
+                constant_declarations.push(constant_declaration.clone());
+            }
+            Declaration::Function(function_declaration) => {
+                function_declarations.push(function_declaration.clone());
+            }
+            Declaration::Import(_) | Declaration::Export(_) => {}
+        }
+    }
+    check_declarations(
+        diagnostics,
+        &type_declarations,
+        &constant_declarations,
+        &function_declarations,
+    );
+}
+
+fn check_declarations(
+    diagnostics: &mut Vec<Diagnostic>,
+    type_declarations: &[TypeDeclaration],
+    constant_declarations: &[ConstantDeclaration],
+    function_declarations: &[FunctionDeclaration],
+) {
+    let mut type_checker = TypeChecker::new(diagnostics);
+    type_checker.collect_type_declarations(type_declarations);
+    type_checker.collect_function_signatures(function_declarations);
+    type_checker.collect_method_signatures(type_declarations);
+    type_checker.check_constant_declarations(constant_declarations);
+    for function in function_declarations {
         type_checker.check_function(function);
     }
-    type_checker.check_methods(&file.types);
-    diagnostics
+    type_checker.check_methods(type_declarations);
 }
 
 pub(super) struct VariableInfo {

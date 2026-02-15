@@ -6,12 +6,15 @@ pub enum Keyword {
     // keep-sorted start
     Abort,
     And,
+    As,
     Break,
     Continue,
     Else,
+    Export,
     For,
     Function,
     If,
+    Import,
     Match,
     Matches,
     Mut,
@@ -31,12 +34,15 @@ impl Keyword {
             // keep-sorted start
             Keyword::Abort => "abort",
             Keyword::And => "and",
+            Keyword::As => "as",
             Keyword::Break => "break",
             Keyword::Continue => "continue",
             Keyword::Else => "else",
+            Keyword::Export => "export",
             Keyword::For => "for",
             Keyword::Function => "function",
             Keyword::If => "if",
+            Keyword::Import => "import",
             Keyword::Match => "match",
             Keyword::Matches => "matches",
             Keyword::Mut => "mut",
@@ -372,6 +378,9 @@ impl<'a> Lexer<'a> {
             "if" => TokenKind::Keyword(Keyword::If),
             "for" => TokenKind::Keyword(Keyword::For),
             "else" => TokenKind::Keyword(Keyword::Else),
+            "export" => TokenKind::Keyword(Keyword::Export),
+            "import" => TokenKind::Keyword(Keyword::Import),
+            "as" => TokenKind::Keyword(Keyword::As),
             "match" => TokenKind::Keyword(Keyword::Match),
             "and" => TokenKind::Keyword(Keyword::And),
             "or" => TokenKind::Keyword(Keyword::Or),
@@ -576,6 +585,8 @@ fn is_statement_start(kind: &TokenKind) -> bool {
                     | Keyword::For
                     | Keyword::Mut
                     | Keyword::Match
+                    | Keyword::Export
+                    | Keyword::Import
             )
     )
 }

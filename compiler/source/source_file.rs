@@ -8,7 +8,7 @@ pub enum FileRole {
     Library,
     BinaryEntrypoint,
     Test,
-    Manifest,
+    PackageManifest,
 }
 
 impl FileRole {
@@ -16,7 +16,7 @@ impl FileRole {
     pub fn from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_str()?;
         if file_name == "PACKAGE.coppice" {
-            return Some(Self::Manifest);
+            return Some(Self::PackageManifest);
         }
         if file_name.ends_with(".bin.coppice") {
             return Some(Self::BinaryEntrypoint);

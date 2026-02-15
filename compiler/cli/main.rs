@@ -1,10 +1,12 @@
 use std::fs;
+use std::path::Path;
 use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__parsing::parse_library_file;
-use compiler__source::Span;
+use compiler__analysis::check_file;
+use compiler__parsing::parse_file;
+use compiler__source::{FileRole, Span};
 
 #[derive(Parser)]
 #[command(version)]
@@ -31,9 +33,14 @@ fn main() {
         }
     };
 
-    match parse_library_file(&source) {
+    let Some(role) = FileRole::from_path(Path::new(&path)) else {
+        eprintln!("{path}: error: expected a .coppice source file");
+        process::exit(1);
+    };
+
+    match parse_file(&source, role) {
         Ok(file) => {
-            let diagnostics = compiler__analysis::check_library_file(&file);
+            let diagnostics = check_file(&file);
             if diagnostics.is_empty() {
                 println!("ok");
             } else {

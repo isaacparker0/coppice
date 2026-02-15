@@ -1,29 +1,17 @@
-use compiler__source::Span;
+use compiler__source::{FileRole, Span};
 
 #[derive(Clone, Debug)]
-pub struct LibraryFile {
-    pub types: Vec<TypeDeclaration>,
-    pub constants: Vec<ConstantDeclaration>,
-    pub functions: Vec<FunctionDeclaration>,
+pub struct ImportDeclaration {
+    pub package_path: String,
+    pub members: Vec<ImportMember>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct BinaryFile {
-    pub types: Vec<TypeDeclaration>,
-    pub constants: Vec<ConstantDeclaration>,
-    pub functions: Vec<FunctionDeclaration>,
-}
-
-#[derive(Clone, Debug)]
-pub struct TestFile {
-    pub types: Vec<TypeDeclaration>,
-    pub constants: Vec<ConstantDeclaration>,
-    pub functions: Vec<FunctionDeclaration>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PackageFile {
-    pub exports: Vec<ExportDeclaration>,
+pub struct ImportMember {
+    pub name: String,
+    pub alias: Option<String>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -39,11 +27,18 @@ pub struct ExportMember {
 }
 
 #[derive(Clone, Debug)]
-pub enum ParsedFile {
-    Library(LibraryFile),
-    Binary(BinaryFile),
-    Test(TestFile),
-    Package(PackageFile),
+pub struct ParsedFile {
+    pub role: FileRole,
+    pub declarations: Vec<Declaration>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Declaration {
+    Import(ImportDeclaration),
+    Export(ExportDeclaration),
+    Type(TypeDeclaration),
+    Constant(ConstantDeclaration),
+    Function(FunctionDeclaration),
 }
 
 #[derive(Clone, Debug)]
