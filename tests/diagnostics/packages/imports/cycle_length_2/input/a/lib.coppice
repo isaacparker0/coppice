@@ -1,0 +1,3 @@
+import workspace/b { B }
+
+public type A :: struct {}

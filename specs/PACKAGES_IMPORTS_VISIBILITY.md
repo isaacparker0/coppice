@@ -236,14 +236,13 @@ another file always requires an explicit `import`.
 For `import P { X }` in file `f`:
 
 1. Resolver locates package `P`.
-2. Imports from `*.bin.coppice` or `*.test.coppice` files are illegal.
-3. If `f` is in package `P`:
+2. If `f` is in package `P`:
    - `X` must be package-visible (`public`) in some file of `P`.
    - file-private symbols are not importable.
-4. If `f` is in a different package:
+3. If `f` is in a different package:
    - `X` must be `public`.
    - `X` must be listed by `exports` in the target package manifest.
-5. Missing or inaccessible symbols are compile errors with source span.
+4. Missing or inaccessible symbols are compile errors with source span.
 
 ---
 

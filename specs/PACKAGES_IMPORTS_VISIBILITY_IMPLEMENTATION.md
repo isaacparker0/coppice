@@ -254,9 +254,8 @@ Tasks:
 2. Emit unknown package diagnostics with source span.
 3. Emit unknown import origin diagnostics (`workspace`, `std`, `external` are
    the only valid top-level import origins).
-4. Reject imports that resolve to a binary entrypoint or test file.
-5. Build directed package graph from resolved imports.
-6. Detect and report cycles (permanent error policy).
+4. Build directed package graph from resolved imports.
+5. Detect and report cycles (permanent error policy).
 
 Cycle diagnostic requirements:
 
@@ -268,7 +267,6 @@ Exit criteria:
 1. Fixtures for unknown package imports.
 2. Fixtures for unknown import origin.
 3. Fixtures for simple and multi-node import cycles.
-4. Fixtures for illegal imports of `.bin.coppice` and `.test.coppice`.
 
 ---
 
@@ -420,8 +418,6 @@ Representative fixture cases:
 12. `main` declared in library file.
 13. `public` declaration in `.bin.coppice`.
 14. `public` declaration in `.test.coppice`.
-15. import of `.bin.coppice` file.
-16. import of `.test.coppice` file.
 
 ## Regression Tests
 

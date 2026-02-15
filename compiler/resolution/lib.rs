@@ -130,6 +130,8 @@ pub fn check_package(files: &[PackageFile<'_>], diagnostics: &mut Vec<PackageDia
             );
         }
     }
+
+    check_package_import_cycles(&ordered_files, &symbols_by_package, diagnostics);
 }
 
 fn top_level_symbol(declaration: &Declaration) -> Option<TopLevelSymbol> {
@@ -243,4 +245,157 @@ fn resolve_import_package_path(
         return Ok((import_package_path.to_string(), false));
     }
     Err("import path must start with import origin 'workspace', 'std/', or 'external/'".to_string())
+}
+
+fn check_package_import_cycles(
+    ordered_files: &[&PackageFile<'_>],
+    symbols_by_package: &BTreeMap<String, PackageSymbols>,
+    diagnostics: &mut Vec<PackageDiagnostic>,
+) {
+    #[derive(Clone)]
+    struct ImportSite {
+        path: PathBuf,
+        span: Span,
+    }
+
+    let mut adjacency_by_package: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut first_import_site_by_edge: BTreeMap<(String, String), ImportSite> = BTreeMap::new();
+
+    for source_package in symbols_by_package.keys() {
+        adjacency_by_package
+            .entry(source_package.clone())
+            .or_default();
+    }
+
+    for file in ordered_files {
+        if file.parsed.role == FileRole::PackageManifest {
+            continue;
+        }
+        for declaration in &file.parsed.declarations {
+            let Declaration::Import(import_declaration) = declaration else {
+                continue;
+            };
+            let Ok((target_package, same_package)) =
+                resolve_import_package_path(file.package_path, &import_declaration.package_path)
+            else {
+                continue;
+            };
+            if same_package || !symbols_by_package.contains_key(&target_package) {
+                continue;
+            }
+            adjacency_by_package
+                .entry(file.package_path.to_string())
+                .or_default()
+                .insert(target_package.clone());
+            first_import_site_by_edge
+                .entry((file.package_path.to_string(), target_package))
+                .or_insert_with(|| ImportSite {
+                    path: file.path.to_path_buf(),
+                    span: import_declaration.span.clone(),
+                });
+        }
+    }
+
+    let Some(cycle) = first_cycle_in_graph(&adjacency_by_package) else {
+        return;
+    };
+    if cycle.len() < 2 {
+        return;
+    }
+
+    let source = &cycle[0];
+    let target = &cycle[1];
+    let Some(import_site) = first_import_site_by_edge.get(&(source.clone(), target.clone())) else {
+        return;
+    };
+
+    let cycle_display = cycle
+        .iter()
+        .map(|package| display_package_path(package))
+        .collect::<Vec<String>>()
+        .join(" -> ");
+    diagnostics.push(PackageDiagnostic {
+        path: import_site.path.clone(),
+        diagnostic: Diagnostic::new(
+            format!("package import cycle detected: {cycle_display}"),
+            import_site.span.clone(),
+        ),
+    });
+}
+
+fn first_cycle_in_graph(
+    adjacency_by_package: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<Vec<String>> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum VisitState {
+        Visiting,
+        Visited,
+    }
+
+    fn dfs(
+        node: &str,
+        adjacency_by_package: &BTreeMap<String, BTreeSet<String>>,
+        state_by_node: &mut BTreeMap<String, VisitState>,
+        stack: &mut Vec<String>,
+        index_by_node_in_stack: &mut BTreeMap<String, usize>,
+    ) -> Option<Vec<String>> {
+        state_by_node.insert(node.to_string(), VisitState::Visiting);
+        index_by_node_in_stack.insert(node.to_string(), stack.len());
+        stack.push(node.to_string());
+
+        if let Some(neighbors) = adjacency_by_package.get(node) {
+            for neighbor in neighbors {
+                if let Some(index) = index_by_node_in_stack.get(neighbor) {
+                    let mut cycle = stack[*index..].to_vec();
+                    cycle.push(neighbor.clone());
+                    return Some(cycle);
+                }
+                if state_by_node.get(neighbor) == Some(&VisitState::Visited) {
+                    continue;
+                }
+                if let Some(cycle) = dfs(
+                    neighbor,
+                    adjacency_by_package,
+                    state_by_node,
+                    stack,
+                    index_by_node_in_stack,
+                ) {
+                    return Some(cycle);
+                }
+            }
+        }
+
+        stack.pop();
+        index_by_node_in_stack.remove(node);
+        state_by_node.insert(node.to_string(), VisitState::Visited);
+        None
+    }
+
+    let mut state_by_node: BTreeMap<String, VisitState> = BTreeMap::new();
+    let mut stack = Vec::new();
+    let mut index_by_node_in_stack: BTreeMap<String, usize> = BTreeMap::new();
+
+    for package in adjacency_by_package.keys() {
+        if state_by_node.contains_key(package) {
+            continue;
+        }
+        if let Some(cycle) = dfs(
+            package,
+            adjacency_by_package,
+            &mut state_by_node,
+            &mut stack,
+            &mut index_by_node_in_stack,
+        ) {
+            return Some(cycle);
+        }
+    }
+    None
+}
+
+fn display_package_path(package_path: &str) -> String {
+    if package_path.is_empty() {
+        "workspace".to_string()
+    } else {
+        format!("workspace/{package_path}")
+    }
 }
