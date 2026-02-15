@@ -5,7 +5,7 @@ type User :: struct {
     },
 }
 
-function main() -> int64 {
+function run() -> int64 {
     user := User { id: 1 }
     return user.plus()
 }

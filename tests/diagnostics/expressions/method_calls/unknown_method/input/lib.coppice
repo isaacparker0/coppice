@@ -2,7 +2,7 @@ type User :: struct {
     id: int64,
 }
 
-function main() -> int64 {
+function run() -> int64 {
     user := User { id: 1 }
     return user.missing()
 }

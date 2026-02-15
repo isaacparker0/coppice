@@ -1,4 +1,4 @@
-function main() -> int64 {
+function run() -> int64 {
     1 + 2
     return 0
 }

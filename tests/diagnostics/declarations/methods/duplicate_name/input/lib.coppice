@@ -8,6 +8,6 @@ type User :: struct {
     },
 }
 
-function main() -> int64 {
+function run() -> int64 {
     return 0
 }

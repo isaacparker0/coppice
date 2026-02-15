@@ -9,7 +9,7 @@ type User :: struct {
     },
 }
 
-function main() -> int64 {
+function run() -> int64 {
     mut user := User { id: 1 }
     value := user.idValue()
     user.bump(value)

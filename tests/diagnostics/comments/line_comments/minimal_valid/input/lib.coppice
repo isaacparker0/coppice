@@ -1,4 +1,4 @@
-function main() -> int64 {
+function run() -> int64 {
     // full-line comment
     value := 1 // trailing comment
     return value // trailing comment
