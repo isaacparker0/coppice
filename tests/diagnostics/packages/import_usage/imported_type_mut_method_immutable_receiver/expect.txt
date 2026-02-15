@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:5:17: error: cannot call mutating method 'User.bump' on immutable binding 'user'
+      return user.bump(1)
+                  ^

@@ -1,0 +1,5 @@
+public type Token :: struct {}
+
+public function makeToken() -> Token {
+    return Token {}
+}

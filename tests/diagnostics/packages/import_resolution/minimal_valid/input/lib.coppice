@@ -1,0 +1,5 @@
+import workspace/auth { Token }
+
+function run() -> Token {
+    return Token {}
+}

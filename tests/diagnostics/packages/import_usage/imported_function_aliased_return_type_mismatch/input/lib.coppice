@@ -1,0 +1,9 @@
+import workspace/auth { Token as AuthToken, makeToken }
+
+function idOf(token: AuthToken) -> int64 {
+    return token.id()
+}
+
+function run() -> string {
+    return idOf(makeToken())
+}

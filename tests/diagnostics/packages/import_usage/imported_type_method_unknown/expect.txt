@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:5:17: error: unknown method 'User.missing'
+      return user.missing()
+                  ^

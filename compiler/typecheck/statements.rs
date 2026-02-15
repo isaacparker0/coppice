@@ -207,7 +207,7 @@ impl TypeChecker<'_> {
                         format!("cannot assign to constant '{name}'"),
                         name_span.clone(),
                     );
-                } else if self.imported_constants.contains_key(name) {
+                } else if self.imported_constant_type(name).is_some() {
                     self.mark_import_used(name);
                     self.error(
                         format!("cannot assign to constant '{name}'"),

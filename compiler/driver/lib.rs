@@ -8,11 +8,13 @@ use compiler__diagnostics::Diagnostic;
 use compiler__exports as exports;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_graph as package_graph;
+use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
-use compiler__syntax::{Declaration, Visibility};
-use compiler__typecheck as typecheck;
+use compiler__typecheck::{
+    self as typecheck, PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
+};
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
 
@@ -39,17 +41,18 @@ pub enum CheckFileError {
 }
 
 struct ParsedUnit {
+    package_id: PackageId,
     package_path: String,
     path: PathBuf,
     source: String,
     parsed: compiler__syntax::ParsedFile,
 }
 
-pub fn check_file(path: &str) -> Result<CheckedTarget, CheckFileError> {
-    check_file_with_workspace_root(path, None)
+pub fn check_target(path: &str) -> Result<CheckedTarget, CheckFileError> {
+    check_target_with_workspace_root(path, None)
 }
 
-pub fn check_file_with_workspace_root(
+pub fn check_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
 ) -> Result<CheckedTarget, CheckFileError> {
@@ -147,6 +150,7 @@ pub fn check_file_with_workspace_root(
                 })?;
             match parse_file(&source, role) {
                 Ok(parsed) => parsed_units.push(ParsedUnit {
+                    package_id: package.id,
                     package_path: package.package_path.clone(),
                     path: relative_path,
                     source,
@@ -234,8 +238,21 @@ pub fn check_file_with_workspace_root(
         }
     }
 
+    let package_id_by_path = collect_package_ids_by_path(&workspace);
+    let package_units: Vec<PackageUnit<'_>> = parsed_units
+        .iter()
+        .map(|unit| PackageUnit {
+            package_id: unit.package_id,
+            path: &unit.path,
+            parsed: &unit.parsed,
+        })
+        .collect();
+    let typecheck_resolved_imports =
+        build_typecheck_resolved_imports(&resolved_imports, &package_id_by_path);
+    let typed_public_symbol_table =
+        typecheck::build_typed_public_symbol_table(&package_units, &typecheck_resolved_imports);
     let imported_bindings_by_file =
-        build_typecheck_imported_bindings(&parsed_units, &resolved_imports);
+        typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
 
     let has_pre_typecheck_errors = !rendered_diagnostics.is_empty();
     if has_pre_typecheck_errors {
@@ -263,7 +280,7 @@ pub fn check_file_with_workspace_root(
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
-        typecheck::check_file(
+        typecheck::check_package_unit(
             &parsed_unit.parsed,
             imported_bindings,
             &mut file_diagnostics,
@@ -291,89 +308,40 @@ pub fn check_file_with_workspace_root(
     })
 }
 
-fn build_typecheck_imported_bindings(
-    parsed_units: &[ParsedUnit],
+fn collect_package_ids_by_path(workspace: &Workspace) -> BTreeMap<String, PackageId> {
+    let mut package_id_by_path = BTreeMap::new();
+    for package in workspace.packages() {
+        package_id_by_path.insert(package.package_path.clone(), package.id);
+    }
+    package_id_by_path
+}
+
+fn build_typecheck_resolved_imports(
     resolved_imports: &[visibility::ResolvedImport],
-) -> BTreeMap<PathBuf, Vec<typecheck::ImportedBinding>> {
-    let mut declaration_by_package_and_name: BTreeMap<(String, String), Declaration> =
-        BTreeMap::new();
-    let mut ordered_units: Vec<&ParsedUnit> = parsed_units.iter().collect();
-    ordered_units.sort_by(|left, right| {
-        left.package_path
-            .cmp(&right.package_path)
-            .then(compare_paths(&left.path, &right.path))
-    });
-
-    for unit in ordered_units {
-        if unit.parsed.role != FileRole::Library {
-            continue;
-        }
-        for declaration in &unit.parsed.declarations {
-            let (name, is_public) = match declaration {
-                Declaration::Type(type_declaration) => (
-                    &type_declaration.name,
-                    type_declaration.visibility == Visibility::Public,
-                ),
-                Declaration::Function(function_declaration) => (
-                    &function_declaration.name,
-                    function_declaration.visibility == Visibility::Public,
-                ),
-                Declaration::Constant(constant_declaration) => (
-                    &constant_declaration.name,
-                    constant_declaration.visibility == Visibility::Public,
-                ),
-                Declaration::Import(_) | Declaration::Exports(_) => {
-                    continue;
-                }
-            };
-            if !is_public {
-                continue;
-            }
-
-            declaration_by_package_and_name
-                .entry((unit.package_path.clone(), name.clone()))
-                .or_insert_with(|| declaration.clone());
-        }
-    }
-
-    let mut imported_by_file: BTreeMap<PathBuf, Vec<typecheck::ImportedBinding>> = BTreeMap::new();
+    package_id_by_path: &BTreeMap<String, PackageId>,
+) -> Vec<ResolvedImportSummary> {
+    let mut typecheck_resolved_imports = Vec::new();
     for resolved_import in resolved_imports {
-        for binding in &resolved_import.bindings {
-            let key = (
-                resolved_import.target_package_path.clone(),
-                binding.imported_name.clone(),
-            );
-            let Some(declaration) = declaration_by_package_and_name.get(&key) else {
-                continue;
-            };
-
-            let symbol = match declaration {
-                Declaration::Type(type_declaration) => {
-                    typecheck::ImportedSymbol::Type(type_declaration.clone())
-                }
-                Declaration::Function(function_declaration) => {
-                    typecheck::ImportedSymbol::Function(function_declaration.clone())
-                }
-                Declaration::Constant(constant_declaration) => {
-                    typecheck::ImportedSymbol::Constant(constant_declaration.clone())
-                }
-                Declaration::Import(_) | Declaration::Exports(_) => {
-                    continue;
-                }
-            };
-
-            imported_by_file
-                .entry(resolved_import.source_path.clone())
-                .or_default()
-                .push(typecheck::ImportedBinding {
-                    local_name: binding.local_name.clone(),
-                    span: binding.span.clone(),
-                    symbol,
-                });
-        }
+        let Some(target_package_id) = package_id_by_path.get(&resolved_import.target_package_path)
+        else {
+            continue;
+        };
+        let bindings = resolved_import
+            .bindings
+            .iter()
+            .map(|binding| ResolvedImportBindingSummary {
+                imported_name: binding.imported_name.clone(),
+                local_name: binding.local_name.clone(),
+                span: binding.span.clone(),
+            })
+            .collect();
+        typecheck_resolved_imports.push(ResolvedImportSummary {
+            source_path: resolved_import.source_path.clone(),
+            target_package_id: *target_package_id,
+            bindings,
+        });
     }
-
-    imported_by_file
+    typecheck_resolved_imports
 }
 
 fn scoped_package_paths_for_target(

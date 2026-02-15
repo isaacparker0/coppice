@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:4:12: error: return type mismatch: expected string, got int64
+      return TOP
+             ^

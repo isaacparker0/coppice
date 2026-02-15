@@ -7,22 +7,45 @@ use compiler__syntax::{
     TypeDeclaration, TypeName,
 };
 
-use crate::types::{Type, type_from_name};
+use crate::types::type_from_name;
 
 mod assignability;
 mod declarations;
 mod expressions;
 mod naming_rules;
+mod package_symbols;
 mod statements;
 mod type_narrowing;
 mod types;
 mod unused_bindings;
 
+pub use package_symbols::{
+    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary, TypedPublicSymbolTable,
+    build_typed_public_symbol_table,
+};
+pub use types::Type;
+
+pub struct TypedFunctionSignature {
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
+}
+
+pub enum TypedSymbol {
+    Type(TypeDeclaration),
+    Function(TypedFunctionSignature),
+    Constant(Type),
+}
+
+#[derive(Default)]
+pub struct FileTypecheckSummary {
+    pub typed_symbol_by_name: HashMap<String, TypedSymbol>,
+}
+
 #[derive(Clone)]
 pub enum ImportedSymbol {
     Type(TypeDeclaration),
     Function(FunctionDeclaration),
-    Constant(ConstantDeclaration),
+    Constant(Type),
 }
 
 #[derive(Clone)]
@@ -32,23 +55,31 @@ pub struct ImportedBinding {
     pub symbol: ImportedSymbol,
 }
 
-pub fn check_file(
-    file: &ParsedFile,
+pub fn check_package_unit(
+    package_unit: &ParsedFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    check_parsed_file(file, imported_bindings, diagnostics);
+    analyze_package_unit(package_unit, imported_bindings, diagnostics);
 }
 
-fn check_parsed_file(
-    file: &ParsedFile,
+pub fn analyze_package_unit(
+    package_unit: &ParsedFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
-) {
+) -> FileTypecheckSummary {
+    check_package_unit_declarations(package_unit, imported_bindings, diagnostics)
+}
+
+fn check_package_unit_declarations(
+    package_unit: &ParsedFile,
+    imported_bindings: &[ImportedBinding],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> FileTypecheckSummary {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
     let mut function_declarations = Vec::new();
-    for declaration in &file.declarations {
+    for declaration in &package_unit.declarations {
         match declaration {
             Declaration::Type(type_declaration) => type_declarations.push(type_declaration.clone()),
             Declaration::Constant(constant_declaration) => {
@@ -66,7 +97,7 @@ fn check_parsed_file(
         &constant_declarations,
         &function_declarations,
         imported_bindings,
-    );
+    )
 }
 
 fn check_declarations(
@@ -75,12 +106,13 @@ fn check_declarations(
     constant_declarations: &[ConstantDeclaration],
     function_declarations: &[FunctionDeclaration],
     imported_bindings: &[ImportedBinding],
-) {
+) -> FileTypecheckSummary {
     let mut type_checker = TypeChecker::new(imported_bindings, diagnostics);
     type_checker.collect_imported_type_declarations();
     type_checker.collect_type_declarations(type_declarations);
     type_checker.collect_imported_function_signatures();
     type_checker.collect_function_signatures(function_declarations);
+    type_checker.collect_imported_method_signatures();
     type_checker.collect_method_signatures(type_declarations);
     type_checker.check_constant_declarations(constant_declarations);
     for function in function_declarations {
@@ -88,6 +120,11 @@ fn check_declarations(
     }
     type_checker.check_methods(type_declarations);
     type_checker.check_unused_imports();
+    type_checker.build_summary(
+        type_declarations,
+        function_declarations,
+        constant_declarations,
+    )
 }
 
 struct VariableInfo {
@@ -138,7 +175,6 @@ struct TypeChecker<'a> {
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
-    imported_constants: HashMap<String, Type>,
     imported_functions: HashMap<String, FunctionInfo>,
     imported_bindings: HashMap<String, ImportedBindingInfo>,
     methods: HashMap<MethodKey, MethodInfo>,
@@ -189,7 +225,6 @@ impl<'a> TypeChecker<'a> {
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: HashMap::new(),
-            imported_constants: HashMap::new(),
             imported_functions: HashMap::new(),
             imported_bindings: imported_binding_map,
             methods: HashMap::new(),
@@ -197,6 +232,53 @@ impl<'a> TypeChecker<'a> {
             diagnostics,
             current_return_type: Type::Unknown,
             loop_depth: 0,
+        }
+    }
+
+    fn build_summary(
+        &self,
+        type_declarations: &[TypeDeclaration],
+        function_declarations: &[FunctionDeclaration],
+        constant_declarations: &[ConstantDeclaration],
+    ) -> FileTypecheckSummary {
+        let mut typed_symbol_by_name = HashMap::new();
+
+        for type_declaration in type_declarations {
+            typed_symbol_by_name.insert(
+                type_declaration.name.clone(),
+                TypedSymbol::Type(type_declaration.clone()),
+            );
+        }
+        for function_declaration in function_declarations {
+            if let Some(info) = self.functions.get(&function_declaration.name) {
+                typed_symbol_by_name.insert(
+                    function_declaration.name.clone(),
+                    TypedSymbol::Function(TypedFunctionSignature {
+                        parameter_types: info.parameter_types.clone(),
+                        return_type: info.return_type.clone(),
+                    }),
+                );
+            }
+        }
+        for constant_declaration in constant_declarations {
+            if let Some(info) = self.constants.get(&constant_declaration.name) {
+                typed_symbol_by_name.insert(
+                    constant_declaration.name.clone(),
+                    TypedSymbol::Constant(info.value_type.clone()),
+                );
+            }
+        }
+
+        FileTypecheckSummary {
+            typed_symbol_by_name,
+        }
+    }
+
+    fn imported_constant_type(&self, name: &str) -> Option<Type> {
+        let binding = self.imported_bindings.get(name)?;
+        match &binding.symbol {
+            ImportedSymbol::Constant(value_type) => Some(value_type.clone()),
+            ImportedSymbol::Type(_) | ImportedSymbol::Function(_) => None,
         }
     }
 
@@ -237,7 +319,7 @@ impl<'a> TypeChecker<'a> {
         if let Some(info) = self.constants.get(name) {
             return info.value_type.clone();
         }
-        if let Some(value_type) = self.imported_constants.get(name).cloned() {
+        if let Some(value_type) = self.imported_constant_type(name) {
             self.mark_import_used(name);
             return value_type;
         }

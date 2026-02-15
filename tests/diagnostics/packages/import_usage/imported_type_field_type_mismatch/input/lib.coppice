@@ -1,0 +1,5 @@
+import workspace/auth { User }
+
+function run() -> User {
+    return User { id: true }
+}

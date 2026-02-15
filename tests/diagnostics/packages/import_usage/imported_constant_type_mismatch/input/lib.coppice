@@ -1,0 +1,5 @@
+import workspace/auth { LIMIT }
+
+function run() -> int64 {
+    return LIMIT
+}

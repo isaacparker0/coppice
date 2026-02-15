@@ -1,5 +1,0 @@
-import workspace/lib/auth { Token as AuthToken }
-
-type Session :: struct {
-    token: AuthToken
-}

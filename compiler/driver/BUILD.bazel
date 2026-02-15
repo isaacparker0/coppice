@@ -10,6 +10,7 @@ rust_library(
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
+        "//compiler/packages",
         "//compiler/parsing",
         "//compiler/source",
         "//compiler/symbols",

@@ -1,0 +1,7 @@
+public type User :: struct {
+    id: int64,
+    function bump(mut self, delta: int64) -> int64 {
+        self = User { id: self.id + delta }
+        return self.id
+    },
+}

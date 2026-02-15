@@ -8,7 +8,10 @@ rust_library(
         "types.rs",
     ],
     visibility = ["//:__subpackages__"],
-    deps = ["//compiler/source"],
+    deps = [
+        "//compiler/packages",
+        "//compiler/source",
+    ],
 )
 
 rust_test(

@@ -1,0 +1,5 @@
+import workspace/auth { COUNT }
+
+function run() -> int64 {
+    return COUNT
+}

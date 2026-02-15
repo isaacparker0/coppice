@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:4:26: error: unknown field 'extra' on User
+      return User { id: 1, extra: 2 }
+                           ^

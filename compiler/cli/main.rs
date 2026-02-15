@@ -2,7 +2,7 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__driver::{CheckFileError, check_file_with_workspace_root};
+use compiler__driver::{CheckFileError, check_target_with_workspace_root};
 use compiler__source::Span;
 
 #[derive(Parser)]
@@ -27,7 +27,7 @@ fn main() {
         Command::Check { path } => path.unwrap_or_else(|| ".".to_string()),
     };
 
-    match check_file_with_workspace_root(&path, workspace_root) {
+    match check_target_with_workspace_root(&path, workspace_root) {
         Ok(checked_target) => {
             if checked_target.diagnostics.is_empty() {
                 println!("ok");

@@ -1,0 +1,3 @@
+import workspace/b { MID }
+
+public TOP := MID

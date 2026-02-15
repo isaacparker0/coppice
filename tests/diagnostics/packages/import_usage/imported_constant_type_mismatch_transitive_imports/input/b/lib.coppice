@@ -1,0 +1,3 @@
+import workspace/c { BASE }
+
+public MID := BASE

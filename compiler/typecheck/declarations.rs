@@ -1,40 +1,51 @@
 use std::collections::HashSet;
 
-use crate::types::Type;
 use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
 
 use super::{FunctionInfo, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind};
 
+struct ImportedTypeBinding {
+    local_name: String,
+    type_declaration: TypeDeclaration,
+}
+
+struct ImportedFunctionBinding {
+    local_name: String,
+    function_declaration: FunctionDeclaration,
+}
+
 impl TypeChecker<'_> {
     pub(super) fn collect_imported_type_declarations(&mut self) {
-        let imported_type_bindings: Vec<(String, TypeDeclaration)> = self
+        let imported_type_bindings: Vec<ImportedTypeBinding> = self
             .imported_bindings
             .iter()
             .filter_map(|(local_name, binding)| match &binding.symbol {
-                super::ImportedSymbol::Type(type_declaration) => {
-                    Some((local_name.clone(), type_declaration.clone()))
-                }
+                super::ImportedSymbol::Type(type_declaration) => Some(ImportedTypeBinding {
+                    local_name: local_name.clone(),
+                    type_declaration: type_declaration.clone(),
+                }),
                 super::ImportedSymbol::Function(_) | super::ImportedSymbol::Constant(_) => None,
             })
             .collect();
 
-        for (local_name, type_declaration) in &imported_type_bindings {
-            if self.types.contains_key(local_name) {
+        for imported_binding in &imported_type_bindings {
+            if self.types.contains_key(&imported_binding.local_name) {
                 continue;
             }
-            let kind = match &type_declaration.kind {
+            let kind = match &imported_binding.type_declaration.kind {
                 TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
                 TypeDeclarationKind::Union { .. } => TypeKind::Union {
                     variants: Vec::new(),
                 },
             };
-            self.types.insert(local_name.clone(), TypeInfo { kind });
+            self.types
+                .insert(imported_binding.local_name.clone(), TypeInfo { kind });
         }
 
-        for (local_name, type_declaration) in imported_type_bindings {
-            match &type_declaration.kind {
+        for imported_binding in imported_type_bindings {
+            match &imported_binding.type_declaration.kind {
                 TypeDeclarationKind::Struct { fields, .. } => {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
@@ -45,7 +56,7 @@ impl TypeChecker<'_> {
                         let field_type = self.resolve_type_name(&field.type_name);
                         resolved_fields.push((field.name.clone(), field_type));
                     }
-                    if let Some(info) = self.types.get_mut(&local_name) {
+                    if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
                         };
@@ -65,7 +76,7 @@ impl TypeChecker<'_> {
                         }
                         resolved_variants.push(variant_type);
                     }
-                    if let Some(info) = self.types.get_mut(&local_name) {
+                    if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
                         info.kind = TypeKind::Union {
                             variants: resolved_variants,
                         };
@@ -76,42 +87,80 @@ impl TypeChecker<'_> {
     }
 
     pub(super) fn collect_imported_function_signatures(&mut self) {
-        let imported_function_bindings: Vec<(String, FunctionDeclaration)> = self
+        let imported_function_bindings: Vec<ImportedFunctionBinding> = self
             .imported_bindings
             .iter()
             .filter_map(|(local_name, binding)| match &binding.symbol {
-                super::ImportedSymbol::Function(function) => {
-                    Some((local_name.clone(), function.clone()))
-                }
+                super::ImportedSymbol::Function(function) => Some(ImportedFunctionBinding {
+                    local_name: local_name.clone(),
+                    function_declaration: function.clone(),
+                }),
                 super::ImportedSymbol::Type(_) | super::ImportedSymbol::Constant(_) => None,
             })
             .collect();
 
-        for (local_name, function) in imported_function_bindings {
-            let return_type = self.resolve_type_name(&function.return_type);
+        for imported_binding in imported_function_bindings {
+            let return_type =
+                self.resolve_type_name(&imported_binding.function_declaration.return_type);
             let mut parameter_types = Vec::new();
-            for parameter in &function.parameters {
+            for parameter in &imported_binding.function_declaration.parameters {
                 parameter_types.push(self.resolve_type_name(&parameter.type_name));
             }
             self.imported_functions.insert(
-                local_name,
+                imported_binding.local_name,
                 FunctionInfo {
                     parameter_types,
                     return_type,
                 },
             );
         }
+    }
 
-        let imported_constant_names: Vec<String> = self
+    pub(super) fn collect_imported_method_signatures(&mut self) {
+        let imported_type_bindings: Vec<ImportedTypeBinding> = self
             .imported_bindings
             .iter()
             .filter_map(|(local_name, binding)| match &binding.symbol {
-                super::ImportedSymbol::Constant(_) => Some(local_name.clone()),
-                super::ImportedSymbol::Type(_) | super::ImportedSymbol::Function(_) => None,
+                super::ImportedSymbol::Type(type_declaration) => Some(ImportedTypeBinding {
+                    local_name: local_name.clone(),
+                    type_declaration: type_declaration.clone(),
+                }),
+                super::ImportedSymbol::Function(_) | super::ImportedSymbol::Constant(_) => None,
             })
             .collect();
-        for local_name in imported_constant_names {
-            self.imported_constants.insert(local_name, Type::Unknown);
+
+        for imported_binding in imported_type_bindings {
+            let TypeDeclarationKind::Struct { methods, .. } =
+                &imported_binding.type_declaration.kind
+            else {
+                continue;
+            };
+
+            for method in methods {
+                let method_key = MethodKey {
+                    receiver_type_name: imported_binding.local_name.clone(),
+                    method_name: method.name.clone(),
+                };
+                if self.methods.contains_key(&method_key) {
+                    continue;
+                }
+
+                let return_type = self.resolve_type_name(&method.return_type);
+                let mut parameter_types = Vec::new();
+                for parameter in &method.parameters {
+                    let value_type = self.resolve_type_name(&parameter.type_name);
+                    parameter_types.push(value_type);
+                }
+
+                self.methods.insert(
+                    method_key,
+                    MethodInfo {
+                        self_mutable: method.self_mutable,
+                        parameter_types,
+                        return_type,
+                    },
+                );
+            }
         }
     }
 

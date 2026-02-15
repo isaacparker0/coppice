@@ -1,2 +1,0 @@
-import workspace/lib/auth { Token as Shared }
-import workspace/lib/session { Token as Shared }

@@ -1,0 +1,6 @@
+import workspace/auth { User }
+
+function run() -> int64 {
+    user := User { id: 1 }
+    return user.bump(1)
+}

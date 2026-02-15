@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use compiler__packages::PackageId;
 use compiler__source::SourceFile;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct PackageId(pub usize);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveredPackage {

@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:4:15: error: expected 2 arguments, got 1
+      return add(1)
+                ^

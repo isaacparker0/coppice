@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:4:23: error: field 'id' must be int64, got boolean
+      return User { id: true }
+                        ^

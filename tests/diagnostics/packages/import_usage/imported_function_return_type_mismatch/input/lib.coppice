@@ -1,0 +1,5 @@
+import workspace/auth { id }
+
+function run() -> string {
+    return id(1)
+}

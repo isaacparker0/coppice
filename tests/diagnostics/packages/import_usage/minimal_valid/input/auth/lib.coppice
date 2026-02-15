@@ -1,0 +1,12 @@
+public type Token :: struct {
+    id: int64,
+    function bump(self, delta: int64) -> int64 {
+        return self.id + delta
+    },
+}
+
+public START_ID := 1
+
+public function makeToken(id: int64) -> Token {
+    return Token { id: id }
+}

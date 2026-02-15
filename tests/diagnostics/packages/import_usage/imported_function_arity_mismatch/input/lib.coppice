@@ -1,0 +1,5 @@
+import workspace/auth { add }
+
+function run() -> int64 {
+    return add(1)
+}

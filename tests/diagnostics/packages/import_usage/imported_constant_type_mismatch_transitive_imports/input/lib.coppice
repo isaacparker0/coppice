@@ -1,0 +1,5 @@
+import workspace/a { TOP }
+
+function run() -> string {
+    return TOP
+}

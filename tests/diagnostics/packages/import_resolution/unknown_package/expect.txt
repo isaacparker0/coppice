@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:1:1: error: unknown package 'workspace/missing/pkg'
+  import workspace/missing/pkg { Token }
+  ^

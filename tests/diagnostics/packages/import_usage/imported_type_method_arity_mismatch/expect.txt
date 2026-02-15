@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:5:21: error: expected 1 arguments, got 0
+      return user.plus()
+                      ^

@@ -1,0 +1,11 @@
+import workspace/auth { Token, START_ID, makeToken }
+
+function idOf(token: Token) -> int64 {
+    return token.bump(0)
+}
+
+function run() -> int64 {
+    token := makeToken(START_ID)
+    bumped := token.bump(1)
+    return idOf(token) + bumped
+}

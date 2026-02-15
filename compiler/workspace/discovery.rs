@@ -4,9 +4,10 @@ use std::io;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use compiler__packages::PackageId;
 use compiler__source::{FileId, FileRole, SourceFile, compare_paths};
 
-use crate::types::{DiscoveredPackage, DiscoveryError, PackageId, Workspace};
+use crate::types::{DiscoveredPackage, DiscoveryError, Workspace};
 
 pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<DiscoveryError>> {
     let mut package_roots = BTreeSet::new();

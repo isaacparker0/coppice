@@ -10,6 +10,7 @@ pub enum Type {
 }
 
 impl Type {
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             Type::Integer64 => "int64",
@@ -22,6 +23,7 @@ impl Type {
         }
     }
 
+    #[must_use]
     pub fn display(&self) -> String {
         match self {
             Type::Union(types) => types
@@ -34,6 +36,7 @@ impl Type {
     }
 }
 
+#[must_use]
 pub fn type_from_name(name: &str) -> Option<Type> {
     match name {
         "int64" => Some(Type::Integer64),

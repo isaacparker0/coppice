@@ -1,4 +1,0 @@
-# exit: 1
-main.coppice:2:41: error: duplicate imported name 'Shared'; use an alias
-  import workspace/lib/session { Token as Shared }
-                                          ^

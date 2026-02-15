@@ -8,6 +8,7 @@ rust_library(
         "expressions.rs",
         "lib.rs",
         "naming_rules.rs",
+        "package_symbols.rs",
         "statements.rs",
         "type_narrowing.rs",
         "types.rs",
@@ -16,6 +17,7 @@ rust_library(
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/diagnostics",
+        "//compiler/packages",
         "//compiler/source",
         "//compiler/syntax",
     ],
