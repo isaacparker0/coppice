@@ -1,0 +1,4 @@
+# exit: 1
+input/PACKAGE.coppice:1:11: error: exported symbol 'Missing' is not declared in this package
+  exports { Missing }
+            ^

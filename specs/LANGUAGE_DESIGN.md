@@ -468,6 +468,19 @@ returning recoverable errors in function signatures.
 A directory is a package if and only if it contains a `PACKAGE.coppice` file.
 Without one, a subdirectory's files belong to the parent package.
 
+All source files must be owned by a package, including role-specialized files:
+`*.bin.coppice` and `*.test.coppice` are package members, not standalone
+compilation units.
+
+If a `.coppice` source file has no ancestor `PACKAGE.coppice` up to workspace
+root, compilation fails.
+
+Why this policy:
+
+1. keeps one canonical build/analysis unit (the package)
+2. preserves deterministic mapping to Bazel package targets
+3. avoids split semantics between "package mode" and ad-hoc "single-file mode"
+
 ```
 platform/
   auth/
@@ -803,6 +816,11 @@ Command invocation policy:
 - Commands are run from workspace root.
 - Invoking from outside workspace root is an error unless workspace root is
   explicitly provided.
+- `check <path>` accepts a file or directory path.
+- If `<path>` is a source file (including `.bin.coppice`/`.test.coppice`), the
+  compiler resolves its owning package and checks that package.
+- If a source file has no owning package, `check` fails with a package ownership
+  error.
 
 ---
 

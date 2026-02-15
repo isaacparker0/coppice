@@ -10,6 +10,8 @@ rust_library(
         "//compiler/parsing",
         "//compiler/resolution",
         "//compiler/source",
+        "//compiler/syntax",
         "//compiler/typecheck",
+        "//compiler/workspace",
     ],
 )

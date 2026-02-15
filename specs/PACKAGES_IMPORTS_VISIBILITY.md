@@ -70,6 +70,21 @@ workspace root is explicitly provided by CLI flag.
 Any `.coppice` source file not owned by any package (no ancestor
 `PACKAGE.coppice` up to workspace root) is a compile error.
 
+This ownership rule applies uniformly to all file roles:
+
+1. library files (`*.coppice`)
+2. binary entrypoint files (`*.bin.coppice`)
+3. test files (`*.test.coppice`)
+
+`*.bin.coppice` and `*.test.coppice` are role-specialized source files, not
+standalone compilation units outside package structure.
+
+Rationale:
+
+1. preserves one compilation/dependency model (package-centered)
+2. keeps mapping to Bazel package targets deterministic
+3. avoids introducing a second "standalone file mode" with different semantics
+
 ### Example
 
 ```text
@@ -107,11 +122,12 @@ In this layout:
 
 Rules for `*.bin.coppice`:
 
-1. Must declare exactly one `main` function.
-2. `main` must have no parameters and no return value.
-3. `main` must be file-private (not `public`).
-4. No `public` declarations are allowed in a binary entrypoint file.
-5. A binary entrypoint file may not be imported by any other file.
+1. Must be owned by a package (same ownership rule as all source files).
+2. Must declare exactly one `main` function.
+3. `main` must have no parameters and no return value.
+4. `main` must be file-private (not `public`).
+5. No `public` declarations are allowed in a binary entrypoint file.
+6. A binary entrypoint file may not be imported by any other file.
 
 Violations are compile errors anchored to the offending declaration or import.
 
@@ -130,10 +146,11 @@ Rules for `*.coppice` (non-bin, non-test):
 
 Rules for `*.test.coppice`:
 
-1. Must not declare `main`.
-2. No `public` declarations are allowed.
-3. A test file may not be imported by any other file.
-4. Tests may import library symbols per normal visibility rules.
+1. Must be owned by a package (same ownership rule as all source files).
+2. Must not declare `main`.
+3. No `public` declarations are allowed.
+4. A test file may not be imported by any other file.
+5. Tests may import library symbols per normal visibility rules.
 
 Violations are compile errors anchored to the offending declaration or import.
 

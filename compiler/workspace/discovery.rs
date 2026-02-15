@@ -100,9 +100,10 @@ fn collect_workspace_entries(
     entries.sort_by(|left, right| compare_paths(&left.path(), &right.path()));
 
     for entry in entries {
-        let file_type = entry.file_type()?;
+        let mut file_type = entry.file_type()?;
         if file_type.is_symlink() {
-            continue;
+            let metadata = fs::metadata(entry.path())?;
+            file_type = metadata.file_type();
         }
 
         let file_name = entry.file_name();

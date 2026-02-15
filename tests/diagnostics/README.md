@@ -4,7 +4,8 @@ Every fixture uses a three-level layout:
 
 ```
 tests/diagnostics/<area>/<feature>/<case>/
-  input/main.coppice
+  input/PACKAGE.coppice
+  input/<files>.coppice
   expect.txt
 ```
 
@@ -28,6 +29,8 @@ tests/diagnostics/<area>/<feature>/<case>/
   cases, and `PACKAGE.coppice` for manifest-role cases; these are defaults for
   clarity, not hard constraints, and multi-file fixtures may use other
   filenames/layouts as needed.
+- The fixture runner invokes `check input`, so each `input/` directory must
+  contain `PACKAGE.coppice` to define the package root.
 - `minimal_valid` is the only success case for a feature and should cover all
   valid sub-kinds for that feature in one file.
 - `expect.txt` starts with `# exit: <code>` and the exact expected output after

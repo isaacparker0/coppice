@@ -340,7 +340,10 @@ Tasks:
 1. CLI:
    - `check <path>` accepts file or package directory, relative to workspace
      root.
-   - if file path is provided, resolve owning package and check package.
+   - if file path is provided (including `.bin.coppice` and `.test.coppice`),
+     resolve owning package and check package.
+   - if no owning package exists (no ancestor `PACKAGE.coppice`), emit a
+     package-ownership compile error.
    - invocation outside workspace root is an error unless workspace root is
      explicitly provided.
 2. Fixture runner:

@@ -14,24 +14,24 @@ struct CommandLine {
 
 #[derive(Subcommand)]
 enum Command {
-    Check { file: String },
+    Check { path: String },
 }
 
 fn main() {
     let command_line = CommandLine::parse();
     let path = match command_line.command {
-        Command::Check { file } => file,
+        Command::Check { path } => path,
     };
 
     match check_file(&path) {
-        Ok(checked_file) => {
-            if checked_file.diagnostics.is_empty() {
+        Ok(checked_target) => {
+            if checked_target.diagnostics.is_empty() {
                 println!("ok");
             } else {
-                for diagnostic in checked_file.diagnostics {
+                for diagnostic in checked_target.diagnostics {
                     print_diagnostic(
-                        &path,
-                        &checked_file.source,
+                        &diagnostic.path,
+                        &diagnostic.source,
                         &diagnostic.message,
                         &diagnostic.span,
                     );
@@ -39,12 +39,26 @@ fn main() {
                 process::exit(1);
             }
         }
-        Err(CheckFileError::ReadSource(error)) => {
+        Err(CheckFileError::ReadSource { path, error }) => {
             eprintln!("{path}: error: {error}");
             process::exit(1);
         }
-        Err(CheckFileError::InvalidSourceFileExtension) => {
-            eprintln!("{path}: error: expected a .coppice source file");
+        Err(CheckFileError::InvalidCheckTarget) => {
+            eprintln!("{path}: error: expected a file or directory path");
+            process::exit(1);
+        }
+        Err(CheckFileError::PackageNotFound) => {
+            eprintln!("{path}: error: target is not inside a package (missing PACKAGE.coppice)");
+            process::exit(1);
+        }
+        Err(CheckFileError::WorkspaceDiscoveryFailed(errors)) => {
+            for error in errors {
+                if let Some(error_path) = error.path {
+                    eprintln!("{}: error: {}", error_path.display(), error.message);
+                } else {
+                    eprintln!("{path}: error: {}", error.message);
+                }
+            }
             process::exit(1);
         }
     }

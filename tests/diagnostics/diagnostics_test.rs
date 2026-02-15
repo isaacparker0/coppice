@@ -55,10 +55,15 @@ fn collect_cases(dir: &Path, runfiles_directory: &Path, case_paths: &mut Vec<Pat
 
 fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: &Mode) {
     let case_directory = runfiles_directory.join(case_path);
-    let input_file = discover_single_input_file(&case_directory, case_path);
+    let input_directory = case_directory.join("input");
+    assert!(
+        input_directory.is_dir(),
+        "missing input directory for diagnostics case: {}",
+        case_path.display()
+    );
     let output = Command::new(compiler)
         .arg("check")
-        .arg(&input_file)
+        .arg("input")
         .current_dir(&case_directory)
         .output()
         .unwrap();
@@ -103,60 +108,6 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                  To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
                 case_path.display()
             );
-        }
-    }
-}
-
-// Currently all fixture tests are single file. When we support multi-file
-// fixtures this will need to change.
-fn discover_single_input_file(case_directory: &Path, case_path: &Path) -> String {
-    let input_directory = case_directory.join("input");
-    assert!(
-        input_directory.is_dir(),
-        "missing input directory for diagnostics case: {}",
-        case_path.display()
-    );
-
-    let mut source_paths = Vec::new();
-    collect_input_sources(&input_directory, Path::new("input"), &mut source_paths);
-    source_paths.sort();
-
-    assert_eq!(
-        source_paths.len(),
-        1,
-        "diagnostics case must contain exactly one .coppice file under input/: {}",
-        case_path.display()
-    );
-    source_paths.remove(0)
-}
-
-fn collect_input_sources(
-    directory: &Path,
-    relative_directory: &Path,
-    source_paths: &mut Vec<String>,
-) {
-    let mut entries = fs::read_dir(directory)
-        .unwrap()
-        .map(|entry| entry.unwrap())
-        .collect::<Vec<_>>();
-    entries.sort_by_key(std::fs::DirEntry::path);
-
-    for entry in entries {
-        let path = entry.path();
-        let relative_path = relative_directory.join(entry.file_name());
-
-        if path.is_dir() {
-            collect_input_sources(&path, &relative_path, source_paths);
-            continue;
-        }
-
-        if path.is_file()
-            && path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.ends_with(".coppice"))
-        {
-            source_paths.push(relative_path.to_string_lossy().to_string());
         }
     }
 }

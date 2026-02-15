@@ -1,0 +1,3 @@
+public function token() -> nil {
+    return nil
+}
