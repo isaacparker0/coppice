@@ -266,15 +266,12 @@ impl TypeChecker<'_> {
                     }
                 }
                 TypeDeclarationKind::Union { variants } => {
-                    if !type_declaration.type_parameters.is_empty() {
-                        self.error(
-                            format!(
-                                "generic union type '{}' is not yet supported",
-                                type_declaration.name
-                            ),
-                            type_declaration.span.clone(),
-                        );
-                    }
+                    let names_and_spans = type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                        .collect::<Vec<_>>();
+                    self.push_type_parameters(&names_and_spans);
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
@@ -293,6 +290,7 @@ impl TypeChecker<'_> {
                         }
                         resolved_variants.push(variant_type);
                     }
+                    self.pop_type_parameters();
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Union {
                             variants: resolved_variants,

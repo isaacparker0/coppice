@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:4:12: error: type 'Maybe' expects 1 type arguments, got 0
+      value: Maybe := nil
+             ^

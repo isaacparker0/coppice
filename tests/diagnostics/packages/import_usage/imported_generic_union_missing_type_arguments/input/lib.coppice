@@ -1,0 +1,9 @@
+import workspace/auth { Maybe }
+
+function run() -> nil {
+    value: Maybe := nil
+    if value == nil {
+        return nil
+    }
+    return nil
+}

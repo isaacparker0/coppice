@@ -12,6 +12,8 @@ public type Box[T] :: struct {
     },
 }
 
+public type Maybe[T] :: T | nil
+
 public START_ID: int64 := 1
 
 public function makeToken(id: int64) -> Token {

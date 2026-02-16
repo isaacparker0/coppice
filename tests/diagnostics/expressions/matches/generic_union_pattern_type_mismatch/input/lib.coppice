@@ -1,0 +1,5 @@
+type Maybe[T] :: T | nil
+
+function run(value: Maybe[int64]) -> boolean {
+    return value matches string
+}

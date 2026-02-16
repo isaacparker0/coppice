@@ -1,1 +1,1 @@
-exports { Token, START_ID, makeToken, identity, Box }
+exports { Token, START_ID, makeToken, identity, Box, Maybe }

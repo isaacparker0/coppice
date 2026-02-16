@@ -15,3 +15,5 @@ type Direction :: enum {
 type Box[T] :: struct {
     value: T,
 }
+
+type Maybe[T] :: T | nil

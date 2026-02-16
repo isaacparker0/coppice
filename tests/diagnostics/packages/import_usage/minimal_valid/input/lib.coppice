@@ -1,4 +1,4 @@
-import workspace/auth { Token, START_ID, makeToken, identity, Box }
+import workspace/auth { Token, START_ID, makeToken, identity, Box, Maybe }
 
 function idOf(token: Token) -> int64 {
     return token.bump(0)
@@ -7,6 +7,10 @@ function idOf(token: Token) -> int64 {
 function run() -> int64 {
     token := makeToken(START_ID)
     bumped := token.bump(1)
+    maybeBumped: Maybe[int64] := identity[int64](bumped)
     boxed := Box[int64] { value: identity[int64](bumped) }
+    if maybeBumped == nil {
+        return idOf(token)
+    }
     return idOf(token) + boxed.get()
 }

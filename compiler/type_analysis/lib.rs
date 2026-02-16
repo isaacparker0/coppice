@@ -406,7 +406,8 @@ impl<'a> TypeChecker<'a> {
             if let Some(info) = self.types.get(name) {
                 let kind = info.kind.clone();
                 let nominal_type_id = info.nominal_type_id.clone();
-                let type_parameter_count = info.type_parameters.len();
+                let declared_type_parameters = info.type_parameters.clone();
+                let type_parameter_count = declared_type_parameters.len();
                 if matches!(
                     self.imported_bindings.get(name),
                     Some(ImportedBindingInfo {
@@ -455,15 +456,20 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                     TypeKind::Union { variants } => {
-                        if type_parameter_count != 0 {
-                            self.error(
-                                format!("generic union type '{name}' is not yet supported"),
-                                atom.span.clone(),
-                            );
-                            has_unknown = true;
-                            continue;
+                        if type_parameter_count == 0 {
+                            resolved.push(Self::normalize_union(variants));
+                        } else {
+                            let substitutions: HashMap<String, Type> = declared_type_parameters
+                                .iter()
+                                .cloned()
+                                .zip(resolved_type_arguments.iter().cloned())
+                                .collect();
+                            let instantiated_variants = variants
+                                .iter()
+                                .map(|variant| Self::instantiate_type(variant, &substitutions))
+                                .collect();
+                            resolved.push(Self::normalize_union(instantiated_variants));
                         }
-                        resolved.push(Self::normalize_union(variants));
                     }
                 }
                 continue;
