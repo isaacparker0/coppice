@@ -1,5 +1,5 @@
 use compiler__diagnostics::Diagnostic;
-use compiler__phase_results::{PhaseResult, SemanticAnalysisEligibility};
+use compiler__phase_results::{PhaseResult, PhaseStatus};
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
 
@@ -22,11 +22,11 @@ pub fn check_file(file: &ParsedFile) -> PhaseResult {
     check_public_declaration_roles(file, &mut diagnostics);
     check_main_function_roles(file, &mut diagnostics);
 
-    let semantic_analysis_eligibility = SemanticAnalysisEligibility::Eligible;
+    let status = PhaseStatus::Ok;
 
     PhaseResult {
         diagnostics,
-        semantic_analysis_eligibility,
+        status,
     }
 }
 

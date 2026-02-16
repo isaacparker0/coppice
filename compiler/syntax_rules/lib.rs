@@ -1,7 +1,5 @@
 use compiler__diagnostics::Diagnostic;
-use compiler__phase_results::{
-    PhaseResult, SemanticAnalysisEligibility, SemanticAnalysisIneligibilityReason,
-};
+use compiler__phase_results::{PhaseResult, PhaseStatus};
 use compiler__source::Span;
 use compiler__syntax::{Declaration, FileItem, ParsedFile, StructMemberItem, TypeDeclarationKind};
 
@@ -22,17 +20,15 @@ pub fn check_file(file: &ParsedFile) -> PhaseResult {
     check_import_order(file, &mut violations);
     check_doc_comment_placement(file, &mut violations);
     let diagnostics = render_diagnostics(&violations);
-    let semantic_analysis_eligibility = if diagnostics.is_empty() {
-        SemanticAnalysisEligibility::Eligible
+    let status = if diagnostics.is_empty() {
+        PhaseStatus::Ok
     } else {
-        SemanticAnalysisEligibility::Ineligible {
-            reason: SemanticAnalysisIneligibilityReason::StructuralValidityViolation,
-        }
+        PhaseStatus::PreventsDownstreamExecution
     };
 
     PhaseResult {
         diagnostics,
-        semantic_analysis_eligibility,
+        status,
     }
 }
 

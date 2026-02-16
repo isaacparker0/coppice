@@ -14,7 +14,7 @@ use compiler__package_symbols::{
 };
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
-use compiler__phase_results::SemanticAnalysisEligibility;
+use compiler__phase_results::PhaseStatus;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
@@ -55,19 +55,19 @@ struct ParsedUnit {
 }
 
 struct FilePhaseState {
-    syntax_rules_eligibility: SemanticAnalysisEligibility,
-    file_role_rules_eligibility: SemanticAnalysisEligibility,
+    syntax_rules: PhaseStatus,
+    file_role_rules: PhaseStatus,
+    resolution: PhaseStatus,
 }
 
 impl FilePhaseState {
-    fn ready_for_semantic_analysis(&self) -> bool {
-        matches!(
-            self.syntax_rules_eligibility,
-            SemanticAnalysisEligibility::Eligible
-        ) && matches!(
-            self.file_role_rules_eligibility,
-            SemanticAnalysisEligibility::Eligible
-        )
+    fn can_run_resolution(&self) -> bool {
+        matches!(self.syntax_rules, PhaseStatus::Ok)
+            && matches!(self.file_role_rules, PhaseStatus::Ok)
+    }
+
+    fn can_run_type_analysis(&self) -> bool {
+        self.can_run_resolution() && matches!(self.resolution, PhaseStatus::Ok)
     }
 }
 
@@ -179,8 +179,9 @@ pub fn check_target_with_workspace_root(
                     source,
                     parsed,
                     phase_state: FilePhaseState {
-                        syntax_rules_eligibility: SemanticAnalysisEligibility::Eligible,
-                        file_role_rules_eligibility: SemanticAnalysisEligibility::Eligible,
+                        syntax_rules: PhaseStatus::Ok,
+                        file_role_rules: PhaseStatus::Ok,
+                        resolution: PhaseStatus::Ok,
                     },
                 }),
                 Err(diagnostics) => {
@@ -201,11 +202,9 @@ pub fn check_target_with_workspace_root(
 
     for parsed_unit in &mut parsed_units {
         let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
-        parsed_unit.phase_state.syntax_rules_eligibility =
-            syntax_rules_result.semantic_analysis_eligibility;
+        parsed_unit.phase_state.syntax_rules = syntax_rules_result.status;
         let file_role_rules_result = file_role_rules::check_file(&parsed_unit.parsed);
-        parsed_unit.phase_state.file_role_rules_eligibility =
-            file_role_rules_result.semantic_analysis_eligibility;
+        parsed_unit.phase_state.file_role_rules = file_role_rules_result.status;
 
         if !scope_is_workspace
             && !scoped_package_paths
@@ -230,7 +229,7 @@ pub fn check_target_with_workspace_root(
     let mut resolution_diagnostics = Vec::new();
     let package_files: Vec<PackageFile<'_>> = parsed_units
         .iter()
-        .filter(|unit| unit.phase_state.ready_for_semantic_analysis())
+        .filter(|unit| unit.phase_state.can_run_resolution())
         .map(|unit| PackageFile {
             package_path: &unit.package_path,
             path: &unit.path,
@@ -250,13 +249,16 @@ pub fn check_target_with_workspace_root(
         &mut resolution_diagnostics,
     );
     package_graph::check_cycles(&resolved_imports, &mut resolution_diagnostics);
+    let cycle_package_paths = package_graph::package_paths_in_cycle(&resolved_imports);
     let bindings_by_file = visibility::resolved_bindings_by_file(&resolved_imports);
     binding::check_bindings(
         &package_files,
         &bindings_by_file,
         &mut resolution_diagnostics,
     );
+    let mut resolution_invalid_paths = BTreeSet::new();
     for PackageDiagnostic { path, diagnostic } in resolution_diagnostics {
+        resolution_invalid_paths.insert(path.clone());
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
             if !scope_is_workspace
                 && !scoped_package_paths
@@ -273,12 +275,19 @@ pub fn check_target_with_workspace_root(
             ));
         }
     }
+    for parsed_unit in &mut parsed_units {
+        if resolution_invalid_paths.contains(&parsed_unit.path)
+            || cycle_package_paths.contains(&parsed_unit.package_path)
+        {
+            parsed_unit.phase_state.resolution = PhaseStatus::PreventsDownstreamExecution;
+        }
+    }
 
     let package_id_by_path = collect_package_ids_by_path(&workspace);
     let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
         parsed_units
             .iter()
-            .filter(|unit| unit.phase_state.ready_for_semantic_analysis())
+            .filter(|unit| unit.phase_state.can_run_type_analysis())
             .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
             .collect();
     let package_units: Vec<PackageUnit<'_>> = parsed_units
@@ -300,26 +309,15 @@ pub fn check_target_with_workspace_root(
     let imported_bindings_by_file =
         typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
 
-    let has_pre_typecheck_errors = !rendered_diagnostics.is_empty();
-    if has_pre_typecheck_errors {
-        rendered_diagnostics.sort_by(|left, right| {
-            left.path
-                .cmp(&right.path)
-                .then(left.span.line.cmp(&right.span.line))
-                .then(left.span.column.cmp(&right.span.column))
-                .then(left.message.cmp(&right.message))
-        });
-        return Ok(CheckedTarget {
-            diagnostics: rendered_diagnostics,
-        });
-    }
-
     for parsed_unit in &parsed_units {
         if !scope_is_workspace
             && !scoped_package_paths
                 .as_ref()
                 .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
         {
+            continue;
+        }
+        if !parsed_unit.phase_state.can_run_type_analysis() {
             continue;
         }
         let mut file_diagnostics = Vec::new();

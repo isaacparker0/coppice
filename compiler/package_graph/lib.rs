@@ -6,42 +6,12 @@ use compiler__source::Span;
 use compiler__symbols::PackageDiagnostic;
 use compiler__visibility::ResolvedImport;
 
+type ImportAdjacencyByPackage = BTreeMap<String, BTreeSet<String>>;
+type ImportSiteByEdge = BTreeMap<(String, String), ImportSite>;
+
 pub fn check_cycles(resolved_imports: &[ResolvedImport], diagnostics: &mut Vec<PackageDiagnostic>) {
-    #[derive(Clone)]
-    struct ImportSite {
-        path: PathBuf,
-        span: Span,
-    }
-
-    let mut adjacency_by_package: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    let mut first_import_site_by_edge: BTreeMap<(String, String), ImportSite> = BTreeMap::new();
-
-    for import in resolved_imports {
-        adjacency_by_package
-            .entry(import.source_package_path.clone())
-            .or_default();
-        adjacency_by_package
-            .entry(import.target_package_path.clone())
-            .or_default();
-
-        if import.source_package_path == import.target_package_path {
-            continue;
-        }
-
-        adjacency_by_package
-            .entry(import.source_package_path.clone())
-            .or_default()
-            .insert(import.target_package_path.clone());
-        first_import_site_by_edge
-            .entry((
-                import.source_package_path.clone(),
-                import.target_package_path.clone(),
-            ))
-            .or_insert_with(|| ImportSite {
-                path: import.source_path.clone(),
-                span: import.import_span.clone(),
-            });
-    }
+    let (adjacency_by_package, first_import_site_by_edge) =
+        import_adjacency_and_first_site_by_edge(resolved_imports);
 
     let Some(cycle) = first_cycle_in_graph(&adjacency_by_package) else {
         return;
@@ -76,9 +46,61 @@ pub fn check_cycles(resolved_imports: &[ResolvedImport], diagnostics: &mut Vec<P
     });
 }
 
-fn first_cycle_in_graph(
-    adjacency_by_package: &BTreeMap<String, BTreeSet<String>>,
-) -> Option<Vec<String>> {
+#[must_use]
+pub fn package_paths_in_cycle(resolved_imports: &[ResolvedImport]) -> BTreeSet<String> {
+    let (adjacency_by_package, _) = import_adjacency_and_first_site_by_edge(resolved_imports);
+    let Some(cycle) = first_cycle_in_graph(&adjacency_by_package) else {
+        return BTreeSet::new();
+    };
+    if cycle.len() < 2 {
+        return BTreeSet::new();
+    }
+    cycle[..cycle.len() - 1].iter().cloned().collect()
+}
+
+fn import_adjacency_and_first_site_by_edge(
+    resolved_imports: &[ResolvedImport],
+) -> (ImportAdjacencyByPackage, ImportSiteByEdge) {
+    let mut adjacency_by_package: ImportAdjacencyByPackage = BTreeMap::new();
+    let mut first_import_site_by_edge: ImportSiteByEdge = BTreeMap::new();
+
+    for import in resolved_imports {
+        adjacency_by_package
+            .entry(import.source_package_path.clone())
+            .or_default();
+        adjacency_by_package
+            .entry(import.target_package_path.clone())
+            .or_default();
+
+        if import.source_package_path == import.target_package_path {
+            continue;
+        }
+
+        adjacency_by_package
+            .entry(import.source_package_path.clone())
+            .or_default()
+            .insert(import.target_package_path.clone());
+        first_import_site_by_edge
+            .entry((
+                import.source_package_path.clone(),
+                import.target_package_path.clone(),
+            ))
+            .or_insert_with(|| ImportSite {
+                path: import.source_path.clone(),
+                span: import.import_span.clone(),
+            });
+    }
+
+    (adjacency_by_package, first_import_site_by_edge)
+}
+
+#[derive(Clone)]
+struct ImportSite {
+    path: PathBuf,
+    span: Span,
+}
+
+fn first_cycle_in_graph(adjacency_by_package: &ImportAdjacencyByPackage) -> Option<Vec<String>> {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum VisitState {
         Visiting,
@@ -87,7 +109,7 @@ fn first_cycle_in_graph(
 
     fn depth_first_search(
         node: &str,
-        adjacency_by_package: &BTreeMap<String, BTreeSet<String>>,
+        adjacency_by_package: &ImportAdjacencyByPackage,
         state_by_node: &mut BTreeMap<String, VisitState>,
         stack: &mut Vec<String>,
         index_by_node_in_stack: &mut BTreeMap<String, usize>,
