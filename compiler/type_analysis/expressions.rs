@@ -20,6 +20,11 @@ struct ResolvedCallTarget {
     return_type: Type,
 }
 
+struct ResolvedStructFields {
+    struct_display_name: String,
+    fields: Vec<(String, Type)>,
+}
+
 impl TypeChecker<'_> {
     pub(super) fn check_expression(&mut self, expression: &Expression) -> Type {
         match expression {
@@ -522,7 +527,7 @@ impl TypeChecker<'_> {
         }
 
         let struct_type = self.resolve_type_name(type_name);
-        let Some((type_name_str, field_defs)) = self.resolve_struct_fields(&struct_type) else {
+        let Some(resolved_struct_fields) = self.resolve_struct_fields(&struct_type) else {
             if struct_type != Type::Unknown {
                 self.error(
                     format!(
@@ -544,7 +549,7 @@ impl TypeChecker<'_> {
                 self.error(
                     format!(
                         "duplicate field '{}' in {} literal",
-                        field.name, type_name_str
+                        field.name, resolved_struct_fields.struct_display_name
                     ),
                     field.name_span.clone(),
                 );
@@ -552,10 +557,16 @@ impl TypeChecker<'_> {
                 continue;
             }
 
-            let Some((_, field_type)) = field_defs.iter().find(|(name, _)| name == &field.name)
+            let Some((_, field_type)) = resolved_struct_fields
+                .fields
+                .iter()
+                .find(|(name, _)| name == &field.name)
             else {
                 self.error(
-                    format!("unknown field '{}' on {}", field.name, type_name_str),
+                    format!(
+                        "unknown field '{}' on {}",
+                        field.name, resolved_struct_fields.struct_display_name
+                    ),
                     field.name_span.clone(),
                 );
                 self.check_expression(&field.value);
@@ -579,10 +590,13 @@ impl TypeChecker<'_> {
             }
         }
 
-        for (field_name, _) in &field_defs {
+        for (field_name, _) in &resolved_struct_fields.fields {
             if !seen.contains(field_name.as_str()) {
                 self.error(
-                    format!("missing field '{field_name}' in {type_name_str} literal"),
+                    format!(
+                        "missing field '{field_name}' in {} literal",
+                        resolved_struct_fields.struct_display_name
+                    ),
                     type_name.span.clone(),
                 );
             }
@@ -597,7 +611,7 @@ impl TypeChecker<'_> {
         field: &str,
         span: &Span,
     ) -> Type {
-        let Some((type_name, fields)) = self.resolve_struct_fields(target_type) else {
+        let Some(resolved_struct_fields) = self.resolve_struct_fields(target_type) else {
             if *target_type != Type::Unknown {
                 self.error(
                     format!(
@@ -611,11 +625,18 @@ impl TypeChecker<'_> {
             return Type::Unknown;
         };
 
-        if let Some((_, field_type)) = fields.iter().find(|(name, _)| name == field) {
+        if let Some((_, field_type)) = resolved_struct_fields
+            .fields
+            .iter()
+            .find(|(name, _)| name == field)
+        {
             return field_type.clone();
         }
         self.error(
-            format!("unknown field '{field}' on {type_name}"),
+            format!(
+                "unknown field '{field}' on {}",
+                resolved_struct_fields.struct_display_name
+            ),
             span.clone(),
         );
         Type::Unknown
@@ -686,10 +707,7 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn resolve_struct_fields(
-        &mut self,
-        struct_type: &Type,
-    ) -> Option<(String, Vec<(String, Type)>)> {
+    fn resolve_struct_fields(&mut self, struct_type: &Type) -> Option<ResolvedStructFields> {
         match struct_type {
             Type::Named(type_name) => {
                 let info = self
@@ -699,7 +717,10 @@ impl TypeChecker<'_> {
                 let TypeKind::Struct { fields } = &info.kind else {
                     return None;
                 };
-                Some((type_name.display_name.clone(), fields.clone()))
+                Some(ResolvedStructFields {
+                    struct_display_name: type_name.display_name.clone(),
+                    fields: fields.clone(),
+                })
             }
             Type::Applied { base, arguments } => {
                 let info = self
@@ -724,7 +745,10 @@ impl TypeChecker<'_> {
                         )
                     })
                     .collect();
-                Some((struct_type.display(), instantiated_fields))
+                Some(ResolvedStructFields {
+                    struct_display_name: struct_type.display(),
+                    fields: instantiated_fields,
+                })
             }
             _ => None,
         }
