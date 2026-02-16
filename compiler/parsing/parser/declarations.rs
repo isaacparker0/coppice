@@ -14,7 +14,10 @@ impl Parser {
     ) -> ParseResult<TypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
-        let type_parameters = self.parse_type_parameter_list()?;
+        let (type_parameters, recoveries) = self.parse_type_parameter_list()?;
+        for recovery in recoveries {
+            self.report_parse_error(&recovery);
+        }
         self.expect_symbol(Symbol::DoubleColon)?;
         let start = name_span.clone();
         if self.peek_is_keyword(Keyword::Struct) {
@@ -38,7 +41,10 @@ impl Parser {
         }
         if self.peek_is_keyword(Keyword::Enum) {
             self.expect_keyword(Keyword::Enum)?;
-            let variants = self.parse_enum_type_declaration()?;
+            let (variants, recoveries) = self.parse_enum_type_declaration()?;
+            for recovery in recoveries {
+                self.report_parse_error(&recovery);
+            }
             let right_brace = self.expect_symbol(Symbol::RightBrace)?;
             let span = Span {
                 start: start.start,
@@ -161,7 +167,10 @@ impl Parser {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
-        let (self_span, self_mutable, parameters) = self.parse_method_parameters()?;
+        let (self_span, self_mutable, parameters, recoveries) = self.parse_method_parameters()?;
+        for recovery in recoveries {
+            self.report_parse_error(&recovery);
+        }
         self.expect_symbol(Symbol::RightParenthesis)?;
         self.expect_symbol(Symbol::Arrow)?;
         let return_type = self.parse_type_name()?;
@@ -187,7 +196,8 @@ impl Parser {
 
     pub(super) fn parse_method_parameters(
         &mut self,
-    ) -> ParseResult<(Span, bool, Vec<ParameterDeclaration>)> {
+    ) -> ParseResult<(Span, bool, Vec<ParameterDeclaration>, Vec<ParseError>)> {
+        let mut recoveries = Vec::new();
         let self_mutable = if self.peek_is_keyword(Keyword::Mut) {
             self.advance();
             true
@@ -203,21 +213,21 @@ impl Parser {
         }
         if self.peek_is_symbol(Symbol::Colon) {
             let span = self.expect_symbol(Symbol::Colon)?;
-            self.report_parse_error(&ParseError::Recovered {
+            recoveries.push(ParseError::Recovered {
                 kind: RecoveredKind::MethodReceiverSelfMustNotHaveTypeAnnotation,
                 span,
             });
             let _ = self.parse_type_name();
         }
         if !self.peek_is_symbol(Symbol::Comma) {
-            return Ok((receiver_span, self_mutable, Vec::new()));
+            return Ok((receiver_span, self_mutable, Vec::new(), recoveries));
         }
 
         self.advance();
         let mut parameters = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParenthesis) {
-            return Ok((receiver_span, self_mutable, parameters));
+            return Ok((receiver_span, self_mutable, parameters, recoveries));
         }
         loop {
             self.skip_statement_terminators();
@@ -243,7 +253,7 @@ impl Parser {
             }
             break;
         }
-        Ok((receiver_span, self_mutable, parameters))
+        Ok((receiver_span, self_mutable, parameters, recoveries))
     }
 
     pub(super) fn parse_function(
@@ -252,7 +262,10 @@ impl Parser {
     ) -> ParseResult<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
-        let type_parameters = self.parse_type_parameter_list()?;
+        let (type_parameters, recoveries) = self.parse_type_parameter_list()?;
+        for recovery in recoveries {
+            self.report_parse_error(&recovery);
+        }
         self.expect_symbol(Symbol::LeftParenthesis)?;
         let parameters = self.parse_parameters();
         self.expect_symbol(Symbol::RightParenthesis)?;

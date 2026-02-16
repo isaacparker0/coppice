@@ -76,7 +76,8 @@ pub(super) type ParseResult<T> = Result<T, ParseError>;
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
-    diagnostics: Vec<PhaseDiagnostic>,
+    parse_errors: Vec<ParseError>,
+    deferred_parse_errors: Vec<ParseError>,
 }
 
 impl Parser {
@@ -84,12 +85,16 @@ impl Parser {
         Self {
             tokens,
             position: 0,
-            diagnostics: Vec::new(),
+            parse_errors: Vec::new(),
+            deferred_parse_errors: Vec::new(),
         }
     }
 
     pub fn into_diagnostics(self) -> Vec<PhaseDiagnostic> {
-        self.diagnostics
+        self.parse_errors
+            .iter()
+            .filter_map(Self::render_parse_error)
+            .collect()
     }
 
     pub fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
@@ -108,83 +113,75 @@ impl Parser {
             if self.at_eof() {
                 break;
             }
-
-            let parse_result: Option<ParseResult<Declaration>> = if self
-                .peek_is_keyword(Keyword::Public)
-            {
-                let visibility = self.parse_visibility();
-                if self.peek_is_keyword(Keyword::Type) {
-                    Some(
-                        self.parse_type_declaration(visibility)
-                            .map(Declaration::Type),
-                    )
-                } else if self.peek_is_keyword(Keyword::Function) {
-                    Some(self.parse_function(visibility).map(Declaration::Function))
-                } else if self.peek_is_identifier() {
-                    Some(
-                        self.parse_constant_declaration(visibility)
-                            .map(Declaration::Constant),
-                    )
-                } else {
-                    let span = self.peek_span();
-                    self.report_parse_error(&ParseError::Recovered {
-                        kind: RecoveredKind::ExpectedDeclarationAfterPublic,
-                        span,
-                    });
-                    self.synchronize();
-                    None
+            match self.parse_declaration() {
+                Ok(declaration) => {
+                    items.push(FileItem::Declaration(Box::new(declaration)));
                 }
-            } else if self.peek_is_keyword(Keyword::Type) {
-                Some(
-                    self.parse_type_declaration(Visibility::Private)
-                        .map(Declaration::Type),
-                )
-            } else if self.peek_is_keyword(Keyword::Import) {
-                Some(self.parse_import_declaration().map(Declaration::Import))
-            } else if self.peek_is_keyword(Keyword::Exports) {
-                Some(self.parse_exports_declaration().map(Declaration::Exports))
-            } else if self.peek_is_keyword(Keyword::Function) {
-                Some(
-                    self.parse_function(Visibility::Private)
-                        .map(Declaration::Function),
-                )
-            } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
-                let span = self.peek_span();
-                self.report_parse_error(&ParseError::Recovered {
-                    kind: RecoveredKind::ExpectedTypeKeywordBeforeTypeDeclaration,
-                    span,
-                });
-                self.advance();
-                self.synchronize();
-                None
-            } else if self.peek_is_identifier() {
-                Some(
-                    self.parse_constant_declaration(Visibility::Private)
-                        .map(Declaration::Constant),
-                )
-            } else {
-                let span = self.peek_span();
-                self.report_parse_error(&ParseError::Recovered {
-                    kind: RecoveredKind::ExpectedDeclaration,
-                    span,
-                });
-                self.synchronize();
-                None
-            };
-
-            if let Some(result) = parse_result {
-                match result {
-                    Ok(declaration) => {
-                        items.push(FileItem::Declaration(Box::new(declaration.clone())));
-                    }
-                    Err(error) => {
-                        self.report_parse_error(&error);
-                        self.synchronize();
-                    }
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize();
                 }
             }
+            self.flush_deferred_parse_errors();
         }
         items
+    }
+
+    fn parse_declaration(&mut self) -> ParseResult<Declaration> {
+        if self.peek_is_keyword(Keyword::Public) {
+            let visibility = self.parse_visibility();
+            if self.peek_is_keyword(Keyword::Type) {
+                return self
+                    .parse_type_declaration(visibility)
+                    .map(Declaration::Type);
+            }
+            if self.peek_is_keyword(Keyword::Function) {
+                return self.parse_function(visibility).map(Declaration::Function);
+            }
+            if self.peek_is_identifier() {
+                return self
+                    .parse_constant_declaration(visibility)
+                    .map(Declaration::Constant);
+            }
+            return Err(ParseError::Recovered {
+                kind: RecoveredKind::ExpectedDeclarationAfterPublic,
+                span: self.peek_span(),
+            });
+        }
+
+        if self.peek_is_keyword(Keyword::Type) {
+            return self
+                .parse_type_declaration(Visibility::Private)
+                .map(Declaration::Type);
+        }
+        if self.peek_is_keyword(Keyword::Import) {
+            return self.parse_import_declaration().map(Declaration::Import);
+        }
+        if self.peek_is_keyword(Keyword::Exports) {
+            return self.parse_exports_declaration().map(Declaration::Exports);
+        }
+        if self.peek_is_keyword(Keyword::Function) {
+            return self
+                .parse_function(Visibility::Private)
+                .map(Declaration::Function);
+        }
+        if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
+            let span = self.peek_span();
+            self.advance();
+            return Err(ParseError::Recovered {
+                kind: RecoveredKind::ExpectedTypeKeywordBeforeTypeDeclaration,
+                span,
+            });
+        }
+        if self.peek_is_identifier() {
+            return self
+                .parse_constant_declaration(Visibility::Private)
+                .map(Declaration::Constant);
+        }
+        Err(ParseError::Recovered {
+            kind: RecoveredKind::ExpectedDeclaration,
+            span: self.peek_span(),
+        })
     }
 
     fn parse_visibility(&mut self) -> Visibility {
@@ -279,11 +276,22 @@ impl Parser {
         self.peek().span.clone()
     }
 
-    fn error(&mut self, message: impl Into<String>, span: Span) {
-        self.diagnostics.push(PhaseDiagnostic::new(message, span));
+    fn report_parse_error(&mut self, error: &ParseError) {
+        self.parse_errors.push(error.clone());
     }
 
-    fn report_parse_error(&mut self, error: &ParseError) {
+    fn defer_parse_error(&mut self, error: ParseError) {
+        self.deferred_parse_errors.push(error);
+    }
+
+    fn flush_deferred_parse_errors(&mut self) {
+        let deferred = std::mem::take(&mut self.deferred_parse_errors);
+        for error in deferred {
+            self.report_parse_error(&error);
+        }
+    }
+
+    fn render_parse_error(error: &ParseError) -> Option<PhaseDiagnostic> {
         match error {
             ParseError::UnexpectedToken { kind, span } => {
                 let message = match kind {
@@ -294,7 +302,7 @@ impl Parser {
                     ),
                     UnexpectedTokenKind::ExpectedExpression => "expected expression".to_string(),
                 };
-                self.error(message, span.clone());
+                Some(PhaseDiagnostic::new(message, span.clone()))
             }
             ParseError::MissingToken { kind, span } => {
                 let message = match kind {
@@ -303,7 +311,7 @@ impl Parser {
                     }
                     MissingTokenKind::Symbol => "expected symbol".to_string(),
                 };
-                self.error(message, span.clone());
+                Some(PhaseDiagnostic::new(message, span.clone()))
             }
             ParseError::InvalidConstruct { kind, span } => {
                 let message = match kind {
@@ -317,7 +325,7 @@ impl Parser {
                         "type arguments must be followed by a call".to_string()
                     }
                 };
-                self.error(message, span.clone());
+                Some(PhaseDiagnostic::new(message, span.clone()))
             }
             ParseError::Recovered { kind, span } => {
                 let message = match kind {
@@ -344,9 +352,9 @@ impl Parser {
                         "unexpected '=' in expression".to_string()
                     }
                 };
-                self.error(message, span.clone());
+                Some(PhaseDiagnostic::new(message, span.clone()))
             }
-            ParseError::UnparsableToken => {}
+            ParseError::UnparsableToken => None,
         }
     }
 }

@@ -12,7 +12,9 @@ use super::{
 
 impl Parser {
     pub(super) fn parse_expression(&mut self) -> ParseResult<Expression> {
-        self.parse_or()
+        let result = self.parse_or();
+        self.flush_deferred_parse_errors();
+        result
     }
 
     pub(super) fn parse_or(&mut self) -> ParseResult<Expression> {
@@ -68,7 +70,7 @@ impl Parser {
         loop {
             if self.peek_is_symbol(Symbol::Equal) {
                 let operator_span = self.advance().span.clone();
-                self.report_parse_error(&ParseError::Recovered {
+                self.defer_parse_error(ParseError::Recovered {
                     kind: RecoveredKind::UnexpectedEqualsInExpression,
                     span: operator_span,
                 });

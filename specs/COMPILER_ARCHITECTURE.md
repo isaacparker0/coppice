@@ -1,24 +1,30 @@
 # Compiler Architecture
 
-Authoritative architecture specification for the current compiler design.
+Authoritative architecture specification for the Coppice compiler frontend.
 
 ## Purpose
 
-This architecture supports Coppice language goals:
+This architecture exists to enforce deterministic semantics and maintainable
+compiler evolution while keeping CLI and tooling/LSP behavior aligned.
 
-1. One constrained, deterministic way to implement language semantics.
-2. Clear ownership boundaries by phase.
+Design goals:
+
+1. One constrained, predictable implementation path for language rules.
+2. Clear rule ownership by phase.
 3. Build-time enforceable dependency direction.
-4. A shared frontend foundation for CLI and tooling/LSP.
+4. Shared frontend behavior across command entrypoints and tooling.
 
-## Core Principles
+## Design Rationale
 
-1. Own each rule in the earliest phase that has enough information.
-2. Separate source structure (`syntax`) from semantic meaning
-   (`semantic_program`).
-3. Keep orchestration in `driver`; keep language semantics in phase crates.
-4. Use explicit phase outputs for diagnostics and downstream gating.
-5. Prefer stable contracts over cross-crate implementation coupling.
+1. Determinism over convenience: each rule has one owner phase.
+2. Earliest-sufficient ownership: a rule belongs to the earliest phase with the
+   information required to evaluate it correctly.
+3. Explicit boundaries over implicit behavior: phase outputs and statuses are
+   machine-readable contracts used by orchestration.
+4. Representation separation: source-structure fidelity is distinct from
+   semantic meaning.
+5. Hard-failure separation: infrastructure/runtime failures are not modeled as
+   language diagnostics.
 
 ## Canonical Pipeline
 
@@ -30,111 +36,13 @@ This architecture supports Coppice language goals:
 6. Type analysis (`compiler/type_analysis`)
 7. Driver orchestration and rendering (`compiler/driver`)
 
-## Shared Reporting Contracts
+The pipeline is linear. Per-file downstream skipping is controlled by explicit
+phase status, not by ad-hoc heuristics.
 
-`compiler/reports` owns shared frontend output/failure reporting contracts used
-across command entrypoints (`check` today, extensible to future `build`/`run`):
+## Phase Contracts
 
-1. `DiagnosticPhase`
-2. `RenderedDiagnostic`
-3. `CompilerFailure` (+ `CompilerFailureKind`)
-4. `ReportFormat`
-
-`compiler/driver` produces these contracts; CLI/tooling consumers render or
-serialize them.
-
-## Package Ownership
-
-### `compiler/parsing`
-
-Owns lexical and syntactic parsing.
-
-Produces parser-facing syntax (`compiler/syntax::ParsedFile`) with parse
-diagnostics and phase status via `PhaseOutput<ParsedFile>`.
-
-### `compiler/syntax`
-
-Owns source-structure representation.
-
-Doc-comment source of truth:
-
-- top-level docs are ordered `FileItem::DocComment` items
-- struct-member docs are ordered `StructMemberItem::DocComment` items
-- declaration nodes do not duplicate doc attachments
-
-### `compiler/syntax_rules`
-
-Owns parseable-but-invalid structural language rules.
-
-Examples:
-
-- imports must appear before other top-level declarations
-- doc comments must document declarations
-
-Returns `PhaseOutput<()>`.
-
-### `compiler/file_role_rules`
-
-Owns file-role-dependent policy rules.
-
-Examples:
-
-- `PACKAGE.coppice` declaration constraints
-- `.bin.coppice` `main` placement/signature rules
-- role-specific visibility restrictions
-
-Returns `PhaseOutput<()>`.
-
-### `compiler/resolution`
-
-Owns package-level semantic resolution orchestration:
-
-- symbols
-- exports
-- import visibility legality
-- package cycle diagnostics
-- binding conflict checks
-
-Returns `FileScopedPhaseOutput<ResolutionArtifacts>` where artifacts include:
-
-- resolved imports
-- per-file resolution status
-- path-aware resolution diagnostics
-
-### `compiler/semantic_lowering`
-
-Owns conversion from `syntax` to `semantic_program`.
-
-- preserves spans for diagnostics
-- attaches semantic docs from ordered syntax doc-comment items
-
-### `compiler/semantic_program`
-
-Owns semantic pass input model.
-
-### `compiler/package_symbols` and `compiler/semantic_types`
-
-Own typed cross-package symbol/type contracts.
-
-### `compiler/type_analysis`
-
-Owns type checking and related semantic usage checks (for example unused
-imports).
-
-Returns `PhaseOutput<()>`.
-
-### `compiler/driver`
-
-Owns orchestration only:
-
-- phase ordering
-- workspace/package scoping
-- diagnostics aggregation/sorting/rendering
-- downstream gating from explicit phase statuses
-
-## Phase Contract
-
-All phase boundaries use the shared envelope from `compiler/phase_results`:
+All non-resolution phase boundaries use
+`compiler/phase_results::PhaseOutput<T>`:
 
 ```rust
 pub struct PhaseOutput<T> {
@@ -149,37 +57,136 @@ pub enum PhaseStatus {
 }
 ```
 
-Semantics:
+Resolution uses file-scoped output:
 
-1. `diagnostics` are owned by that phase.
-2. `status` controls downstream execution eligibility.
-3. Driver consumes these statuses explicitly; it does not infer gating from
-   incidental behavior.
+```rust
+pub struct FileScopedPhaseOutput<T> {
+    pub value: T,
+    pub diagnostics: Vec<FileScopedDiagnostic>,
+    pub status_by_file: BTreeMap<PathBuf, PhaseStatus>,
+}
+```
 
-Boundary failure semantics:
+Contract semantics:
 
-1. `PhaseOutput<T>` is for program-facing diagnostics and phase gating.
-2. Infrastructure/runtime/invariant failures should use explicit hard-failure
-   channels at orchestration boundaries.
-3. Infrastructure failures must not be emitted as synthetic language-rule
-   diagnostics.
+1. `diagnostics` are emitted by the owning phase.
+2. `status` (or `status_by_file`) is the only downstream gating signal.
+3. Driver consumes statuses explicitly; it does not infer gating from incidental
+   behavior.
 
-Current shared failure contract:
+## Parser Error Model
 
-1. Hard failures are represented via `compiler/reports::CompilerFailure`.
-2. This remains distinct from phase diagnostics and does not carry synthetic
-   phase provenance.
+Parser control flow uses structured parse failures:
 
-## Current Gating Policy
+```rust
+type ParseResult<T> = Result<T, ParseError>;
+```
+
+Rules:
+
+1. Use `Err(ParseError)` for parse failure.
+2. Use `Option<T>` only for optional grammar on successful parse paths.
+3. Recovery occurs at explicit parser boundary/caller synchronization points.
+4. User-facing parse diagnostics are rendered through parser boundary reporting
+   from structured parse errors.
+
+Ownership and behavior:
+
+1. Lexer owns lexical failures.
+2. Parser owns syntactic failures.
+3. Parse boundary aggregates lex+parse diagnostics deterministically.
+4. Parser remains resilient and returns usable syntax under recoverable parse
+   errors.
+
+## Representation Boundaries
+
+1. `compiler/syntax` owns source structure fidelity (ordered items, spans,
+   doc-comment items, parse-facing shape).
+2. `compiler/semantic_program` owns semantic pass input representation.
+3. `compiler/semantic_lowering` maps `syntax` to `semantic_program` while
+   preserving diagnostic spans and deriving semantic doc attachments from
+   ordered syntax doc-comment items.
+
+## Phase Ownership
+
+### `compiler/parsing`
+
+Owns lexical and syntactic parsing.
+
+Output: `PhaseOutput<syntax::ParsedFile>`.
+
+### `compiler/syntax_rules`
+
+Owns parseable-but-invalid structural source-shape rules.
+
+Examples:
+
+1. import declarations must precede non-import top-level declarations
+2. doc comments must document declarations
+
+Output: `PhaseOutput<()>`.
+
+### `compiler/file_role_rules`
+
+Owns role-dependent policy rules.
+
+Examples:
+
+1. `PACKAGE.coppice` declaration constraints
+2. `.bin.coppice` `main` placement/signature constraints
+3. role-specific visibility restrictions
+
+Output: `PhaseOutput<()>`.
+
+### `compiler/resolution`
+
+Owns package-level resolution of symbols, exports, import visibility legality,
+package cycles, and binding conflict checks.
+
+Output: `FileScopedPhaseOutput<ResolutionArtifacts>`.
+
+### `compiler/type_analysis`
+
+Owns type, flow, and semantic usage checks (for example unused imports).
+
+Output: `PhaseOutput<()>`.
+
+### `compiler/driver`
+
+Owns orchestration only:
+
+1. phase ordering
+2. workspace/package scoping
+3. diagnostics aggregation/sorting/rendering
+4. status-driven downstream gating
+
+## Gating Policy
 
 Per file:
 
-1. Parsing status gates syntax/file-role checks.
-2. Syntax/file-role status gates resolution participation.
-3. Resolution per-file status gates lowering/type-analysis.
+1. parse status gates syntax/file-role checks
+2. syntax/file-role status gates resolution participation
+3. resolution per-file status gates semantic lowering and type analysis
 
-This is linear orchestration with explicit per-file skipping; no non-linear
-phase branching.
+This is explicit per-file skipping inside a linear pipeline.
+
+## Diagnostic and Failure Ownership
+
+Phase-owned language diagnostics:
+
+1. parsing: lexical/syntactic diagnostics
+2. syntax_rules: structural source-shape diagnostics
+3. file_role_rules: file-role policy diagnostics
+4. resolution: package/import/export/visibility/binding/cycle diagnostics
+5. type_analysis: type/flow/usage diagnostics
+6. driver: rendering/sorting only
+
+Hard failures:
+
+1. infrastructure/runtime/invariant failures are represented via
+   `compiler/reports::CompilerFailure`
+2. these remain distinct from phase diagnostics
+3. infrastructure failures must not be encoded as synthetic language diagnostics
 
 ## Dependency Direction (Normative)
 
@@ -195,75 +202,49 @@ High-level direction:
 
 Key prohibitions:
 
-1. `type_analysis` must not depend on `syntax`.
-2. `package_symbols` must not depend on `syntax`.
-3. Semantic phase crates must not depend on `driver`.
+1. `type_analysis` must not depend on `syntax`
+2. `package_symbols` must not depend on `syntax`
+3. semantic phase crates must not depend on `driver`
 
 These are enforced by Bazel dependency-enforcement tests.
 
-## Diagnostic Ownership
+## Rule Placement Rubric
 
-Diagnostics are emitted by the phase that owns the violated rule:
+Choose ownership using these checks:
 
-1. parsing: lexical/syntactic failures
-2. syntax_rules: structural source-shape failures
-3. file_role_rules: file-role policy failures
-4. resolution: package/import/export/visibility/binding/cycle failures
-5. type_analysis: type and semantic usage failures
-6. driver: rendering/sorting only
+1. Parsing owns a rule only when violating it prevents reliable syntax structure
+   construction from tokens.
+2. Syntax rules own parseable structural/order policy constraints.
+3. File-role rules own constraints requiring file-role knowledge.
+4. Resolution owns constraints requiring package/import/export/visibility/graph
+   information.
+5. Type analysis owns constraints requiring type/flow/usage information.
 
-## Phase Placement Acceptance Criteria
+Non-acceptance examples for parser ownership:
 
-Use these acceptance tests when deciding phase ownership:
-
-1. Parser (`parsing`) owns a rule only if violating it prevents building
-   reliable syntax structure from tokens.
-2. Syntax rules (`syntax_rules`) own a rule when syntax structure is buildable
-   but source structure/order is invalid by language definition.
-3. File-role rules (`file_role_rules`) own a rule when validity depends on file
-   role (`.bin.coppice`, `.test.coppice`, `PACKAGE.coppice`, library).
-4. Resolution (`resolution`) owns a rule when package/import/export/visibility/
-   dependency graph information is required.
-5. Type analysis (`type_analysis`) owns a rule when type, flow, or usage
-   information is required.
-
-Negative constraints:
-
-1. Parser must not enforce parseable structural policy rules (for example import
-   ordering, doc-comment placement).
-2. Syntax rules must not require package graph or type information.
-3. Type analysis must not depend on parser/syntax internals.
-
-Parser final-form constraints:
-
-1. Parser leaf helpers should trend toward structured failures and boundary-site
-   diagnostic ownership where context is clearer.
-2. Recovery diagnostics should avoid duplicate emission and ownership drift.
-3. Parser error metadata should continue becoming more machine-usable for
-   tooling/recovery decisions.
+1. import ordering
+2. doc-comment placement/attachment
+3. declaration-order policy rules that do not block syntax construction
 
 ## Tooling/LSP Alignment
 
-This architecture is intended for a shared frontend:
+This architecture is required for shared CLI/tooling behavior:
 
-1. parser remains resilient and returns syntax with diagnostics under errors
-2. phase boundaries are explicit and machine-readable
-3. gating semantics are deterministic and identical across CLI/tooling consumers
+1. parser returns syntax + diagnostics under recoverable parse errors
+2. phase outputs are machine-readable and stable
+3. gating behavior is deterministic and shared across consumers
 
 ## Acceptance Criteria
 
-1. Phase-owned diagnostics remain deterministic and non-overlapping by rule
-   ownership.
-2. Explicit phase statuses, not incidental heuristics, determine downstream
-   execution.
-3. Recoverable parse failures still produce useful syntax outputs for downstream
-   tooling workflows.
+1. Phase-owned diagnostics are deterministic and non-overlapping.
+2. Downstream execution is status-driven, not heuristic-driven.
+3. Recoverable parser failures still yield useful syntax outputs.
+4. Hard failures stay outside phase diagnostics.
 
-## Future Goals
+## Planned Extensions
 
-1. Continue enriching parser structured failure metadata (`ParseError`) for
-   better recovery/tooling decisions.
-2. Expand syntax losslessness incrementally as tooling features require
-   additional source fidelity.
-3. Introduce backend IR layers with distinct ownership when codegen paths are
-   added.
+These are intentional future extensions, not current architecture debt:
+
+1. enrich `ParseError` metadata for stronger recovery/tooling decisions
+2. expand syntax losslessness as tooling needs additional trivia fidelity
+3. introduce backend IR ownership layers when build/run/codegen are added

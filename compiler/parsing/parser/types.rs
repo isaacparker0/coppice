@@ -2,7 +2,7 @@ use crate::lexer::Symbol;
 use compiler__source::Span;
 use compiler__syntax::{EnumVariant, TypeName, TypeNameAtom, TypeParameter};
 
-use super::{ParseResult, Parser, RecoveredKind};
+use super::{ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
     pub(super) fn parse_type_name(&mut self) -> ParseResult<TypeName> {
@@ -95,20 +95,23 @@ impl Parser {
         Ok((arguments, right_bracket))
     }
 
-    pub(super) fn parse_type_parameter_list(&mut self) -> ParseResult<Vec<TypeParameter>> {
+    pub(super) fn parse_type_parameter_list(
+        &mut self,
+    ) -> ParseResult<(Vec<TypeParameter>, Vec<ParseError>)> {
         if !self.peek_is_symbol(Symbol::LeftBracket) {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
         self.expect_symbol(Symbol::LeftBracket)?;
         let mut type_parameters = Vec::new();
+        let mut recoveries = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBracket) {
-            self.report_parse_error(&super::ParseError::Recovered {
+            recoveries.push(ParseError::Recovered {
                 kind: RecoveredKind::TypeParameterListMustNotBeEmpty,
                 span: self.peek_span(),
             });
             self.expect_symbol(Symbol::RightBracket)?;
-            return Ok(type_parameters);
+            return Ok((type_parameters, recoveries));
         }
         loop {
             self.skip_statement_terminators();
@@ -126,19 +129,22 @@ impl Parser {
             break;
         }
         self.expect_symbol(Symbol::RightBracket)?;
-        Ok(type_parameters)
+        Ok((type_parameters, recoveries))
     }
 
-    pub(super) fn parse_enum_type_declaration(&mut self) -> ParseResult<Vec<EnumVariant>> {
+    pub(super) fn parse_enum_type_declaration(
+        &mut self,
+    ) -> ParseResult<(Vec<EnumVariant>, Vec<ParseError>)> {
         self.expect_symbol(Symbol::LeftBrace)?;
         let mut variants = Vec::new();
+        let mut recoveries = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
-            self.report_parse_error(&super::ParseError::Recovered {
+            recoveries.push(ParseError::Recovered {
                 kind: RecoveredKind::EnumDeclarationMustIncludeAtLeastOneVariant,
                 span: self.peek_span(),
             });
-            return Ok(variants);
+            return Ok((variants, recoveries));
         }
 
         loop {
@@ -161,7 +167,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
             }
-            self.report_parse_error(&super::ParseError::Recovered {
+            recoveries.push(ParseError::Recovered {
                 kind: RecoveredKind::ExpectedCommaOrRightBraceAfterEnumVariant,
                 span: self.peek_span(),
             });
@@ -175,6 +181,6 @@ impl Parser {
             }
         }
 
-        Ok(variants)
+        Ok((variants, recoveries))
     }
 }
