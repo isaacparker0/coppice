@@ -9,9 +9,13 @@ publish = false
 path = "placeholder.rs"
 
 [dependencies]
+# keep-sorted start
 clap = { version = "^4.5.58", features = ["derive"] }
 globset = { version = "^0.4.18" }
+serde = { version = "^1.0.228", features = ["derive"] }
+serde_json = { version = "^1.0.149" }
 syn = { version = "^2.0.116", features = ["full", "parsing", "visit"] }
+# keep-sorted end
 
 [lints.rust]
 # Our crate names use double underscore as path separator.
