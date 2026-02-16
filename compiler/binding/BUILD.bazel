@@ -23,7 +23,6 @@ dependency_enforcement_test(
         "//compiler/parsing",
         "//compiler/semantic_types",
         "//compiler/type_analysis",
-        "//compiler/typecheck",
         "//compiler/workspace",
     ],
     target = ":binding",

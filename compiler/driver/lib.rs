@@ -17,7 +17,7 @@ use compiler__parsing::parse_file;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
-use compiler__typecheck::{self as typecheck};
+use compiler__type_analysis as type_analysis;
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
 
@@ -242,12 +242,21 @@ pub fn check_target_with_workspace_root(
     }
 
     let package_id_by_path = collect_package_ids_by_path(&workspace);
+    let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
+        parsed_units
+            .iter()
+            .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
+            .collect();
     let package_units: Vec<PackageUnit<'_>> = parsed_units
         .iter()
-        .map(|unit| PackageUnit {
-            package_id: unit.package_id,
-            path: &unit.path,
-            parsed: &unit.parsed,
+        .filter_map(|unit| {
+            semantic_program_by_file
+                .get(&unit.path)
+                .map(|program| PackageUnit {
+                    package_id: unit.package_id,
+                    path: &unit.path,
+                    program,
+                })
         })
         .collect();
     let typecheck_resolved_imports =
@@ -283,10 +292,12 @@ pub fn check_target_with_workspace_root(
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
-        let semantic_unit = lower_parsed_file(&parsed_unit.parsed);
-        typecheck::check_package_unit(
+        let Some(semantic_unit) = semantic_program_by_file.get(&parsed_unit.path) else {
+            continue;
+        };
+        type_analysis::check_package_unit(
             parsed_unit.package_id,
-            &semantic_unit,
+            semantic_unit,
             imported_bindings,
             &mut file_diagnostics,
         );

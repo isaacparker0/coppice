@@ -2,16 +2,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
+use compiler__semantic_program::{
+    Declaration, FunctionDeclaration, PackageUnit as SemanticPackageUnit, TypeDeclaration,
+    TypeDeclarationKind, TypeName, Visibility,
+};
 use compiler__semantic_types::{
     ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
     ImportedTypeShape, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature,
     type_from_builtin_name,
 };
 use compiler__source::{FileRole, Span, compare_paths};
-use compiler__syntax::{
-    Declaration, FunctionDeclaration, ParsedFile, TypeDeclaration, TypeDeclarationKind, TypeName,
-    Visibility,
-};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct PublicSymbolId(usize);
@@ -39,7 +39,7 @@ enum TypedPublicSymbol {
 pub struct PackageUnit<'a> {
     pub package_id: PackageId,
     pub path: &'a Path,
-    pub parsed: &'a ParsedFile,
+    pub program: &'a SemanticPackageUnit,
 }
 
 #[derive(Clone)]
@@ -109,11 +109,11 @@ fn collect_public_symbol_index(
     });
 
     for unit in ordered_units {
-        if unit.parsed.role != FileRole::Library {
+        if unit.program.role != FileRole::Library {
             continue;
         }
 
-        for declaration in &unit.parsed.declarations {
+        for declaration in &unit.program.declarations {
             let (name, is_public) = match declaration {
                 Declaration::Type(type_declaration) => (
                     &type_declaration.name,
@@ -127,7 +127,6 @@ fn collect_public_symbol_index(
                     &constant_declaration.name,
                     constant_declaration.visibility == Visibility::Public,
                 ),
-                Declaration::Import(_) | Declaration::Exports(_) => continue,
             };
             if !is_public {
                 continue;
@@ -143,7 +142,6 @@ fn collect_public_symbol_index(
                 Declaration::Constant(constant_declaration) => {
                     PublicSymbolDefinition::Constant(constant_declaration.type_name.clone())
                 }
-                Declaration::Import(_) | Declaration::Exports(_) => continue,
             };
 
             let lookup_key = PublicSymbolLookupKey {

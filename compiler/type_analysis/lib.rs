@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use compiler__diagnostics::Diagnostic;
 use compiler__packages::PackageId;
 use compiler__semantic_program::{
-    ConstantDeclaration, Expression, FunctionDeclaration, PackageUnit as SemanticPackageUnit,
-    Statement, TypeDeclaration, TypeName,
+    ConstantDeclaration, Declaration, Expression, FunctionDeclaration,
+    PackageUnit as SemanticPackageUnit, Statement, TypeDeclaration, TypeName,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, ImportedBinding, ImportedSymbol, ImportedTypeDeclaration, NominalTypeId,
@@ -44,12 +44,27 @@ fn check_package_unit_declarations(
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FileTypecheckSummary {
+    let mut type_declarations = Vec::new();
+    let mut constant_declarations = Vec::new();
+    let mut function_declarations = Vec::new();
+    for declaration in &package_unit.declarations {
+        match declaration {
+            Declaration::Type(type_declaration) => type_declarations.push(type_declaration.clone()),
+            Declaration::Constant(constant_declaration) => {
+                constant_declarations.push(constant_declaration.clone());
+            }
+            Declaration::Function(function_declaration) => {
+                function_declarations.push(function_declaration.clone());
+            }
+        }
+    }
+
     check_declarations(
         package_id,
         diagnostics,
-        &package_unit.type_declarations,
-        &package_unit.constant_declarations,
-        &package_unit.function_declarations,
+        &type_declarations,
+        &constant_declarations,
+        &function_declarations,
         imported_bindings,
     )
 }

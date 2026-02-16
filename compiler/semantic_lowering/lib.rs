@@ -3,20 +3,21 @@ use compiler__syntax as syntax;
 
 #[must_use]
 pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageUnit {
-    let mut type_declarations = Vec::new();
-    let mut constant_declarations = Vec::new();
-    let mut function_declarations = Vec::new();
+    let mut declarations = Vec::new();
 
     for declaration in &parsed_file.declarations {
         match declaration {
             syntax::Declaration::Type(type_declaration) => {
-                type_declarations.push(lower_type_declaration(type_declaration));
+                let lowered = lower_type_declaration(type_declaration);
+                declarations.push(semantic::Declaration::Type(lowered.clone()));
             }
             syntax::Declaration::Constant(constant_declaration) => {
-                constant_declarations.push(lower_constant_declaration(constant_declaration));
+                let lowered = lower_constant_declaration(constant_declaration);
+                declarations.push(semantic::Declaration::Constant(lowered.clone()));
             }
             syntax::Declaration::Function(function_declaration) => {
-                function_declarations.push(lower_function_declaration(function_declaration));
+                let lowered = lower_function_declaration(function_declaration);
+                declarations.push(semantic::Declaration::Function(lowered.clone()));
             }
             syntax::Declaration::Import(_) | syntax::Declaration::Exports(_) => {}
         }
@@ -24,9 +25,7 @@ pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageU
 
     semantic::PackageUnit {
         role: parsed_file.role,
-        type_declarations,
-        constant_declarations,
-        function_declarations,
+        declarations,
     }
 }
 

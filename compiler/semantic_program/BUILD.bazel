@@ -24,7 +24,6 @@ dependency_enforcement_test(
         "//compiler/semantic_types",
         "//compiler/symbols",
         "//compiler/type_analysis",
-        "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",
     ],

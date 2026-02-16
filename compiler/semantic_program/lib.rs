@@ -3,9 +3,14 @@ use compiler__source::{FileRole, Span};
 #[derive(Clone)]
 pub struct PackageUnit {
     pub role: FileRole,
-    pub type_declarations: Vec<TypeDeclaration>,
-    pub constant_declarations: Vec<ConstantDeclaration>,
-    pub function_declarations: Vec<FunctionDeclaration>,
+    pub declarations: Vec<Declaration>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Declaration {
+    Type(TypeDeclaration),
+    Constant(ConstantDeclaration),
+    Function(FunctionDeclaration),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
