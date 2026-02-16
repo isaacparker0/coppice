@@ -26,7 +26,7 @@ struct PublicSymbolLookupKey {
 enum PublicSymbolDefinition {
     Type(TypeDeclaration),
     Function(FunctionDeclaration),
-    Constant,
+    Constant(TypeName),
 }
 
 #[derive(Clone)]
@@ -67,20 +67,10 @@ impl TypedPublicSymbolTable {
         &self,
         resolved_imports: &[ResolvedImportSummary],
     ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
-        self.imported_bindings_by_file_with_constant_types(resolved_imports, &BTreeMap::new())
-    }
-
-    #[must_use]
-    pub fn imported_bindings_by_file_with_constant_types(
-        &self,
-        resolved_imports: &[ResolvedImportSummary],
-        constant_type_by_symbol: &BTreeMap<(PackageId, String), Type>,
-    ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
         build_imported_bindings_by_file(
             resolved_imports,
             &self.symbol_id_by_lookup_key,
             &self.typed_symbol_by_id,
-            constant_type_by_symbol,
         )
     }
 }
@@ -93,7 +83,8 @@ pub fn build_typed_public_symbol_table(
     let (symbol_id_by_lookup_key, public_symbol_definition_by_id) =
         collect_public_symbol_index(package_units);
 
-    let typed_symbol_by_id = resolve_public_symbol_types(&public_symbol_definition_by_id);
+    let typed_symbol_by_id =
+        resolve_public_symbol_types(&symbol_id_by_lookup_key, &public_symbol_definition_by_id);
 
     TypedPublicSymbolTable {
         symbol_id_by_lookup_key,
@@ -149,7 +140,9 @@ fn collect_public_symbol_index(
                 Declaration::Function(function_declaration) => {
                     PublicSymbolDefinition::Function(function_declaration.clone())
                 }
-                Declaration::Constant(_) => PublicSymbolDefinition::Constant,
+                Declaration::Constant(constant_declaration) => {
+                    PublicSymbolDefinition::Constant(constant_declaration.type_name.clone())
+                }
                 Declaration::Import(_) | Declaration::Exports(_) => continue,
             };
 
@@ -171,6 +164,7 @@ fn collect_public_symbol_index(
 }
 
 fn resolve_public_symbol_types(
+    symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     public_symbol_definition_by_id: &BTreeMap<PublicSymbolId, PublicSymbolDefinition>,
 ) -> BTreeMap<PublicSymbolId, TypedPublicSymbol> {
     let mut typed_symbol_by_id = BTreeMap::new();
@@ -182,10 +176,34 @@ fn resolve_public_symbol_types(
             PublicSymbolDefinition::Function(function_declaration) => {
                 TypedPublicSymbol::Function(function_declaration.clone())
             }
-            PublicSymbolDefinition::Constant => TypedPublicSymbol::Constant(Type::Unknown),
+            PublicSymbolDefinition::Constant(_) => TypedPublicSymbol::Constant(Type::Unknown),
         };
         typed_symbol_by_id.insert(*symbol_id, typed_symbol);
     }
+
+    let nominal_type_id_by_lookup_key =
+        nominal_type_id_by_lookup_key(symbol_id_by_lookup_key, &typed_symbol_by_id);
+    let lookup_key_by_symbol_id: BTreeMap<PublicSymbolId, PublicSymbolLookupKey> =
+        symbol_id_by_lookup_key
+            .iter()
+            .map(|(lookup_key, symbol_id)| (*symbol_id, lookup_key.clone()))
+            .collect();
+
+    for (symbol_id, definition) in public_symbol_definition_by_id {
+        let PublicSymbolDefinition::Constant(type_name) = definition else {
+            continue;
+        };
+        let Some(lookup_key) = lookup_key_by_symbol_id.get(symbol_id) else {
+            continue;
+        };
+        let value_type = resolve_type_name_to_semantic_type(
+            type_name,
+            lookup_key.package_id,
+            &nominal_type_id_by_lookup_key,
+        );
+        typed_symbol_by_id.insert(*symbol_id, TypedPublicSymbol::Constant(value_type));
+    }
+
     typed_symbol_by_id
 }
 
@@ -193,7 +211,6 @@ fn build_imported_bindings_by_file(
     resolved_imports: &[ResolvedImportSummary],
     symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     typed_symbol_by_id: &BTreeMap<PublicSymbolId, TypedPublicSymbol>,
-    constant_type_by_symbol: &BTreeMap<(PackageId, String), Type>,
 ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
     let mut imported_by_file: BTreeMap<PathBuf, Vec<ImportedBinding>> = BTreeMap::new();
     let nominal_type_id_by_lookup_key =
@@ -227,15 +244,8 @@ fn build_imported_bindings_by_file(
                         &nominal_type_id_by_lookup_key,
                     ))
                 }
-                TypedPublicSymbol::Constant(fallback_type) => {
-                    let value_type = constant_type_by_symbol
-                        .get(&(
-                            resolved_import.target_package_id,
-                            binding.imported_name.clone(),
-                        ))
-                        .cloned()
-                        .unwrap_or_else(|| fallback_type.clone());
-                    ImportedSymbol::Constant(value_type)
+                TypedPublicSymbol::Constant(value_type) => {
+                    ImportedSymbol::Constant(value_type.clone())
                 }
             };
 

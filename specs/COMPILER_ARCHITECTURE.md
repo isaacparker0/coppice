@@ -166,11 +166,9 @@ Current intended high-level direction:
 3. `visibility -> package_graph`
 4. `visibility + symbols -> binding`
 5. `semantic_types` is shared by `package_symbols` and `type_analysis`
-6. `type_analysis -> package_symbols` (temporary; used for exported constant
-   type inference)
-7. `type_analysis + semantic_types -> typecheck` (facade only)
-8. `driver` orchestrates `package_symbols` outputs and `typecheck` execution
-9. `driver` depends on phase crates; phase crates do not depend on `driver`
+6. `type_analysis + semantic_types -> typecheck` (facade only)
+7. `driver` orchestrates `package_symbols` outputs and `typecheck` execution
+8. `driver` depends on phase crates; phase crates do not depend on `driver`
 
 ---
 
@@ -227,8 +225,9 @@ Temporary coupling still present (known debt):
 1. Public constant fixed-point type inference currently runs in
    `compiler/driver` as orchestration glue between `package_symbols` and
    `typecheck`/`type_analysis`.
-2. This logic should move into a dedicated semantic pass crate so driver returns
-   to wiring-only ownership.
+2. With language policy requiring explicit type annotations on all constants,
+   this inference path should be removed instead of extracted into a dedicated
+   pass.
 
 ---
 
@@ -339,16 +338,14 @@ sufficient information and no duplication.
 3. Add each invariant in the same change that completes the corresponding
    migration step.
 
-## Phase G: Public Constant Pass Extraction (planned)
+## Phase G: Constant Annotation Enforcement (planned)
 
-1. Introduce a dedicated semantic pass crate for public constant fixed-point
-   type inference.
-2. Move public constant inference logic out of `compiler/driver` into that pass
-   crate.
-3. Keep `compiler/driver` orchestration-only by wiring this pass alongside
-   `package_symbols` and `typecheck`.
-4. Add/enforce dependency invariants so the new pass owns semantic logic and
-   driver does not.
+1. Enforce explicit type annotations on all constant declarations.
+2. Remove public constant fixed-point inference from `compiler/driver`.
+3. Keep `compiler/driver` orchestration-only by wiring declaration-owned pass
+   outputs without semantic inference loops.
+4. Add/enforce dependency invariants guaranteeing package contracts are built
+   from explicit declarations rather than driver-owned inference.
 
 ---
 

@@ -197,6 +197,7 @@ Tasks:
    - parse top-level `import package/path { ... }` where `package/path` is
      import-origin-prefixed (`workspace`, `std`, `external`).
    - enforce import-before-declarations policy (recommended for clarity).
+   - enforce explicit type annotations on all constant declarations.
 3. Manifest parser:
    - parse `exports { ... }`.
    - reject non-comment non-`exports` tokens.
@@ -215,6 +216,7 @@ Exit criteria:
 2. New parser fixture suite for manifest grammar violations.
 3. New diagnostics fixtures for file-role violations (missing/invalid `main`,
    `public` in bin/test, `main` in library/test).
+4. New diagnostics fixtures for missing constant type annotations.
 
 ---
 

@@ -216,6 +216,7 @@ Visibility is split across two declaration kinds with one keyword:
      same package)
    - externally visible only if `public` and listed in `PACKAGE.coppice` via
      `exports`
+   - constants must include explicit type annotations
 2. **Struct members** (fields, methods):
    - default: type-private (accessible only inside methods on that type)
    - `public`: accessible anywhere the type is accessible

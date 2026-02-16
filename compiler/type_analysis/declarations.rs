@@ -314,6 +314,7 @@ impl TypeChecker<'_> {
         for constant in constants {
             self.check_constant_name(&constant.name, &constant.span);
             let value_type = self.check_expression(&constant.expression);
+            let declared_type = self.resolve_type_name(&constant.type_name);
             if self.constants.contains_key(&constant.name) {
                 self.error(
                     format!("duplicate constant '{name}'", name = constant.name),
@@ -321,8 +322,29 @@ impl TypeChecker<'_> {
                 );
                 continue;
             }
-            self.constants
-                .insert(constant.name.clone(), super::ConstantInfo { value_type });
+            if declared_type != super::Type::Unknown
+                && value_type != super::Type::Unknown
+                && !Self::is_assignable(&value_type, &declared_type)
+            {
+                self.error(
+                    format!(
+                        "type mismatch: expected {}, got {}",
+                        declared_type.display(),
+                        value_type.display()
+                    ),
+                    constant.span.clone(),
+                );
+            }
+            self.constants.insert(
+                constant.name.clone(),
+                super::ConstantInfo {
+                    value_type: if declared_type == super::Type::Unknown {
+                        value_type
+                    } else {
+                        declared_type
+                    },
+                },
+            );
         }
     }
 }

@@ -1,1 +1,1 @@
-public BASE := 1
+public BASE: int64 := 1

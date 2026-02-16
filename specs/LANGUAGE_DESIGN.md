@@ -10,7 +10,7 @@ compiler is the linter, the formatter, and the style guide.
 programming, not OS kernels, not embedded.
 
 **Core tradeoff:** Accept ~80-90% of LLVM -O3 peak performance in exchange for
-fast compilation, simple mental model, and zero annotation burden.
+fast compilation, simple mental model, and minimal annotation burden.
 
 ---
 
@@ -29,9 +29,9 @@ fast compilation, simple mental model, and zero annotation burden.
    where correctness is unambiguous.
 5. **Designed for hermetic builds.** The import system, module structure, and
    compilation model are designed to map directly to Bazel's dependency graph.
-6. **No annotation burden.** No lifetime annotations, no explicit borrow/move
-   markers in common code. The compiler infers; the programmer writes clean
-   code.
+6. **Minimal annotation burden.** No lifetime annotations, no explicit
+   borrow/move markers in common code. Constants require explicit type
+   annotations; other local expressions are inferred where unambiguous.
 
 ### File Roles Are Language Semantics
 
@@ -85,6 +85,26 @@ x: i64 := 42           // explicit type annotation
 
 // No alternatives. No 'let', 'var', 'const', 'val'.
 ```
+
+### Constants
+
+```
+MAX_RETRIES: int64 := 5
+DEFAULT_REGION: string := "us-east-1"
+
+// Annotation is required on every constant declaration.
+// MAX_RETRIES := 5  // compile error
+```
+
+Rationale:
+
+1. Constants are long-lived declarations and commonly part of package contracts;
+   explicit types keep API intent stable and obvious at declaration sites.
+2. Requiring annotations on all constants avoids split style rules (`public`
+   annotated vs private inferred) and preserves one canonical way to write
+   constants.
+3. This removes cross-file constant type-inference complexity from package
+   contract construction, keeping build semantics more deterministic.
 
 ### Functions
 
@@ -283,15 +303,29 @@ type Authored :: interface {
 function fetch_posts() -> List[Timestamped & Authored] { ... }
 ```
 
-### Literal Types
+### No Literal Singleton Types
+
+Literal singleton types are intentionally not part of the language.
 
 ```
-type Direction :: "north" | "south" | "east" | "west"
-
-function move(d: Direction) { ... }
-move("north")   // ok
-move("oops")    // compile error
+// type Direction :: "north" | "south" // compile error
 ```
+
+Use named union/enum-style declarations for closed sets:
+
+```
+type Direction :: North | South | East | West
+```
+
+Rationale:
+
+1. Literal singleton types would introduce overlapping ways to model closed
+   value sets (`"foo" | "bar"` vs named unions/enums), violating the one-way
+   design principle.
+2. Named declarations communicate domain intent better than ad-hoc literal
+   unions and remain easier to refactor safely across package boundaries.
+3. Excluding literal singleton types keeps type inference, assignability, and
+   diagnostics simpler and more predictable.
 
 ### Nullability
 
@@ -739,6 +773,7 @@ platform/auth/token.test.coppice
 - Unreachable code → error.
 - Non-exhaustive match → error.
 - No implicit type conversions.
+- Constant declarations must include explicit type annotations.
 - Unformatted code → error (in strict mode).
 
 ### Naming Conventions (Compiler-Enforced)
@@ -763,6 +798,8 @@ No syntax alternatives. No feature overlaps.
 - One fatal unrecoverable failure construct: `abort(...)`.
 - One union branching form: `match`.
 - One union boolean membership check: `matches`.
+- One constrained value-set model: named union/enum declarations (not literal
+  singleton types).
 - The compiler rejects equivalent non-canonical patterns (for example, boolean
   membership `match` expressions where `matches` is the canonical form).
 
@@ -774,6 +811,7 @@ No syntax alternatives. No feature overlaps.
 - No `null` AND `undefined` (one `nil`).
 - No operator overloading (or very limited).
 - No variadic arguments (pass a list).
+- No literal singleton types (`"foo"`, `1`, `true` as types).
 - No implicit returns.
 - No single-statement braceless `if`.
 - No macros that perform I/O or read files.
@@ -1112,13 +1150,13 @@ dogfooding is a means, not an end.
 
 ## Prior Art and Influences
 
-| Influence      | What's borrowed                                                                    |
-| -------------- | ---------------------------------------------------------------------------------- |
-| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`               |
-| **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting    |
-| **TypeScript** | Structural typing, union/intersection types, control-flow narrowing, literal types |
-| **Swift**      | Witness table generics, ARC memory model, value semantics                          |
-| **Kotlin**     | `val`/`var` distinction (our `:=`/`mut :=`), null safety                           |
+| Influence      | What's borrowed                                                                 |
+| -------------- | ------------------------------------------------------------------------------- |
+| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`            |
+| **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting |
+| **TypeScript** | Structural typing, union/intersection types, control-flow narrowing             |
+| **Swift**      | Witness table generics, ARC memory model, value semantics                       |
+| **Kotlin**     | `val`/`var` distinction (our `:=`/`mut :=`), null safety                        |
 
 ---
 

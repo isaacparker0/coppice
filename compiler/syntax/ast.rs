@@ -101,6 +101,7 @@ pub struct MethodDeclaration {
 #[derive(Clone, Debug)]
 pub struct ConstantDeclaration {
     pub name: String,
+    pub type_name: TypeName,
     pub expression: Expression,
     pub doc: Option<DocComment>,
     pub visibility: Visibility,

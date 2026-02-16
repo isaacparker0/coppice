@@ -1,4 +1,4 @@
 # exit: 1
-lib.coppice:1:11: error: unknown name 'MISSING'
-  BROKEN := MISSING
-            ^
+lib.coppice:1:18: error: unknown name 'MISSING'
+  BROKEN: int64 := MISSING
+                   ^

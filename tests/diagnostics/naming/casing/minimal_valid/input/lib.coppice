@@ -3,7 +3,7 @@ type UserProfile :: struct {
     displayName: string,
 }
 
-API_VERSION := "v1"
+API_VERSION: string := "v1"
 
 function getUser(userId: int64) -> int64 {
     mut requestCount := 0

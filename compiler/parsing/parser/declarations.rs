@@ -270,6 +270,13 @@ impl Parser {
         visibility: Visibility,
     ) -> Option<ConstantDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
+        if self.peek_is_symbol(Symbol::Assign) {
+            let span = self.peek_span();
+            self.error("constants require an explicit type annotation", span);
+            return None;
+        }
+        self.expect_symbol(Symbol::Colon)?;
+        let type_name = self.parse_type_name()?;
         self.expect_symbol(Symbol::Assign)?;
         let expression = self.parse_expression()?;
         let span = Span {
@@ -280,6 +287,7 @@ impl Parser {
         };
         Some(ConstantDeclaration {
             name,
+            type_name,
             expression,
             doc: None,
             visibility,

@@ -1,4 +1,4 @@
-API_VERSION := "v1"
+API_VERSION: string := "v1"
 
 function version() -> string {
     return API_VERSION

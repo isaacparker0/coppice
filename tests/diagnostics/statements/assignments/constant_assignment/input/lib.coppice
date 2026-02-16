@@ -1,4 +1,4 @@
-ANSWER := 1
+ANSWER: int64 := 1
 
 function nope() -> int64 {
     ANSWER = 2
