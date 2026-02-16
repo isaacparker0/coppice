@@ -56,6 +56,7 @@ struct FilePhaseState {
     syntax_rules: PhaseStatus,
     file_role_rules: PhaseStatus,
     resolution: PhaseStatus,
+    semantic_lowering: PhaseStatus,
 }
 
 impl FilePhaseState {
@@ -70,6 +71,10 @@ impl FilePhaseState {
     }
 
     fn can_run_type_analysis(&self) -> bool {
+        self.can_run_semantic_lowering() && matches!(self.semantic_lowering, PhaseStatus::Ok)
+    }
+
+    fn can_run_semantic_lowering(&self) -> bool {
         self.can_run_resolution() && matches!(self.resolution, PhaseStatus::Ok)
     }
 }
@@ -196,6 +201,7 @@ pub fn check_target_with_workspace_root(
                     syntax_rules: PhaseStatus::Ok,
                     file_role_rules: PhaseStatus::Ok,
                     resolution: PhaseStatus::Ok,
+                    semantic_lowering: PhaseStatus::Ok,
                 },
             });
         }
@@ -267,12 +273,38 @@ pub fn check_target_with_workspace_root(
     }
 
     let package_id_by_path = collect_package_ids_by_path(&workspace);
-    let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
-        parsed_units
-            .iter()
-            .filter(|unit| unit.phase_state.can_run_type_analysis())
-            .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
-            .collect();
+    let mut semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
+        BTreeMap::new();
+    for parsed_unit in &mut parsed_units {
+        if !parsed_unit.phase_state.can_run_semantic_lowering() {
+            continue;
+        }
+        let lowering_result = lower_parsed_file(&parsed_unit.parsed);
+        let compiler__phase_results::PhaseOutput {
+            value,
+            diagnostics,
+            status,
+        } = lowering_result;
+        parsed_unit.phase_state.semantic_lowering = status;
+        if !scope_is_workspace
+            && !scoped_package_paths
+                .as_ref()
+                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
+        {
+            continue;
+        }
+        for diagnostic in diagnostics {
+            rendered_diagnostics.push(render_diagnostic(
+                &diagnostic_display_base,
+                &parsed_unit.path,
+                &parsed_unit.source,
+                diagnostic,
+            ));
+        }
+        if matches!(parsed_unit.phase_state.semantic_lowering, PhaseStatus::Ok) {
+            semantic_program_by_file.insert(parsed_unit.path.clone(), value);
+        }
+    }
     let package_units: Vec<PackageUnit<'_>> = parsed_units
         .iter()
         .filter_map(|unit| {

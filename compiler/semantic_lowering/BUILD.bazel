@@ -6,6 +6,7 @@ rust_library(
     srcs = ["lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
+        "//compiler/phase_results",
         "//compiler/semantic_program",
         "//compiler/syntax",
     ],
@@ -15,7 +16,6 @@ dependency_enforcement_test(
     name = "semantic_lowering_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
-        "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/exports",
         "//compiler/file_role_rules",

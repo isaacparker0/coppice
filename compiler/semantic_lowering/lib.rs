@@ -1,8 +1,9 @@
+use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program as semantic;
 use compiler__syntax as syntax;
 
 #[must_use]
-pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageUnit {
+pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semantic::PackageUnit> {
     let mut declarations = Vec::new();
     let mut pending_doc_comment: Option<semantic::DocComment> = None;
 
@@ -36,9 +37,13 @@ pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageU
         }
     }
 
-    semantic::PackageUnit {
-        role: parsed_file.role,
-        declarations,
+    PhaseOutput {
+        value: semantic::PackageUnit {
+            role: parsed_file.role,
+            declarations,
+        },
+        diagnostics: Vec::new(),
+        status: PhaseStatus::Ok,
     }
 }
 
