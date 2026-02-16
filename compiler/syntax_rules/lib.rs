@@ -1,5 +1,5 @@
 use compiler__diagnostics::Diagnostic;
-use compiler__phase_results::{PhaseResult, PhaseStatus};
+use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__syntax::{Declaration, FileItem, ParsedFile, StructMemberItem, TypeDeclarationKind};
 
@@ -15,7 +15,7 @@ struct SyntaxRuleViolation {
 }
 
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> PhaseResult {
+pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     let mut violations = Vec::new();
     check_import_order(file, &mut violations);
     check_doc_comment_placement(file, &mut violations);
@@ -26,7 +26,8 @@ pub fn check_file(file: &ParsedFile) -> PhaseResult {
         PhaseStatus::PreventsDownstreamExecution
     };
 
-    PhaseResult {
+    PhaseOutput {
+        value: (),
         diagnostics,
         status,
     }

@@ -5,7 +5,7 @@ use compiler__binding as binding;
 use compiler__diagnostics::Diagnostic;
 use compiler__exports as exports;
 use compiler__package_graph as package_graph;
-use compiler__phase_results::PhaseStatus;
+use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__symbols::{self as symbols, PackageFile};
 use compiler__syntax::ParsedFile;
 use compiler__visibility::{self as visibility, ResolvedImport};
@@ -21,14 +21,14 @@ pub struct ResolutionDiagnostic {
     pub diagnostic: Diagnostic,
 }
 
-pub struct ResolutionResult {
-    pub diagnostics: Vec<ResolutionDiagnostic>,
+pub struct ResolutionArtifacts {
     pub resolved_imports: Vec<ResolvedImport>,
     pub status_by_file: BTreeMap<PathBuf, PhaseStatus>,
+    pub diagnostics_by_file: Vec<ResolutionDiagnostic>,
 }
 
 #[must_use]
-pub fn resolve_files(files: &[ResolutionFile<'_>]) -> ResolutionResult {
+pub fn resolve_files(files: &[ResolutionFile<'_>]) -> PhaseOutput<ResolutionArtifacts> {
     let package_files: Vec<PackageFile<'_>> = files
         .iter()
         .map(|file| PackageFile {
@@ -75,17 +75,29 @@ pub fn resolve_files(files: &[ResolutionFile<'_>]) -> ResolutionResult {
         }
     }
 
-    let diagnostics = package_diagnostics
+    let diagnostics_by_file = package_diagnostics
         .into_iter()
         .map(|diagnostic| ResolutionDiagnostic {
             path: diagnostic.path,
             diagnostic: diagnostic.diagnostic,
         })
         .collect();
+    let status = if status_by_file
+        .values()
+        .any(|status| matches!(status, PhaseStatus::PreventsDownstreamExecution))
+    {
+        PhaseStatus::PreventsDownstreamExecution
+    } else {
+        PhaseStatus::Ok
+    };
 
-    ResolutionResult {
-        diagnostics,
-        resolved_imports,
-        status_by_file,
+    PhaseOutput {
+        value: ResolutionArtifacts {
+            resolved_imports,
+            status_by_file,
+            diagnostics_by_file,
+        },
+        diagnostics: Vec::new(),
+        status,
     }
 }

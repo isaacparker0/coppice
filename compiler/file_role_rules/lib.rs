@@ -1,5 +1,5 @@
 use compiler__diagnostics::Diagnostic;
-use compiler__phase_results::{PhaseResult, PhaseStatus};
+use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
 
@@ -16,7 +16,7 @@ use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, V
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> PhaseResult {
+pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     let mut diagnostics = Vec::new();
     check_exports_declaration_roles(file, &mut diagnostics);
     check_public_declaration_roles(file, &mut diagnostics);
@@ -24,7 +24,8 @@ pub fn check_file(file: &ParsedFile) -> PhaseResult {
 
     let status = PhaseStatus::Ok;
 
-    PhaseResult {
+    PhaseOutput {
+        value: (),
         diagnostics,
         status,
     }

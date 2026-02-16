@@ -240,13 +240,15 @@ pub fn check_target_with_workspace_root(
         })
         .collect();
     let resolution_result = resolution::resolve_files(&resolution_files);
-    let resolved_imports = resolution_result.resolved_imports;
-    for (path, status) in &resolution_result.status_by_file {
+    let resolved_imports = resolution_result.value.resolved_imports;
+    for (path, status) in &resolution_result.value.status_by_file {
         if let Some(parsed_unit) = parsed_units.iter_mut().find(|unit| &unit.path == path) {
             parsed_unit.phase_state.resolution = *status;
         }
     }
-    for resolution::ResolutionDiagnostic { path, diagnostic } in resolution_result.diagnostics {
+    for resolution::ResolutionDiagnostic { path, diagnostic } in
+        resolution_result.value.diagnostics_by_file
+    {
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
             if !scope_is_workspace
                 && !scoped_package_paths
