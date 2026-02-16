@@ -338,6 +338,28 @@ fn imported_type_declaration(
                 methods: typed_methods,
             }
         }
+        TypeDeclarationKind::Enum { variants } => ImportedTypeShape::Union {
+            variants: variants
+                .iter()
+                .map(|variant| {
+                    Type::Named(NominalTypeRef {
+                        id: NominalTypeId {
+                            package_id: target_package_id,
+                            symbol_name: format!(
+                                "{enum_name}.{variant_name}",
+                                enum_name = type_declaration.name,
+                                variant_name = variant.name
+                            ),
+                        },
+                        display_name: format!(
+                            "{enum_name}.{variant_name}",
+                            enum_name = type_declaration.name,
+                            variant_name = variant.name
+                        ),
+                    })
+                })
+                .collect(),
+        },
         TypeDeclarationKind::Union { variants } => ImportedTypeShape::Union {
             variants: variants
                 .iter()

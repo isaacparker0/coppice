@@ -161,18 +161,26 @@ public type User :: struct {
 
 Methods are declared inside struct bodies, not in `impl` blocks.
 
-### Enums / Union Types
+### Enums And Union Types (Distinct Roles)
 
 ```
-type Shape :: Circle | Rect | Point
-
-type Circle :: struct { radius: f64 }
-type Rect :: struct { w: f64, h: f64 }
-type Point :: struct {}
+type Direction :: enum {
+    North
+    South
+    East
+    West
+}
 ```
 
-Union types are first-class. They compose at the use site without pre-declaring
-wrapper enums.
+Enums define closed sets of named variants.
+
+Use sites are explicit and namespaced:
+
+```
+heading: Direction := Direction.North
+```
+
+Union composition remains first-class for composing existing types:
 
 ```
 type ID :: string | u64
@@ -184,6 +192,13 @@ function describe(id: ID) -> string {
     }
 }
 ```
+
+Design rule:
+
+1. `enum { ... }` is the canonical closed-set declaration form.
+2. `A | B` composes already-declared types (or builtins) only.
+3. The compiler does not implicitly synthesize variants from unresolved union
+   members.
 
 ### Generics
 
@@ -288,6 +303,9 @@ type StringOrInt :: string | u64
 
 Tagged unions under the hood. Composable at the use site.
 
+`|` is composition, not enum declaration syntax. Union members must resolve to
+existing named types or builtins.
+
 ### Intersection Types
 
 ```
@@ -311,19 +329,24 @@ Literal singleton types are intentionally not part of the language.
 // type Direction :: "north" | "south" // compile error
 ```
 
-Use named union/enum-style declarations for closed sets:
+Use explicit enum declarations for closed sets:
 
 ```
-type Direction :: North | South | East | West
+type Direction :: enum {
+    North
+    South
+    East
+    West
+}
 ```
 
 Rationale:
 
 1. Literal singleton types would introduce overlapping ways to model closed
-   value sets (`"foo" | "bar"` vs named unions/enums), violating the one-way
-   design principle.
-2. Named declarations communicate domain intent better than ad-hoc literal
-   unions and remain easier to refactor safely across package boundaries.
+   value sets (`"foo" | "bar"` vs explicit enums), violating the one-way design
+   principle.
+2. Explicit enums communicate domain intent better than ad-hoc literal unions
+   and remain easier to refactor safely across package boundaries.
 3. Excluding literal singleton types keeps type inference, assignability, and
    diagnostics simpler and more predictable.
 
@@ -798,8 +821,9 @@ No syntax alternatives. No feature overlaps.
 - One fatal unrecoverable failure construct: `abort(...)`.
 - One union branching form: `match`.
 - One union boolean membership check: `matches`.
-- One constrained value-set model: named union/enum declarations (not literal
+- One constrained value-set declaration form: `enum { ... }` (not literal
   singleton types).
+- One union composition form: `A | B` over already-declared types or builtins.
 - The compiler rejects equivalent non-canonical patterns (for example, boolean
   membership `match` expressions where `matches` is the canonical form).
 
@@ -812,6 +836,7 @@ No syntax alternatives. No feature overlaps.
 - No operator overloading (or very limited).
 - No variadic arguments (pass a list).
 - No literal singleton types (`"foo"`, `1`, `true` as types).
+- No implicit enum-variant synthesis from unresolved union members.
 - No implicit returns.
 - No single-statement braceless `if`.
 - No macros that perform I/O or read files.

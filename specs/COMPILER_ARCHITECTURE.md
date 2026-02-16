@@ -347,6 +347,16 @@ sufficient information and no duplication.
 4. Add/enforce dependency invariants guaranteeing package contracts are built
    from explicit declarations rather than driver-owned inference.
 
+## Phase H: Enum Surface Syntax (planned)
+
+1. Add parser + AST support for explicit closed-set enum declarations:
+   `type Direction :: enum { North, South, ... }`.
+2. Keep `A | B` as union composition over existing types only.
+3. Forbid implicit enum-variant synthesis from unresolved union members.
+4. Ensure enum lowering keeps existing deterministic type-analysis and
+   exhaustiveness behavior, with diagnostics owned by parsing/type-analysis (not
+   driver).
+
 ---
 
 ## Diagnostic Ownership

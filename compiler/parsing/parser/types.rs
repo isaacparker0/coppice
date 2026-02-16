@@ -1,6 +1,6 @@
 use crate::lexer::Symbol;
 use compiler__source::Span;
-use compiler__syntax::{TypeName, TypeNameAtom};
+use compiler__syntax::{EnumVariant, TypeName, TypeNameAtom};
 
 use super::Parser;
 
@@ -52,6 +52,52 @@ impl Parser {
                 span,
             });
         }
+        Some(variants)
+    }
+
+    pub(super) fn parse_enum_type_declaration(&mut self) -> Option<Vec<EnumVariant>> {
+        self.expect_symbol(Symbol::LeftBrace)?;
+        let mut variants = Vec::new();
+        self.skip_statement_terminators();
+        if self.peek_is_symbol(Symbol::RightBrace) {
+            self.error(
+                "enum declaration must include at least one variant",
+                self.peek_span(),
+            );
+            return Some(variants);
+        }
+
+        loop {
+            self.skip_statement_terminators();
+            let (name, span) = self.expect_identifier()?;
+            variants.push(EnumVariant {
+                name,
+                span: span.clone(),
+            });
+
+            self.skip_statement_terminators();
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
+            }
+            self.error("expected ',' or '}' after enum variant", self.peek_span());
+            self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
+            }
+        }
+
         Some(variants)
     }
 }

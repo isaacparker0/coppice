@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use compiler__semantic_types::{ImportedTypeShape, NominalTypeId};
+use compiler__semantic_types::{ImportedTypeShape, NominalTypeId, NominalTypeRef};
 use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
@@ -166,9 +166,11 @@ impl TypeChecker<'_> {
             }
             let kind = match &type_declaration.kind {
                 TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
-                TypeDeclarationKind::Union { .. } => TypeKind::Union {
-                    variants: Vec::new(),
-                },
+                TypeDeclarationKind::Enum { .. } | TypeDeclarationKind::Union { .. } => {
+                    TypeKind::Union {
+                        variants: Vec::new(),
+                    }
+                }
             };
             self.types.insert(
                 type_declaration.name.clone(),
@@ -204,6 +206,39 @@ impl TypeChecker<'_> {
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
+                        };
+                    }
+                }
+                TypeDeclarationKind::Enum { variants } => {
+                    let mut resolved_variants = Vec::new();
+                    let mut seen = HashSet::new();
+                    for variant in variants {
+                        if !seen.insert(variant.name.clone()) {
+                            self.error(
+                                format!("duplicate enum variant '{}'", variant.name),
+                                variant.span.clone(),
+                            );
+                            continue;
+                        }
+                        resolved_variants.push(super::Type::Named(NominalTypeRef {
+                            id: NominalTypeId {
+                                package_id: self.package_id,
+                                symbol_name: format!(
+                                    "{enum_name}.{variant_name}",
+                                    enum_name = type_declaration.name,
+                                    variant_name = variant.name
+                                ),
+                            },
+                            display_name: format!(
+                                "{enum_name}.{variant_name}",
+                                enum_name = type_declaration.name,
+                                variant_name = variant.name
+                            ),
+                        }));
+                    }
+                    if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                        info.kind = TypeKind::Union {
+                            variants: resolved_variants,
                         };
                     }
                 }

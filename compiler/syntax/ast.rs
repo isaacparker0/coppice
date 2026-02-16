@@ -70,9 +70,18 @@ pub enum TypeDeclarationKind {
         fields: Vec<FieldDeclaration>,
         methods: Vec<MethodDeclaration>,
     },
+    Enum {
+        variants: Vec<EnumVariant>,
+    },
     Union {
         variants: Vec<TypeName>,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    pub name: String,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]

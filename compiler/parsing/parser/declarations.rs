@@ -36,6 +36,24 @@ impl Parser {
                 span,
             });
         }
+        if self.peek_is_keyword(Keyword::Enum) {
+            self.expect_keyword(Keyword::Enum)?;
+            let variants = self.parse_enum_type_declaration()?;
+            let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+            let span = Span {
+                start: start.start,
+                end: right_brace.end,
+                line: start.line,
+                column: start.column,
+            };
+            return Some(TypeDeclaration {
+                name,
+                kind: TypeDeclarationKind::Enum { variants },
+                doc,
+                visibility,
+                span,
+            });
+        }
         let variants = self.parse_union_type_declaration()?;
         let end = variants
             .last()
