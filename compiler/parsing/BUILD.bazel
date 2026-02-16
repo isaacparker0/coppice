@@ -18,6 +18,7 @@ rust_library(
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/diagnostics",
+        "//compiler/phase_results",
         "//compiler/source",
         "//compiler/syntax",
     ],

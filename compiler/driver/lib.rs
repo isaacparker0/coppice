@@ -52,14 +52,20 @@ struct ParsedUnit {
 }
 
 struct FilePhaseState {
+    parsing: PhaseStatus,
     syntax_rules: PhaseStatus,
     file_role_rules: PhaseStatus,
     resolution: PhaseStatus,
 }
 
 impl FilePhaseState {
+    fn can_run_syntax_checks(&self) -> bool {
+        matches!(self.parsing, PhaseStatus::Ok)
+    }
+
     fn can_run_resolution(&self) -> bool {
-        matches!(self.syntax_rules, PhaseStatus::Ok)
+        self.can_run_syntax_checks()
+            && matches!(self.syntax_rules, PhaseStatus::Ok)
             && matches!(self.file_role_rules, PhaseStatus::Ok)
     }
 
@@ -168,36 +174,37 @@ pub fn check_target_with_workspace_root(
                     path: display_path(&absolute_path),
                     error,
                 })?;
-            match parse_file(&source, role) {
-                Ok(parsed) => parsed_units.push(ParsedUnit {
-                    package_id: package.id,
-                    package_path: package.package_path.clone(),
-                    path: relative_path,
-                    source,
-                    parsed,
-                    phase_state: FilePhaseState {
-                        syntax_rules: PhaseStatus::Ok,
-                        file_role_rules: PhaseStatus::Ok,
-                        resolution: PhaseStatus::Ok,
-                    },
-                }),
-                Err(diagnostics) => {
-                    if package_in_scope {
-                        for diagnostic in diagnostics {
-                            rendered_diagnostics.push(render_diagnostic(
-                                &diagnostic_display_base,
-                                &relative_path,
-                                &source,
-                                diagnostic,
-                            ));
-                        }
-                    }
+            let parse_result = parse_file(&source, role);
+            if package_in_scope {
+                for diagnostic in &parse_result.diagnostics {
+                    rendered_diagnostics.push(render_diagnostic(
+                        &diagnostic_display_base,
+                        &relative_path,
+                        &source,
+                        diagnostic.clone(),
+                    ));
                 }
             }
+            parsed_units.push(ParsedUnit {
+                package_id: package.id,
+                package_path: package.package_path.clone(),
+                path: relative_path,
+                source,
+                parsed: parse_result.value,
+                phase_state: FilePhaseState {
+                    parsing: parse_result.status,
+                    syntax_rules: PhaseStatus::Ok,
+                    file_role_rules: PhaseStatus::Ok,
+                    resolution: PhaseStatus::Ok,
+                },
+            });
         }
     }
 
     for parsed_unit in &mut parsed_units {
+        if !parsed_unit.phase_state.can_run_syntax_checks() {
+            continue;
+        }
         let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
         parsed_unit.phase_state.syntax_rules = syntax_rules_result.status;
         let file_role_rules_result = file_role_rules::check_file(&parsed_unit.parsed);
