@@ -8,6 +8,7 @@ rust_library(
     deps = [
         "//compiler/diagnostics",
         "//compiler/packages",
+        "//compiler/semantic_lowering",
         "//compiler/semantic_types",
         "//compiler/syntax",
         "//compiler/type_analysis",

@@ -2,7 +2,6 @@ use std::hash::{Hash, Hasher};
 
 use compiler__packages::PackageId;
 use compiler__source::Span;
-use compiler__syntax::TypeDeclaration;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct NominalTypeId {
@@ -111,7 +110,7 @@ pub struct ImportedMethodSignature {
 }
 
 pub enum TypedSymbol {
-    Type(TypeDeclaration),
+    Type,
     Function(TypedFunctionSignature),
     Constant(Type),
 }

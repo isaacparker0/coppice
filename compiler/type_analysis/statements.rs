@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
-use compiler__syntax::{
+use compiler__semantic_program::{
     Block, Expression, FunctionDeclaration, MethodDeclaration, Statement, TypeDeclaration,
     TypeDeclarationKind,
 };
+use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 
 use super::{ExpressionSpan, FallthroughNarrowing, StatementOutcome, StatementSpan, TypeChecker};
 

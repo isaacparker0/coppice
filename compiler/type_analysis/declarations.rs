@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
-use compiler__semantic_types::{ImportedTypeShape, NominalTypeId, NominalTypeRef};
-use compiler__syntax::{
+use compiler__semantic_program::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
+use compiler__semantic_types::{ImportedTypeShape, NominalTypeId, NominalTypeRef};
 
 use super::{
     FunctionInfo, ImportedTypeDeclaration, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind,

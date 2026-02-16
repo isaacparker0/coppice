@@ -1,4 +1,4 @@
-use compiler__syntax::{BinaryOperator, Block, Expression, MatchArm};
+use compiler__semantic_program::{BinaryOperator, Block, Expression, MatchArm};
 
 use compiler__semantic_types::Type;
 

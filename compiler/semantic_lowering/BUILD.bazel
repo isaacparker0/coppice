@@ -2,42 +2,33 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "type_analysis",
-    srcs = [
-        "assignability.rs",
-        "declarations.rs",
-        "expressions.rs",
-        "lib.rs",
-        "naming_rules.rs",
-        "statements.rs",
-        "type_narrowing.rs",
-        "unused_bindings.rs",
-    ],
+    name = "semantic_lowering",
+    srcs = ["lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
-        "//compiler/diagnostics",
-        "//compiler/packages",
         "//compiler/semantic_program",
-        "//compiler/semantic_types",
-        "//compiler/source",
+        "//compiler/syntax",
     ],
 )
 
 dependency_enforcement_test(
-    name = "type_analysis_forbidden_dependencies",
+    name = "semantic_lowering_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
+        "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
         "//compiler/package_symbols",
+        "//compiler/packages",
         "//compiler/parsing",
-        "//compiler/syntax",
+        "//compiler/semantic_types",
         "//compiler/symbols",
+        "//compiler/type_analysis",
         "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":type_analysis",
+    target = ":semantic_lowering",
 )

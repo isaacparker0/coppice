@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use compiler__source::Span;
-use compiler__syntax::{
-    BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName,
+use compiler__semantic_program::{
+    BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName, UnaryOperator,
 };
+use compiler__source::Span;
 
 use compiler__semantic_types::Type;
 
@@ -268,14 +268,14 @@ impl TypeChecker<'_> {
             } => {
                 let value_type = self.check_expression(expression);
                 match operator {
-                    compiler__syntax::UnaryOperator::Not => {
+                    UnaryOperator::Not => {
                         if value_type != Type::Boolean && value_type != Type::Unknown {
                             self.error("not operator requires boolean operand", expression.span());
                             return Type::Unknown;
                         }
                         Type::Boolean
                     }
-                    compiler__syntax::UnaryOperator::Negate => {
+                    UnaryOperator::Negate => {
                         if value_type != Type::Integer64 && value_type != Type::Unknown {
                             self.error("unary minus requires int64 operand", expression.span());
                             return Type::Unknown;

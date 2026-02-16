@@ -8,7 +8,6 @@ rust_library(
     deps = [
         "//compiler/packages",
         "//compiler/source",
-        "//compiler/syntax",
     ],
 )
 
@@ -23,6 +22,7 @@ dependency_enforcement_test(
         "//compiler/package_graph",
         "//compiler/package_symbols",
         "//compiler/parsing",
+        "//compiler/syntax",
         "//compiler/symbols",
         "//compiler/typecheck",
         "//compiler/type_analysis",

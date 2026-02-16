@@ -101,11 +101,10 @@ Examples:
 
 ## Type Analysis
 
-`compiler/type_analysis` owns AST-based type analysis implementation in the
-current transition state.
+`compiler/type_analysis` owns semantic-program-based type analysis.
 
-It consumes parsed files plus typed import contracts and emits typing
-diagnostics and file summaries.
+It consumes lowered semantic program units plus typed import contracts and emits
+typing diagnostics and file summaries.
 
 ## Typechecking
 
@@ -150,9 +149,12 @@ Driver must not become semantic owner; it wires owned passes together.
    - `compiler/semantic_types/*`
 5. Type analysis implementation
    - `compiler/type_analysis/*`
-6. Typecheck compatibility facade
+6. Semantic program model + lowering
+   - `compiler/semantic_program/*`
+   - `compiler/semantic_lowering/*`
+7. Typecheck compatibility facade
    - `compiler/typecheck/*`
-7. Driver
+8. Driver
    - `compiler/driver/*`
 
 ---
@@ -166,9 +168,10 @@ Current intended high-level direction:
 3. `visibility -> package_graph`
 4. `visibility + symbols -> binding`
 5. `semantic_types` is shared by `package_symbols` and `type_analysis`
-6. `type_analysis + semantic_types -> typecheck` (facade only)
-7. `driver` orchestrates `package_symbols` outputs and `typecheck` execution
-8. `driver` depends on phase crates; phase crates do not depend on `driver`
+6. `syntax -> semantic_lowering -> semantic_program -> type_analysis`
+7. `type_analysis + semantic_types -> typecheck` (facade only)
+8. `driver` orchestrates `package_symbols` outputs and `typecheck` execution
+9. `driver` depends on phase crates; phase crates do not depend on `driver`
 
 ---
 
@@ -181,14 +184,14 @@ The long-term clean architecture is:
 2. `compiler/semantic_types`
    - canonical semantic type representation
    - includes stable IDs for nominal references
-3. `compiler/semantic_ir`
-   - lowered semantic program IR for typecheck and later semantic/codegen phases
-4. `compiler/lowering`
-   - AST (`syntax`) -> semantic IR conversion
+3. `compiler/semantic_program`
+   - lowered semantic program representation for semantic passes
+4. `compiler/semantic_lowering`
+   - AST (`syntax`) -> semantic program conversion
 5. `compiler/package_symbols`
    - package-level typed symbol contracts keyed by stable identities
 6. `compiler/typecheck`
-   - consumes semantic IR + semantic types + package symbol contracts
+   - consumes semantic program + semantic types + package symbol contracts
    - does not depend on parser AST
 
 In this endpoint, cross-package imports are identity-based and typed; aliasing
@@ -207,7 +210,7 @@ Current progress already achieved toward this endpoint:
 These are normative target invariants:
 
 1. `typecheck` must not depend on `compiler/syntax`.
-2. `typecheck` must consume semantic IR + typed package symbol contracts.
+2. `typecheck` must consume semantic program + typed package symbol contracts.
 3. Cross-package named-type identity must be stable-ID-based, not string-based.
 4. `package_symbols` owns cross-package symbol contracts; `typecheck` does not
    own driver-facing transport models.
@@ -222,12 +225,10 @@ Invariants already realized in current code:
 
 Temporary coupling still present (known debt):
 
-1. Public constant fixed-point type inference currently runs in
-   `compiler/driver` as orchestration glue between `package_symbols` and
-   `typecheck`/`type_analysis`.
-2. With language policy requiring explicit type annotations on all constants,
-   this inference path should be removed instead of extracted into a dedicated
-   pass.
+1. `typecheck` still provides a compatibility facade over `type_analysis`
+   instead of owning semantic analysis directly.
+2. `package_symbols` still consumes parser-owned declarations directly and has
+   not yet migrated to semantic-program-owned declarations.
 
 ---
 
@@ -315,18 +316,19 @@ sufficient information and no duplication.
 ## Phase C: Type Analysis Extraction (complete)
 
 1. Move AST-based type analysis implementation into `compiler/type_analysis`.
+   (Historical step; now migrated to semantic-program-based input.)
 2. Keep `compiler/typecheck` as a thin compatibility facade.
 3. Ensure diagnostics parity while changing dependency direction.
 
-## Phase D: Semantic IR Introduction (not started)
+## Phase D: Semantic Program Introduction (complete)
 
-1. Define semantic IR structures for declarations/statements/expressions.
-2. Add lowering from AST to semantic IR with span preservation.
+1. Define semantic program structures for declarations/statements/expressions.
+2. Add lowering from AST to semantic program with span preservation.
 3. Keep diagnostics parity while migrating pass consumers.
 
-## Phase E: Typecheck Migration To Semantic IR (not started)
+## Phase E: Typecheck Migration To Semantic Program (in progress)
 
-1. Switch typecheck to semantic IR.
+1. Switch typecheck to semantic program.
 2. Remove `compiler/syntax` dependency from `compiler/typecheck`.
 3. Add colocated `dependency_enforcement_test` invariant and enforce in CI.
 
@@ -338,7 +340,7 @@ sufficient information and no duplication.
 3. Add each invariant in the same change that completes the corresponding
    migration step.
 
-## Phase G: Constant Annotation Enforcement (planned)
+## Phase G: Constant Annotation Enforcement (complete)
 
 1. Enforce explicit type annotations on all constant declarations.
 2. Remove public constant fixed-point inference from `compiler/driver`.
@@ -347,7 +349,7 @@ sufficient information and no duplication.
 4. Add/enforce dependency invariants guaranteeing package contracts are built
    from explicit declarations rather than driver-owned inference.
 
-## Phase H: Enum Surface Syntax (planned)
+## Phase H: Enum Surface Syntax (complete)
 
 1. Add parser + AST support for explicit closed-set enum declarations:
    `type Direction :: enum { North, South, ... }`.
@@ -385,7 +387,7 @@ Guideline:
 The compiler should evolve toward stable semantic boundaries:
 
 1. AST for parsing only
-2. semantic IR for semantic passes
+2. semantic program for semantic passes
 3. typed, ID-based package symbol contracts for cross-package analysis
 4. strict dependency direction enforced by build graph
 

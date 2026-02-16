@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use compiler__diagnostics::Diagnostic;
 use compiler__packages::PackageId;
+use compiler__semantic_program::{
+    ConstantDeclaration, Expression, FunctionDeclaration, PackageUnit as SemanticPackageUnit,
+    Statement, TypeDeclaration, TypeName,
+};
 use compiler__semantic_types::{
     FileTypecheckSummary, ImportedBinding, ImportedSymbol, ImportedTypeDeclaration, NominalTypeId,
     NominalTypeRef, Type, TypedFunctionSignature, TypedSymbol, type_from_builtin_name,
 };
 use compiler__source::Span;
-use compiler__syntax::{
-    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, ParsedFile, Statement,
-    TypeDeclaration, TypeName,
-};
 
 mod assignability;
 mod declarations;
@@ -22,7 +22,7 @@ mod unused_bindings;
 
 pub fn check_package_unit(
     package_id: PackageId,
-    package_unit: &ParsedFile,
+    package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -31,7 +31,7 @@ pub fn check_package_unit(
 
 pub fn analyze_package_unit(
     package_id: PackageId,
-    package_unit: &ParsedFile,
+    package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FileTypecheckSummary {
@@ -40,31 +40,16 @@ pub fn analyze_package_unit(
 
 fn check_package_unit_declarations(
     package_id: PackageId,
-    package_unit: &ParsedFile,
+    package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FileTypecheckSummary {
-    let mut type_declarations = Vec::new();
-    let mut constant_declarations = Vec::new();
-    let mut function_declarations = Vec::new();
-    for declaration in &package_unit.declarations {
-        match declaration {
-            Declaration::Type(type_declaration) => type_declarations.push(type_declaration.clone()),
-            Declaration::Constant(constant_declaration) => {
-                constant_declarations.push(constant_declaration.clone());
-            }
-            Declaration::Function(function_declaration) => {
-                function_declarations.push(function_declaration.clone());
-            }
-            Declaration::Import(_) | Declaration::Exports(_) => {}
-        }
-    }
     check_declarations(
         package_id,
         diagnostics,
-        &type_declarations,
-        &constant_declarations,
-        &function_declarations,
+        &package_unit.type_declarations,
+        &package_unit.constant_declarations,
+        &package_unit.function_declarations,
         imported_bindings,
     )
 }
@@ -221,10 +206,7 @@ impl<'a> TypeChecker<'a> {
         let mut typed_symbol_by_name = HashMap::new();
 
         for type_declaration in type_declarations {
-            typed_symbol_by_name.insert(
-                type_declaration.name.clone(),
-                TypedSymbol::Type(type_declaration.clone()),
-            );
+            typed_symbol_by_name.insert(type_declaration.name.clone(), TypedSymbol::Type);
         }
         for function_declaration in function_declarations {
             if let Some(info) = self.functions.get(&function_declaration.name) {

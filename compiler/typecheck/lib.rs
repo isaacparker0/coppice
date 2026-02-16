@@ -1,5 +1,6 @@
 use compiler__diagnostics::Diagnostic;
 use compiler__packages::PackageId;
+use compiler__semantic_lowering::lower_parsed_file;
 use compiler__semantic_types::{FileTypecheckSummary, ImportedBinding};
 use compiler__syntax::ParsedFile;
 
@@ -15,9 +16,10 @@ pub fn check_package_unit(
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let semantic_unit = lower_parsed_file(package_unit);
     compiler__type_analysis::check_package_unit(
         package_id,
-        package_unit,
+        &semantic_unit,
         imported_bindings,
         diagnostics,
     );
@@ -29,9 +31,10 @@ pub fn analyze_package_unit(
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> FileTypecheckSummary {
+    let semantic_unit = lower_parsed_file(package_unit);
     compiler__type_analysis::analyze_package_unit(
         package_id,
-        package_unit,
+        &semantic_unit,
         imported_bindings,
         diagnostics,
     )
