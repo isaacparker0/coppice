@@ -20,7 +20,7 @@ pub(super) enum ParseError {
     MissingToken { message: String, span: Span },
     InvalidConstruct { message: String, span: Span },
     Recovered { message: String, span: Span },
-    AlreadyReported,
+    UnparsableToken,
 }
 
 pub(super) type ParseResult<T> = Result<T, ParseError>;
@@ -284,7 +284,7 @@ impl Parser {
             | ParseError::Recovered { message, span } => {
                 self.error(message.clone(), span.clone());
             }
-            ParseError::AlreadyReported => {}
+            ParseError::UnparsableToken => {}
         }
     }
 }

@@ -1,4 +1,3 @@
-use compiler__diagnostics::Diagnostic;
 use compiler__source::Span;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,13 +113,18 @@ pub struct Token {
     pub span: Span,
 }
 
+pub(crate) struct LexError {
+    pub(crate) message: String,
+    pub(crate) span: Span,
+}
+
 pub struct Lexer<'a> {
     source: &'a str,
     bytes: &'a [u8],
     index: usize,
     line: usize,
     column: usize,
-    diagnostics: Vec<Diagnostic>,
+    lex_errors: Vec<LexError>,
 }
 
 impl<'a> Lexer<'a> {
@@ -131,7 +135,7 @@ impl<'a> Lexer<'a> {
             index: 0,
             line: 1,
             column: 1,
-            diagnostics: Vec::new(),
+            lex_errors: Vec::new(),
         }
     }
 
@@ -148,8 +152,8 @@ impl<'a> Lexer<'a> {
         normalize_newlines_to_statement_terminators(tokens)
     }
 
-    pub fn into_diagnostics(self) -> Vec<Diagnostic> {
-        self.diagnostics
+    pub fn into_errors(self) -> Vec<LexError> {
+        self.lex_errors
     }
 
     fn next_token(&mut self) -> Token {
@@ -304,15 +308,15 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
 
-        self.diagnostics.push(Diagnostic::new(
-            "unterminated string literal",
-            Span {
+        self.lex_errors.push(LexError {
+            message: "unterminated string literal".to_string(),
+            span: Span {
                 start,
                 end: self.index,
                 line,
                 column,
             },
-        ));
+        });
         Token {
             kind: TokenKind::Error("unterminated string literal".to_string()),
             span: Span {
@@ -344,15 +348,15 @@ impl<'a> Lexer<'a> {
                 },
             }
         } else {
-            self.diagnostics.push(Diagnostic::new(
-                "integer literal out of range",
-                Span {
+            self.lex_errors.push(LexError {
+                message: "integer literal out of range".to_string(),
+                span: Span {
                     start,
                     end: self.index,
                     line,
                     column,
                 },
-            ));
+            });
             Token {
                 kind: TokenKind::Error("integer literal out of range".to_string()),
                 span: Span {
@@ -440,15 +444,15 @@ impl<'a> Lexer<'a> {
         column: usize,
     ) -> Token {
         let message = message.into();
-        self.diagnostics.push(Diagnostic::new(
-            message.clone(),
-            Span {
+        self.lex_errors.push(LexError {
+            message: message.clone(),
+            span: Span {
                 start,
                 end: self.index,
                 line,
                 column,
             },
-        ));
+        });
         Token {
             kind: TokenKind::Error(message),
             span: Span {
