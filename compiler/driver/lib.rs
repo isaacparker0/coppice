@@ -310,12 +310,12 @@ pub fn check_target_with_workspace_root(
         let Some(semantic_unit) = semantic_program_by_file.get(&parsed_unit.path) else {
             continue;
         };
-        type_analysis::check_package_unit(
+        let type_analysis_result = type_analysis::check_package_unit(
             parsed_unit.package_id,
             semantic_unit,
             imported_bindings,
-            &mut file_diagnostics,
         );
+        file_diagnostics.extend(type_analysis_result.diagnostics);
         for diagnostic in file_diagnostics {
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use compiler__diagnostics::Diagnostic;
 use compiler__packages::PackageId;
+use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
     ConstantDeclaration, Declaration, Expression, FunctionDeclaration,
     PackageUnit as SemanticPackageUnit, Statement, TypeDeclaration, TypeName,
@@ -20,13 +21,30 @@ mod statements;
 mod type_narrowing;
 mod unused_bindings;
 
+#[must_use]
 pub fn check_package_unit(
     package_id: PackageId,
     package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    analyze_package_unit(package_id, package_unit, imported_bindings, diagnostics);
+) -> PhaseOutput<()> {
+    let mut diagnostics = Vec::new();
+    analyze_package_unit(
+        package_id,
+        package_unit,
+        imported_bindings,
+        &mut diagnostics,
+    );
+    let status = if diagnostics.is_empty() {
+        PhaseStatus::Ok
+    } else {
+        PhaseStatus::PreventsDownstreamExecution
+    };
+
+    PhaseOutput {
+        value: (),
+        diagnostics,
+        status,
+    }
 }
 
 pub fn analyze_package_unit(

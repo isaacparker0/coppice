@@ -17,6 +17,7 @@ rust_library(
     deps = [
         "//compiler/diagnostics",
         "//compiler/packages",
+        "//compiler/phase_results",
         "//compiler/semantic_program",
         "//compiler/semantic_types",
         "//compiler/source",
