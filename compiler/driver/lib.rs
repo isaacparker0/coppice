@@ -9,13 +9,15 @@ use compiler__exports as exports;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_graph as package_graph;
 use compiler__package_symbols::{
-    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
+    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary, TypedPublicSymbolTable,
     build_typed_public_symbol_table,
 };
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
+use compiler__semantic_types::ImportedBinding;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
+use compiler__syntax::{Declaration, Visibility};
 use compiler__typecheck::{self as typecheck};
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
@@ -253,8 +255,11 @@ pub fn check_target_with_workspace_root(
         build_typecheck_resolved_imports(&resolved_imports, &package_id_by_path);
     let typed_public_symbol_table =
         build_typed_public_symbol_table(&package_units, &typecheck_resolved_imports);
-    let imported_bindings_by_file =
-        typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
+    let imported_bindings_by_file = infer_imported_bindings_by_file(
+        &parsed_units,
+        &typecheck_resolved_imports,
+        &typed_public_symbol_table,
+    );
 
     let has_pre_typecheck_errors = !rendered_diagnostics.is_empty();
     if has_pre_typecheck_errors {
@@ -345,6 +350,92 @@ fn build_typecheck_resolved_imports(
         });
     }
     typecheck_resolved_imports
+}
+
+fn infer_imported_bindings_by_file(
+    parsed_units: &[ParsedUnit],
+    resolved_imports: &[ResolvedImportSummary],
+    typed_public_symbol_table: &TypedPublicSymbolTable,
+) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
+    let public_constant_names_by_file = public_constant_names_by_file(parsed_units);
+    if public_constant_names_by_file.is_empty() {
+        return typed_public_symbol_table.imported_bindings_by_file(resolved_imports);
+    }
+
+    let public_constant_count: usize = public_constant_names_by_file.values().map(Vec::len).sum();
+    let max_iterations = public_constant_count + 1;
+    let mut constant_type_by_symbol: BTreeMap<(PackageId, String), typecheck::Type> =
+        BTreeMap::new();
+
+    for _ in 0..max_iterations {
+        let imported_bindings_by_file = typed_public_symbol_table
+            .imported_bindings_by_file_with_constant_types(
+                resolved_imports,
+                &constant_type_by_symbol,
+            );
+        let mut changed = false;
+
+        for parsed_unit in parsed_units {
+            let Some(public_constant_names) = public_constant_names_by_file.get(&parsed_unit.path)
+            else {
+                continue;
+            };
+            let imported_bindings = imported_bindings_by_file
+                .get(&parsed_unit.path)
+                .map_or(&[][..], Vec::as_slice);
+            let mut ignored_diagnostics = Vec::new();
+            let summary = typecheck::analyze_package_unit(
+                parsed_unit.package_id,
+                &parsed_unit.parsed,
+                imported_bindings,
+                &mut ignored_diagnostics,
+            );
+
+            for public_constant_name in public_constant_names {
+                let Some(typecheck::TypedSymbol::Constant(value_type)) =
+                    summary.typed_symbol_by_name.get(public_constant_name)
+                else {
+                    continue;
+                };
+                let key = (parsed_unit.package_id, public_constant_name.clone());
+                if constant_type_by_symbol.get(&key) == Some(value_type) {
+                    continue;
+                }
+                constant_type_by_symbol.insert(key, value_type.clone());
+                changed = true;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    typed_public_symbol_table
+        .imported_bindings_by_file_with_constant_types(resolved_imports, &constant_type_by_symbol)
+}
+
+fn public_constant_names_by_file(parsed_units: &[ParsedUnit]) -> BTreeMap<PathBuf, Vec<String>> {
+    let mut names_by_file = BTreeMap::new();
+    for parsed_unit in parsed_units {
+        if parsed_unit.parsed.role != FileRole::Library {
+            continue;
+        }
+        let mut names = Vec::new();
+        for declaration in &parsed_unit.parsed.declarations {
+            let Declaration::Constant(constant_declaration) = declaration else {
+                continue;
+            };
+            if constant_declaration.visibility != Visibility::Public {
+                continue;
+            }
+            names.push(constant_declaration.name.clone());
+        }
+        if !names.is_empty() {
+            names_by_file.insert(parsed_unit.path.clone(), names);
+        }
+    }
+    names_by_file
 }
 
 fn scoped_package_paths_for_target(

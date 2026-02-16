@@ -10,7 +10,6 @@ rust_library(
         "//compiler/semantic_types",
         "//compiler/source",
         "//compiler/syntax",
-        "//compiler/type_analysis",
     ],
 )
 
@@ -24,6 +23,7 @@ dependency_enforcement_test(
         "//compiler/package_graph",
         "//compiler/parsing",
         "//compiler/symbols",
+        "//compiler/type_analysis",
         "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",

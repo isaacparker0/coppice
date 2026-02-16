@@ -224,10 +224,11 @@ Invariants already realized in current code:
 
 Temporary coupling still present (known debt):
 
-1. `package_symbols` currently depends on `type_analysis` to infer public
-   constant types.
-2. This coupling is expected to be removed during semantic IR/lowering migration
-   so package contracts do not require AST type-analysis internals.
+1. Public constant fixed-point type inference currently runs in
+   `compiler/driver` as orchestration glue between `package_symbols` and
+   `typecheck`/`type_analysis`.
+2. This logic should move into a dedicated semantic pass crate so driver returns
+   to wiring-only ownership.
 
 ---
 
@@ -337,6 +338,17 @@ sufficient information and no duplication.
 2. Keep CI running these invariants under `bazel test`.
 3. Add each invariant in the same change that completes the corresponding
    migration step.
+
+## Phase G: Public Constant Pass Extraction (planned)
+
+1. Introduce a dedicated semantic pass crate for public constant fixed-point
+   type inference.
+2. Move public constant inference logic out of `compiler/driver` into that pass
+   crate.
+3. Keep `compiler/driver` orchestration-only by wiring this pass alongside
+   `package_symbols` and `typecheck`.
+4. Add/enforce dependency invariants so the new pass owns semantic logic and
+   driver does not.
 
 ---
 

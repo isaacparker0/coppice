@@ -13,6 +13,7 @@ rust_library(
         "//compiler/package_symbols",
         "//compiler/packages",
         "//compiler/parsing",
+        "//compiler/semantic_types",
         "//compiler/source",
         "//compiler/symbols",
         "//compiler/syntax",

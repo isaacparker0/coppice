@@ -1,18 +1,17 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
 use compiler__semantic_types::{
     ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
-    ImportedTypeShape, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature, TypedSymbol,
+    ImportedTypeShape, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature,
     type_from_builtin_name,
 };
 use compiler__source::{FileRole, Span, compare_paths};
 use compiler__syntax::{
-    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, MatchPattern, ParsedFile,
-    TypeDeclaration, TypeDeclarationKind, TypeName, Visibility,
+    Declaration, FunctionDeclaration, ParsedFile, TypeDeclaration, TypeDeclarationKind, TypeName,
+    Visibility,
 };
-use compiler__type_analysis::analyze_package_unit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct PublicSymbolId(usize);
@@ -35,12 +34,6 @@ enum TypedPublicSymbol {
     Type(TypeDeclaration),
     Function(FunctionDeclaration),
     Constant(Type),
-}
-
-#[derive(Clone)]
-struct PublicConstantDefinition {
-    path: PathBuf,
-    symbol_name: String,
 }
 
 pub struct PackageUnit<'a> {
@@ -74,10 +67,20 @@ impl TypedPublicSymbolTable {
         &self,
         resolved_imports: &[ResolvedImportSummary],
     ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
+        self.imported_bindings_by_file_with_constant_types(resolved_imports, &BTreeMap::new())
+    }
+
+    #[must_use]
+    pub fn imported_bindings_by_file_with_constant_types(
+        &self,
+        resolved_imports: &[ResolvedImportSummary],
+        constant_type_by_symbol: &BTreeMap<(PackageId, String), Type>,
+    ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
         build_imported_bindings_by_file(
             resolved_imports,
             &self.symbol_id_by_lookup_key,
             &self.typed_symbol_by_id,
+            constant_type_by_symbol,
         )
     }
 }
@@ -85,21 +88,12 @@ impl TypedPublicSymbolTable {
 #[must_use]
 pub fn build_typed_public_symbol_table(
     package_units: &[PackageUnit<'_>],
-    resolved_imports: &[ResolvedImportSummary],
+    _resolved_imports: &[ResolvedImportSummary],
 ) -> TypedPublicSymbolTable {
-    let (
-        symbol_id_by_lookup_key,
-        public_symbol_definition_by_id,
-        public_constant_definition_by_symbol_id,
-    ) = collect_public_symbol_index(package_units);
+    let (symbol_id_by_lookup_key, public_symbol_definition_by_id) =
+        collect_public_symbol_index(package_units);
 
-    let typed_symbol_by_id = resolve_public_symbol_types(
-        package_units,
-        resolved_imports,
-        &symbol_id_by_lookup_key,
-        &public_symbol_definition_by_id,
-        &public_constant_definition_by_symbol_id,
-    );
+    let typed_symbol_by_id = resolve_public_symbol_types(&public_symbol_definition_by_id);
 
     TypedPublicSymbolTable {
         symbol_id_by_lookup_key,
@@ -112,11 +106,9 @@ fn collect_public_symbol_index(
 ) -> (
     BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     BTreeMap<PublicSymbolId, PublicSymbolDefinition>,
-    BTreeMap<PublicSymbolId, PublicConstantDefinition>,
 ) {
     let mut symbol_id_by_lookup_key = BTreeMap::new();
     let mut public_symbol_definition_by_id = BTreeMap::new();
-    let mut public_constant_definition_by_symbol_id = BTreeMap::new();
 
     let mut ordered_units: Vec<&PackageUnit<'_>> = package_units.iter().collect();
     ordered_units.sort_by(|left, right| {
@@ -172,32 +164,14 @@ fn collect_public_symbol_index(
             let symbol_id = PublicSymbolId(symbol_id_by_lookup_key.len());
             symbol_id_by_lookup_key.insert(lookup_key, symbol_id);
             public_symbol_definition_by_id.insert(symbol_id, public_symbol_definition);
-
-            if matches!(declaration, Declaration::Constant(_)) {
-                public_constant_definition_by_symbol_id.insert(
-                    symbol_id,
-                    PublicConstantDefinition {
-                        path: unit.path.to_path_buf(),
-                        symbol_name: name.clone(),
-                    },
-                );
-            }
         }
     }
 
-    (
-        symbol_id_by_lookup_key,
-        public_symbol_definition_by_id,
-        public_constant_definition_by_symbol_id,
-    )
+    (symbol_id_by_lookup_key, public_symbol_definition_by_id)
 }
 
 fn resolve_public_symbol_types(
-    package_units: &[PackageUnit<'_>],
-    resolved_imports: &[ResolvedImportSummary],
-    symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     public_symbol_definition_by_id: &BTreeMap<PublicSymbolId, PublicSymbolDefinition>,
-    public_constant_definition_by_symbol_id: &BTreeMap<PublicSymbolId, PublicConstantDefinition>,
 ) -> BTreeMap<PublicSymbolId, TypedPublicSymbol> {
     let mut typed_symbol_by_id = BTreeMap::new();
     for (symbol_id, definition) in public_symbol_definition_by_id {
@@ -212,535 +186,14 @@ fn resolve_public_symbol_types(
         };
         typed_symbol_by_id.insert(*symbol_id, typed_symbol);
     }
-
-    if public_constant_definition_by_symbol_id.is_empty() {
-        return typed_symbol_by_id;
-    }
-
-    let package_unit_by_path: BTreeMap<PathBuf, &PackageUnit<'_>> = package_units
-        .iter()
-        .map(|unit| (unit.path.to_path_buf(), unit))
-        .collect();
-
-    let imported_constant_symbol_id_by_file = imported_constant_symbol_id_by_file(
-        resolved_imports,
-        symbol_id_by_lookup_key,
-        public_symbol_definition_by_id,
-    );
-    let local_public_constant_symbol_id_by_file =
-        local_public_constant_symbol_id_by_file(public_constant_definition_by_symbol_id);
-
-    let dependency_symbol_ids_by_constant_symbol_id = dependency_symbol_ids_by_constant_symbol_id(
-        public_constant_definition_by_symbol_id,
-        &package_unit_by_path,
-        &local_public_constant_symbol_id_by_file,
-        &imported_constant_symbol_id_by_file,
-    );
-
-    let constant_symbol_ids: Vec<PublicSymbolId> = public_constant_definition_by_symbol_id
-        .keys()
-        .copied()
-        .collect();
-    let components_in_dependency_order = components_in_dependency_order(
-        &constant_symbol_ids,
-        &dependency_symbol_ids_by_constant_symbol_id,
-    );
-
-    for component_constant_symbol_ids in components_in_dependency_order {
-        resolve_constant_component(
-            &component_constant_symbol_ids,
-            public_constant_definition_by_symbol_id,
-            &dependency_symbol_ids_by_constant_symbol_id,
-            &package_unit_by_path,
-            resolved_imports,
-            symbol_id_by_lookup_key,
-            &mut typed_symbol_by_id,
-        );
-    }
-
     typed_symbol_by_id
-}
-
-fn imported_constant_symbol_id_by_file(
-    resolved_imports: &[ResolvedImportSummary],
-    symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
-    public_symbol_definition_by_id: &BTreeMap<PublicSymbolId, PublicSymbolDefinition>,
-) -> BTreeMap<PathBuf, HashMap<String, PublicSymbolId>> {
-    let mut imported_constant_symbol_id_by_file = BTreeMap::new();
-    for resolved_import in resolved_imports {
-        for binding in &resolved_import.bindings {
-            let lookup_key = PublicSymbolLookupKey {
-                package_id: resolved_import.target_package_id,
-                symbol_name: binding.imported_name.clone(),
-            };
-            let Some(symbol_id) = symbol_id_by_lookup_key.get(&lookup_key) else {
-                continue;
-            };
-            if !matches!(
-                public_symbol_definition_by_id.get(symbol_id),
-                Some(PublicSymbolDefinition::Constant)
-            ) {
-                continue;
-            }
-            imported_constant_symbol_id_by_file
-                .entry(resolved_import.source_path.clone())
-                .or_insert_with(HashMap::new)
-                .insert(binding.local_name.clone(), *symbol_id);
-        }
-    }
-    imported_constant_symbol_id_by_file
-}
-
-fn local_public_constant_symbol_id_by_file(
-    public_constant_definition_by_symbol_id: &BTreeMap<PublicSymbolId, PublicConstantDefinition>,
-) -> BTreeMap<PathBuf, HashMap<String, PublicSymbolId>> {
-    let mut local_public_constant_symbol_id_by_file = BTreeMap::new();
-    for (symbol_id, definition) in public_constant_definition_by_symbol_id {
-        local_public_constant_symbol_id_by_file
-            .entry(definition.path.clone())
-            .or_insert_with(HashMap::new)
-            .insert(definition.symbol_name.clone(), *symbol_id);
-    }
-    local_public_constant_symbol_id_by_file
-}
-
-fn dependency_symbol_ids_by_constant_symbol_id(
-    public_constant_definition_by_symbol_id: &BTreeMap<PublicSymbolId, PublicConstantDefinition>,
-    package_unit_by_path: &BTreeMap<PathBuf, &PackageUnit<'_>>,
-    local_public_constant_symbol_id_by_file: &BTreeMap<PathBuf, HashMap<String, PublicSymbolId>>,
-    imported_constant_symbol_id_by_file: &BTreeMap<PathBuf, HashMap<String, PublicSymbolId>>,
-) -> BTreeMap<PublicSymbolId, Vec<PublicSymbolId>> {
-    let mut dependency_symbol_ids_by_constant_symbol_id = BTreeMap::new();
-    for (symbol_id, definition) in public_constant_definition_by_symbol_id {
-        let Some(package_unit) = package_unit_by_path.get(&definition.path) else {
-            dependency_symbol_ids_by_constant_symbol_id.insert(*symbol_id, Vec::new());
-            continue;
-        };
-        let Some(constant_declaration) =
-            find_public_constant_declaration(package_unit.parsed, &definition.symbol_name)
-        else {
-            dependency_symbol_ids_by_constant_symbol_id.insert(*symbol_id, Vec::new());
-            continue;
-        };
-
-        let local_constant_symbol_id_by_name = local_public_constant_symbol_id_by_file
-            .get(&definition.path)
-            .cloned()
-            .unwrap_or_default();
-        let imported_constant_symbol_id_by_name = imported_constant_symbol_id_by_file
-            .get(&definition.path)
-            .cloned()
-            .unwrap_or_default();
-
-        let mut dependency_symbol_ids = collect_constant_dependency_symbol_ids(
-            &constant_declaration.expression,
-            &local_constant_symbol_id_by_name,
-            &imported_constant_symbol_id_by_name,
-        );
-        dependency_symbol_ids.remove(symbol_id);
-
-        dependency_symbol_ids_by_constant_symbol_id
-            .insert(*symbol_id, dependency_symbol_ids.into_iter().collect());
-    }
-    dependency_symbol_ids_by_constant_symbol_id
-}
-
-fn find_public_constant_declaration<'a>(
-    parsed: &'a ParsedFile,
-    constant_name: &str,
-) -> Option<&'a ConstantDeclaration> {
-    for declaration in &parsed.declarations {
-        let Declaration::Constant(constant_declaration) = declaration else {
-            continue;
-        };
-        if constant_declaration.visibility == Visibility::Public
-            && constant_declaration.name == constant_name
-        {
-            return Some(constant_declaration);
-        }
-    }
-    None
-}
-
-fn collect_constant_dependency_symbol_ids(
-    expression: &Expression,
-    local_constant_symbol_id_by_name: &HashMap<String, PublicSymbolId>,
-    imported_constant_symbol_id_by_name: &HashMap<String, PublicSymbolId>,
-) -> BTreeSet<PublicSymbolId> {
-    let mut dependency_symbol_ids = BTreeSet::new();
-    let bound_names = BTreeSet::new();
-    collect_constant_dependency_symbol_ids_in_expression(
-        expression,
-        local_constant_symbol_id_by_name,
-        imported_constant_symbol_id_by_name,
-        &bound_names,
-        &mut dependency_symbol_ids,
-    );
-    dependency_symbol_ids
-}
-
-fn collect_constant_dependency_symbol_ids_in_expression(
-    expression: &Expression,
-    local_constant_symbol_id_by_name: &HashMap<String, PublicSymbolId>,
-    imported_constant_symbol_id_by_name: &HashMap<String, PublicSymbolId>,
-    bound_names: &BTreeSet<String>,
-    dependency_symbol_ids: &mut BTreeSet<PublicSymbolId>,
-) {
-    match expression {
-        Expression::Identifier { name, .. } => {
-            if bound_names.contains(name) {
-                return;
-            }
-            if let Some(symbol_id) = local_constant_symbol_id_by_name.get(name) {
-                dependency_symbol_ids.insert(*symbol_id);
-                return;
-            }
-            if let Some(symbol_id) = imported_constant_symbol_id_by_name.get(name) {
-                dependency_symbol_ids.insert(*symbol_id);
-            }
-        }
-        Expression::StructLiteral { fields, .. } => {
-            for field in fields {
-                collect_constant_dependency_symbol_ids_in_expression(
-                    &field.value,
-                    local_constant_symbol_id_by_name,
-                    imported_constant_symbol_id_by_name,
-                    bound_names,
-                    dependency_symbol_ids,
-                );
-            }
-        }
-        Expression::FieldAccess { target, .. } => {
-            collect_constant_dependency_symbol_ids_in_expression(
-                target,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-        }
-        Expression::Call {
-            callee, arguments, ..
-        } => {
-            collect_constant_dependency_symbol_ids_in_expression(
-                callee,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-            for argument in arguments {
-                collect_constant_dependency_symbol_ids_in_expression(
-                    argument,
-                    local_constant_symbol_id_by_name,
-                    imported_constant_symbol_id_by_name,
-                    bound_names,
-                    dependency_symbol_ids,
-                );
-            }
-        }
-        Expression::Unary { expression, .. } => {
-            collect_constant_dependency_symbol_ids_in_expression(
-                expression,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-        }
-        Expression::Binary { left, right, .. } => {
-            collect_constant_dependency_symbol_ids_in_expression(
-                left,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-            collect_constant_dependency_symbol_ids_in_expression(
-                right,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-        }
-        Expression::Match { target, arms, .. } => {
-            collect_constant_dependency_symbol_ids_in_expression(
-                target,
-                local_constant_symbol_id_by_name,
-                imported_constant_symbol_id_by_name,
-                bound_names,
-                dependency_symbol_ids,
-            );
-            for arm in arms {
-                let mut arm_bound_names = bound_names.clone();
-                if let MatchPattern::Binding { name, .. } = &arm.pattern {
-                    arm_bound_names.insert(name.clone());
-                }
-                collect_constant_dependency_symbol_ids_in_expression(
-                    &arm.value,
-                    local_constant_symbol_id_by_name,
-                    imported_constant_symbol_id_by_name,
-                    &arm_bound_names,
-                    dependency_symbol_ids,
-                );
-            }
-        }
-        Expression::Matches { value, .. } => collect_constant_dependency_symbol_ids_in_expression(
-            value,
-            local_constant_symbol_id_by_name,
-            imported_constant_symbol_id_by_name,
-            bound_names,
-            dependency_symbol_ids,
-        ),
-        Expression::IntegerLiteral { .. }
-        | Expression::NilLiteral { .. }
-        | Expression::BooleanLiteral { .. }
-        | Expression::StringLiteral { .. } => {}
-    }
-}
-
-fn components_in_dependency_order(
-    constant_symbol_ids: &[PublicSymbolId],
-    dependency_symbol_ids_by_constant_symbol_id: &BTreeMap<PublicSymbolId, Vec<PublicSymbolId>>,
-) -> Vec<Vec<PublicSymbolId>> {
-    let components = strongly_connected_components(
-        constant_symbol_ids,
-        dependency_symbol_ids_by_constant_symbol_id,
-    );
-
-    let mut component_index_by_symbol_id = BTreeMap::new();
-    for (component_index, component) in components.iter().enumerate() {
-        for symbol_id in component {
-            component_index_by_symbol_id.insert(*symbol_id, component_index);
-        }
-    }
-
-    let mut dependent_component_indexes_by_component_index =
-        vec![BTreeSet::new(); components.len()];
-    let mut component_indegree = vec![0usize; components.len()];
-    for (symbol_id, dependency_symbol_ids) in dependency_symbol_ids_by_constant_symbol_id {
-        let Some(component_index) = component_index_by_symbol_id.get(symbol_id).copied() else {
-            continue;
-        };
-        for dependency_symbol_id in dependency_symbol_ids {
-            let Some(dependency_component_index) = component_index_by_symbol_id
-                .get(dependency_symbol_id)
-                .copied()
-            else {
-                continue;
-            };
-            if dependency_component_index == component_index {
-                continue;
-            }
-            if dependent_component_indexes_by_component_index[dependency_component_index]
-                .insert(component_index)
-            {
-                component_indegree[component_index] += 1;
-            }
-        }
-    }
-
-    let mut pending = BTreeSet::new();
-    for (component_index, indegree) in component_indegree.iter().enumerate() {
-        if *indegree == 0 {
-            pending.insert(component_index);
-        }
-    }
-
-    let mut ordered_component_indexes = Vec::new();
-    while let Some(component_index) = pending.pop_first() {
-        ordered_component_indexes.push(component_index);
-        for dependent_component_index in
-            &dependent_component_indexes_by_component_index[component_index]
-        {
-            component_indegree[*dependent_component_index] -= 1;
-            if component_indegree[*dependent_component_index] == 0 {
-                pending.insert(*dependent_component_index);
-            }
-        }
-    }
-
-    ordered_component_indexes
-        .into_iter()
-        .map(|component_index| components[component_index].clone())
-        .collect()
-}
-
-fn strongly_connected_components(
-    constant_symbol_ids: &[PublicSymbolId],
-    dependency_symbol_ids_by_constant_symbol_id: &BTreeMap<PublicSymbolId, Vec<PublicSymbolId>>,
-) -> Vec<Vec<PublicSymbolId>> {
-    struct TarjanState {
-        next_index: usize,
-        index_by_symbol_id: BTreeMap<PublicSymbolId, usize>,
-        lowlink_by_symbol_id: BTreeMap<PublicSymbolId, usize>,
-        stack: Vec<PublicSymbolId>,
-        on_stack: BTreeSet<PublicSymbolId>,
-        components: Vec<Vec<PublicSymbolId>>,
-    }
-
-    fn visit(
-        symbol_id: PublicSymbolId,
-        dependency_symbol_ids_by_constant_symbol_id: &BTreeMap<PublicSymbolId, Vec<PublicSymbolId>>,
-        state: &mut TarjanState,
-    ) {
-        let current_index = state.next_index;
-        state.next_index += 1;
-        state.index_by_symbol_id.insert(symbol_id, current_index);
-        state.lowlink_by_symbol_id.insert(symbol_id, current_index);
-        state.stack.push(symbol_id);
-        state.on_stack.insert(symbol_id);
-
-        let dependency_symbol_ids = dependency_symbol_ids_by_constant_symbol_id
-            .get(&symbol_id)
-            .cloned()
-            .unwrap_or_default();
-        for dependency_symbol_id in dependency_symbol_ids {
-            if !state.index_by_symbol_id.contains_key(&dependency_symbol_id) {
-                visit(
-                    dependency_symbol_id,
-                    dependency_symbol_ids_by_constant_symbol_id,
-                    state,
-                );
-                let lowlink = state.lowlink_by_symbol_id[&symbol_id]
-                    .min(state.lowlink_by_symbol_id[&dependency_symbol_id]);
-                state.lowlink_by_symbol_id.insert(symbol_id, lowlink);
-            } else if state.on_stack.contains(&dependency_symbol_id) {
-                let lowlink = state.lowlink_by_symbol_id[&symbol_id]
-                    .min(state.index_by_symbol_id[&dependency_symbol_id]);
-                state.lowlink_by_symbol_id.insert(symbol_id, lowlink);
-            }
-        }
-
-        if state.lowlink_by_symbol_id[&symbol_id] == state.index_by_symbol_id[&symbol_id] {
-            let mut component = Vec::new();
-            loop {
-                let stack_symbol_id = state
-                    .stack
-                    .pop()
-                    .expect("stack must contain current symbol when forming SCC");
-                state.on_stack.remove(&stack_symbol_id);
-                component.push(stack_symbol_id);
-                if stack_symbol_id == symbol_id {
-                    break;
-                }
-            }
-            component.sort();
-            state.components.push(component);
-        }
-    }
-
-    let mut state = TarjanState {
-        next_index: 0,
-        index_by_symbol_id: BTreeMap::new(),
-        lowlink_by_symbol_id: BTreeMap::new(),
-        stack: Vec::new(),
-        on_stack: BTreeSet::new(),
-        components: Vec::new(),
-    };
-
-    for symbol_id in constant_symbol_ids {
-        if !state.index_by_symbol_id.contains_key(symbol_id) {
-            visit(
-                *symbol_id,
-                dependency_symbol_ids_by_constant_symbol_id,
-                &mut state,
-            );
-        }
-    }
-
-    state.components
-}
-
-fn resolve_constant_component(
-    component_constant_symbol_ids: &[PublicSymbolId],
-    public_constant_definition_by_symbol_id: &BTreeMap<PublicSymbolId, PublicConstantDefinition>,
-    dependency_symbol_ids_by_constant_symbol_id: &BTreeMap<PublicSymbolId, Vec<PublicSymbolId>>,
-    package_unit_by_path: &BTreeMap<PathBuf, &PackageUnit<'_>>,
-    resolved_imports: &[ResolvedImportSummary],
-    symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
-    typed_symbol_by_id: &mut BTreeMap<PublicSymbolId, TypedPublicSymbol>,
-) {
-    let mut constant_symbol_ids_by_path: BTreeMap<PathBuf, Vec<(PublicSymbolId, String)>> =
-        BTreeMap::new();
-    for symbol_id in component_constant_symbol_ids {
-        let Some(definition) = public_constant_definition_by_symbol_id.get(symbol_id) else {
-            continue;
-        };
-        constant_symbol_ids_by_path
-            .entry(definition.path.clone())
-            .or_default()
-            .push((*symbol_id, definition.symbol_name.clone()));
-    }
-
-    let mut paths: Vec<PathBuf> = constant_symbol_ids_by_path.keys().cloned().collect();
-    paths.sort_by(|left, right| compare_paths(left, right));
-
-    let has_self_dependency = component_constant_symbol_ids.iter().any(|symbol_id| {
-        dependency_symbol_ids_by_constant_symbol_id
-            .get(symbol_id)
-            .is_some_and(|deps| deps.contains(symbol_id))
-    });
-    let max_iterations = if component_constant_symbol_ids.len() == 1 && !has_self_dependency {
-        1
-    } else {
-        component_constant_symbol_ids.len() + 1
-    };
-
-    for _ in 0..max_iterations {
-        let imported_bindings_by_file = build_imported_bindings_by_file(
-            resolved_imports,
-            symbol_id_by_lookup_key,
-            typed_symbol_by_id,
-        );
-        let mut changed = false;
-
-        for path in &paths {
-            let Some(package_unit) = package_unit_by_path.get(path) else {
-                continue;
-            };
-            let imported_bindings = imported_bindings_by_file
-                .get(path)
-                .map_or(&[][..], Vec::as_slice);
-            let mut ignored_diagnostics = Vec::new();
-            let summary = analyze_package_unit(
-                package_unit.package_id,
-                package_unit.parsed,
-                imported_bindings,
-                &mut ignored_diagnostics,
-            );
-            let Some(constant_symbols) = constant_symbol_ids_by_path.get(path) else {
-                continue;
-            };
-            for (symbol_id, symbol_name) in constant_symbols {
-                let Some(TypedSymbol::Constant(value_type)) =
-                    summary.typed_symbol_by_name.get(symbol_name)
-                else {
-                    continue;
-                };
-                if matches!(
-                    typed_symbol_by_id.get(symbol_id),
-                    Some(TypedPublicSymbol::Constant(existing)) if existing == value_type
-                ) {
-                    continue;
-                }
-                typed_symbol_by_id
-                    .insert(*symbol_id, TypedPublicSymbol::Constant(value_type.clone()));
-                changed = true;
-            }
-        }
-
-        if !changed {
-            break;
-        }
-    }
 }
 
 fn build_imported_bindings_by_file(
     resolved_imports: &[ResolvedImportSummary],
     symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     typed_symbol_by_id: &BTreeMap<PublicSymbolId, TypedPublicSymbol>,
+    constant_type_by_symbol: &BTreeMap<(PackageId, String), Type>,
 ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
     let mut imported_by_file: BTreeMap<PathBuf, Vec<ImportedBinding>> = BTreeMap::new();
     let nominal_type_id_by_lookup_key =
@@ -774,8 +227,15 @@ fn build_imported_bindings_by_file(
                         &nominal_type_id_by_lookup_key,
                     ))
                 }
-                TypedPublicSymbol::Constant(value_type) => {
-                    ImportedSymbol::Constant(value_type.clone())
+                TypedPublicSymbol::Constant(fallback_type) => {
+                    let value_type = constant_type_by_symbol
+                        .get(&(
+                            resolved_import.target_package_id,
+                            binding.imported_name.clone(),
+                        ))
+                        .cloned()
+                        .unwrap_or_else(|| fallback_type.clone());
+                    ImportedSymbol::Constant(value_type)
                 }
             };
 
