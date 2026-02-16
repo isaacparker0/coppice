@@ -14,6 +14,7 @@ use compiler__package_symbols::{
 };
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
+use compiler__semantic_lowering::lower_parsed_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
 use compiler__typecheck::{self as typecheck};
@@ -282,9 +283,10 @@ pub fn check_target_with_workspace_root(
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
+        let semantic_unit = lower_parsed_file(&parsed_unit.parsed);
         typecheck::check_package_unit(
             parsed_unit.package_id,
-            &parsed_unit.parsed,
+            &semantic_unit,
             imported_bindings,
             &mut file_diagnostics,
         );

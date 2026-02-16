@@ -8,9 +8,8 @@ rust_library(
     deps = [
         "//compiler/diagnostics",
         "//compiler/packages",
-        "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
         "//compiler/semantic_types",
-        "//compiler/syntax",
         "//compiler/type_analysis",
     ],
 )
@@ -25,6 +24,8 @@ dependency_enforcement_test(
         "//compiler/package_graph",
         "//compiler/package_symbols",
         "//compiler/parsing",
+        "//compiler/semantic_lowering",
+        "//compiler/syntax",
         "//compiler/symbols",
         "//compiler/visibility",
         "//compiler/workspace",
