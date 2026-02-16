@@ -198,6 +198,28 @@ Rules:
 5. Type errors come from type analysis.
 6. Driver renders and sorts diagnostics; it does not invent semantic rules.
 
+## Phase Gating Policy
+
+Phase ordering is not only about execution order. It also defines prerequisites
+for later analysis.
+
+Rules:
+
+1. A phase may emit diagnostics and still allow later phases to run when results
+   remain semantically meaningful.
+2. A phase must block downstream phases for units that fail required
+   prerequisites for downstream correctness/noise control.
+3. The driver should gate by explicit per-unit phase status contracts, not
+   inferred heuristics.
+
+Current policy direction:
+
+1. Parse failures block downstream phases for that file.
+2. Syntax structural validity failures block semantic resolution/lowering/type
+   analysis for that file.
+3. File-role failures do not necessarily block all downstream phases unless a
+   specific rule requires it.
+
 ## Ownership Rubric
 
 Use this rubric whenever phase ownership is ambiguous:
@@ -208,6 +230,20 @@ Use this rubric whenever phase ownership is ambiguous:
    language-declared structural constraints.
 3. Semantic/type phases own failures that require name, visibility, type, or
    usage information.
+
+## Phase Output Contract Direction
+
+Near-term recommendation:
+
+1. Each phase should expose explicit per-unit status sufficient for driver
+   gating (for example `valid_for_semantic`).
+2. Avoid coupling gating behavior to incidental details such as "any diagnostics
+   emitted".
+
+Long-term recommendation:
+
+1. Evolve toward a shared phase envelope with explicit status and diagnostics.
+2. Keep this incremental; do not require all phases to switch at once.
 
 ---
 

@@ -140,6 +140,19 @@ Representative ownership:
 - imports-must-be-top-of-file: structural validity phase
 - unused imports: semantic/type analysis phase
 
+### D. Explicit phase-status contract for downstream gating
+
+Moving structural rules out of parser can change whether later phases run for
+invalid files. That can introduce diagnostic cascades (for example one
+structural error plus unrelated unknown-package follow-ons).
+
+To keep ownership deterministic and avoid noise:
+
+1. Structural validity phase should publish explicit per-file gating status.
+2. Driver should gate downstream semantic phases based on that status.
+3. This should be an explicit contract, not ad-hoc inference from incidental
+   behavior.
+
 ## ParseError Shape (initial)
 
 Minimal and control-flow oriented:
@@ -200,6 +213,8 @@ Target final-form guidance:
    - user diagnostic rendering (recovery/boundary ownership)
 9. Parseable-but-invalid structural language rules should not accumulate in
    parser internals; they should live in a dedicated structural validity phase.
+10. Downstream phase gating should be driven by explicit phase status (per
+    file), not by implicit heuristics such as "diagnostics vector is empty".
 
 ## Ownership Rubric
 
@@ -293,6 +308,16 @@ Refinement:
    of parser internals into that phase.
 3. Keep parser focused on structure construction + recovery only.
 4. Preserve diagnostic ownership determinism and snapshot stability.
+5. Introduce explicit structural-phase status contract for driver gating.
+
+### Phase 5: phase-status contract formalization (incremental)
+
+1. Add a small explicit result type for `syntax_rules` (example:
+   `SyntaxRulesResult { diagnostics, valid_for_semantic }`).
+2. Replace driver-local inferred gating with this contract.
+3. Optionally expand the same pattern to adjacent phases where it improves
+   clarity.
+4. Keep full boundary-envelope unification optional and incremental.
 
 ## Compatibility and Risk
 
@@ -312,6 +337,8 @@ Refinement:
 - Over-abstracting phase contracts without real semantic benefit.
 - Mixed long-term patterns where some parser paths emit diagnostics at leaf
   sites while others rely on boundary emission.
+- Implicit gating logic in driver can drift from phase intent and cause
+  diagnostic cascades.
 
 ### Mitigations
 
@@ -323,6 +350,8 @@ Refinement:
   adoption site (clearer composition, better tooling output, or stronger
   invariants).
 - Track diagnostic emission ownership by parser layer during migration.
+- Define explicit per-phase gating semantics and keep them in phase-owned
+  contracts.
 
 ## Acceptance Criteria
 
@@ -344,6 +373,8 @@ Refinement:
    flows.
 10. Parseable-but-invalid structural constraints are owned by structural
     validity phase, not parser internals.
+11. Driver gating for structural invalidity is based on explicit phase status,
+    not incidental diagnostic side effects.
 
 ## Target End State
 
@@ -389,6 +420,11 @@ tools:
      be reused consistently by CLI and LSP.
    - Parser should remain resilient and avoid policy-specific branching that is
      unrelated to syntax construction.
+
+5. Predictable gating semantics:
+   - Tooling and CLI should observe the same phase-gating behavior from explicit
+     status contracts.
+   - This avoids mode-specific cascade differences.
 
 ## Lexer/Parser Final Ownership Model
 
@@ -520,3 +556,5 @@ with reality.
    single parse-phase aggregation model is in place.
 4. Move parseable-but-policy invalid structural checks (for example imports
    ordering) into dedicated structural validity phase ownership.
+5. Replace driver-local syntax invalid path tracking with explicit
+   `syntax_rules` phase status contract.

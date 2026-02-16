@@ -17,6 +17,7 @@ use compiler__parsing::parse_file;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
+use compiler__syntax_rules as syntax_rules;
 use compiler__type_analysis as type_analysis;
 use compiler__visibility as visibility;
 use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
@@ -175,6 +176,7 @@ pub fn check_target_with_workspace_root(
         }
     }
 
+    let mut syntax_invalid_paths = BTreeSet::new();
     for parsed_unit in &parsed_units {
         if !scope_is_workspace
             && !scoped_package_paths
@@ -184,6 +186,14 @@ pub fn check_target_with_workspace_root(
             continue;
         }
         let mut file_diagnostics = Vec::new();
+        let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
+        if matches!(
+            syntax_rules_result.semantic_analysis_eligibility,
+            syntax_rules::SemanticAnalysisEligibility::Ineligible { .. }
+        ) {
+            syntax_invalid_paths.insert(parsed_unit.path.clone());
+        }
+        file_diagnostics.extend(syntax_rules_result.diagnostics);
         file_role_rules::check_file(&parsed_unit.parsed, &mut file_diagnostics);
         for diagnostic in file_diagnostics {
             rendered_diagnostics.push(render_diagnostic(
@@ -198,6 +208,7 @@ pub fn check_target_with_workspace_root(
     let mut resolution_diagnostics = Vec::new();
     let package_files: Vec<PackageFile<'_>> = parsed_units
         .iter()
+        .filter(|unit| !syntax_invalid_paths.contains(&unit.path))
         .map(|unit| PackageFile {
             package_path: &unit.package_path,
             path: &unit.path,
@@ -245,6 +256,7 @@ pub fn check_target_with_workspace_root(
     let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
         parsed_units
             .iter()
+            .filter(|unit| !syntax_invalid_paths.contains(&unit.path))
             .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
             .collect();
     let package_units: Vec<PackageUnit<'_>> = parsed_units

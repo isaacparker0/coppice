@@ -1,12 +1,21 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "driver",
+    name = "syntax_rules",
     srcs = ["lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
-        "//compiler/binding",
         "//compiler/diagnostics",
+        "//compiler/syntax",
+    ],
+)
+
+dependency_enforcement_test(
+    name = "syntax_rules_forbidden_dependencies",
+    forbidden = [
+        "//compiler/binding",
+        "//compiler/driver",
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
@@ -15,12 +24,11 @@ rust_library(
         "//compiler/parsing",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
-        "//compiler/source",
+        "//compiler/semantic_types",
         "//compiler/symbols",
-        "//compiler/syntax",
-        "//compiler/syntax_rules",
         "//compiler/type_analysis",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
+    target = ":syntax_rules",
 )

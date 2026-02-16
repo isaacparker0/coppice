@@ -52,7 +52,6 @@ impl Parser {
 
     fn parse_declarations(&mut self) -> Vec<Declaration> {
         let mut declarations = Vec::new();
-        let mut saw_non_import_declaration = false;
         while !self.at_eof() {
             self.skip_statement_terminators();
             let mut doc = self.parse_leading_doc_comment_block();
@@ -78,7 +77,6 @@ impl Parser {
             let parse_result: Option<ParseResult<Declaration>> = if self
                 .peek_is_keyword(Keyword::Public)
             {
-                saw_non_import_declaration = true;
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
                     Some(
@@ -116,32 +114,20 @@ impl Parser {
                     None
                 }
             } else if self.peek_is_keyword(Keyword::Type) {
-                saw_non_import_declaration = true;
                 Some(
                     self.parse_type_declaration(Visibility::Private, doc)
                         .map(Declaration::Type),
                 )
             } else if self.peek_is_keyword(Keyword::Import) {
-                Some(self.parse_import_declaration().map(|import_declaration| {
-                    if saw_non_import_declaration {
-                        self.error(
-                            "import declarations must appear before top-level declarations",
-                            import_declaration.span.clone(),
-                        );
-                    }
-                    Declaration::Import(import_declaration)
-                }))
+                Some(self.parse_import_declaration().map(Declaration::Import))
             } else if self.peek_is_keyword(Keyword::Exports) {
-                saw_non_import_declaration = true;
                 Some(self.parse_exports_declaration().map(Declaration::Exports))
             } else if self.peek_is_keyword(Keyword::Function) {
-                saw_non_import_declaration = true;
                 Some(
                     self.parse_function(Visibility::Private, doc)
                         .map(Declaration::Function),
                 )
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
-                saw_non_import_declaration = true;
                 if let Some(doc) = doc {
                     self.report_parse_error(&ParseError::Recovered {
                         message: "doc comment must document a declaration".to_string(),
@@ -157,7 +143,6 @@ impl Parser {
                 self.synchronize();
                 None
             } else if self.peek_is_identifier() {
-                saw_non_import_declaration = true;
                 Some(self.parse_constant_declaration(Visibility::Private).map(
                     |constant_declaration| {
                         Declaration::Constant(ConstantDeclaration {
@@ -167,7 +152,6 @@ impl Parser {
                     },
                 ))
             } else {
-                saw_non_import_declaration = true;
                 if let Some(doc) = doc {
                     self.report_parse_error(&ParseError::Recovered {
                         message: "doc comment must document a declaration".to_string(),
