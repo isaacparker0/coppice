@@ -56,9 +56,6 @@ impl TypeChecker<'_> {
             let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
-            if !type_declaration.type_parameters.is_empty() {
-                continue;
-            }
             for method in methods {
                 self.check_method(type_declaration, method);
             }
@@ -70,6 +67,12 @@ impl TypeChecker<'_> {
         type_declaration: &TypeDeclaration,
         method: &MethodDeclaration,
     ) {
+        let names_and_spans = type_declaration
+            .type_parameters
+            .iter()
+            .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+            .collect::<Vec<_>>();
+        self.push_type_parameters(&names_and_spans);
         self.scopes.push(HashMap::new());
 
         let method_key = super::MethodKey {
@@ -86,15 +89,33 @@ impl TypeChecker<'_> {
         };
         self.current_return_type = return_type;
 
-        self.define_variable(
-            "self".to_string(),
+        let self_type = if type_declaration.type_parameters.is_empty() {
             Type::Named(NominalTypeRef {
                 id: NominalTypeId {
                     package_id: self.package_id,
                     symbol_name: type_declaration.name.clone(),
                 },
                 display_name: type_declaration.name.clone(),
-            }),
+            })
+        } else {
+            Type::Applied {
+                base: NominalTypeRef {
+                    id: NominalTypeId {
+                        package_id: self.package_id,
+                        symbol_name: type_declaration.name.clone(),
+                    },
+                    display_name: type_declaration.name.clone(),
+                },
+                arguments: type_declaration
+                    .type_parameters
+                    .iter()
+                    .map(|parameter| Type::TypeParameter(parameter.name.clone()))
+                    .collect(),
+            }
+        };
+        self.define_variable(
+            "self".to_string(),
+            self_type,
             method.self_mutable,
             method.self_span.clone(),
         );
@@ -119,6 +140,7 @@ impl TypeChecker<'_> {
 
         self.check_unused_in_current_scope();
         self.scopes.pop();
+        self.pop_type_parameters();
 
         if !body_returns {
             self.error("missing return in function body", method.body.span.clone());

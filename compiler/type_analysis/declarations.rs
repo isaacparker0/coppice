@@ -134,9 +134,6 @@ impl TypeChecker<'_> {
             else {
                 continue;
             };
-            if !imported_binding.type_declaration.type_parameters.is_empty() {
-                continue;
-            }
 
             for method in methods {
                 let method_key = MethodKey {
@@ -352,16 +349,12 @@ impl TypeChecker<'_> {
             let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
-            if !type_declaration.type_parameters.is_empty() && !methods.is_empty() {
-                self.error(
-                    format!(
-                        "methods on generic type '{}' are not yet supported",
-                        type_declaration.name
-                    ),
-                    methods[0].span.clone(),
-                );
-                continue;
-            }
+            let names_and_spans = type_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                .collect::<Vec<_>>();
+            self.push_type_parameters(&names_and_spans);
 
             for method in methods {
                 self.check_function_name(&method.name, &method.name_span);
@@ -399,6 +392,7 @@ impl TypeChecker<'_> {
                     },
                 );
             }
+            self.pop_type_parameters();
         }
     }
 

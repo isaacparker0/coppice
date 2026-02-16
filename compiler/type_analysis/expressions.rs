@@ -5,7 +5,7 @@ use compiler__semantic_program::{
 };
 use compiler__source::Span;
 
-use compiler__semantic_types::Type;
+use compiler__semantic_types::{NominalTypeId, Type};
 
 use super::{ExpressionSpan, MethodKey, TypeChecker, TypeKind};
 
@@ -132,34 +132,54 @@ impl TypeChecker<'_> {
                         self.error("methods do not take type arguments", span.clone());
                     }
                     let receiver_type = self.check_expression(target);
-                    let receiver_type = if let Type::Named(named) = &receiver_type {
-                        named.clone()
-                    } else {
-                        if receiver_type != Type::Unknown {
-                            self.error(
-                                format!(
-                                    "cannot call method '{}' on non-struct type {}",
-                                    field,
-                                    receiver_type.display()
-                                ),
-                                field_span.clone(),
-                            );
-                        }
-                        for argument in arguments {
-                            self.check_expression(argument);
-                        }
-                        return Type::Unknown;
-                    };
-                    let receiver_type_name = receiver_type.display_name.clone();
+                    let (receiver_type_id, receiver_type_name, receiver_type_arguments) =
+                        match &receiver_type {
+                            Type::Named(named) => {
+                                (named.id.clone(), named.display_name.clone(), Vec::new())
+                            }
+                            Type::Applied { base, arguments } => {
+                                (base.id.clone(), receiver_type.display(), arguments.clone())
+                            }
+                            _ => {
+                                if receiver_type != Type::Unknown {
+                                    self.error(
+                                        format!(
+                                            "cannot call method '{}' on non-struct type {}",
+                                            field,
+                                            receiver_type.display()
+                                        ),
+                                        field_span.clone(),
+                                    );
+                                }
+                                for argument in arguments {
+                                    self.check_expression(argument);
+                                }
+                                return Type::Unknown;
+                            }
+                        };
 
                     let method_key = MethodKey {
-                        receiver_type_id: receiver_type.id.clone(),
+                        receiver_type_id: receiver_type_id.clone(),
                         method_name: field.clone(),
                     };
-                    if let Some(info) = self.methods.get(&method_key) {
-                        let method_self_mutable = info.self_mutable;
-                        let method_parameter_types = info.parameter_types.clone();
-                        let method_return_type = info.return_type.clone();
+                    if let Some((method_self_mutable, method_parameter_types, method_return_type)) =
+                        self.methods.get(&method_key).map(|info| {
+                            (
+                                info.self_mutable,
+                                info.parameter_types.clone(),
+                                info.return_type.clone(),
+                            )
+                        })
+                    {
+                        let instantiated_signature = self.instantiate_method_call_signature(
+                            &receiver_type_id,
+                            &receiver_type_arguments,
+                            &method_parameter_types,
+                            &method_return_type,
+                            field_span,
+                        );
+                        let method_parameter_types = instantiated_signature.parameter_types;
+                        let method_return_type = instantiated_signature.return_type;
                         if method_self_mutable {
                             if let Expression::Identifier { name, .. } = target.as_ref() {
                                 let receiver_is_mutable = self
@@ -695,6 +715,64 @@ impl TypeChecker<'_> {
             .iter()
             .zip(type_arguments.iter())
             .map(|(name, argument)| (name.clone(), self.resolve_type_name(argument)))
+            .collect();
+        let instantiated_parameters = parameter_types
+            .iter()
+            .map(|parameter_type| Self::instantiate_type(parameter_type, &substitutions))
+            .collect();
+        let instantiated_return = Self::instantiate_type(return_type, &substitutions);
+        InstantiatedFunctionSignature {
+            parameter_types: instantiated_parameters,
+            return_type: instantiated_return,
+        }
+    }
+
+    fn instantiate_method_call_signature(
+        &mut self,
+        receiver_type_id: &NominalTypeId,
+        receiver_type_arguments: &[Type],
+        parameter_types: &[Type],
+        return_type: &Type,
+        span: &Span,
+    ) -> InstantiatedFunctionSignature {
+        let Some(receiver_info) = self
+            .types
+            .values()
+            .find(|info| info.nominal_type_id == *receiver_type_id)
+        else {
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        };
+
+        if receiver_info.type_parameters.is_empty() {
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        }
+
+        if receiver_type_arguments.len() != receiver_info.type_parameters.len() {
+            self.error(
+                format!(
+                    "receiver type expects {} type arguments, got {}",
+                    receiver_info.type_parameters.len(),
+                    receiver_type_arguments.len()
+                ),
+                span.clone(),
+            );
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        }
+
+        let substitutions: HashMap<String, Type> = receiver_info
+            .type_parameters
+            .iter()
+            .cloned()
+            .zip(receiver_type_arguments.iter().cloned())
             .collect();
         let instantiated_parameters = parameter_types
             .iter()

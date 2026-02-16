@@ -9,9 +9,23 @@ type User :: struct {
     },
 }
 
+type Box[T] :: struct {
+    value: T,
+    function get(self) -> T {
+        return self.value
+    },
+    function set(mut self, value: T) -> nil {
+        self = Box[T] { value: value }
+        return nil
+    },
+}
+
 function run() -> int64 {
     mut user := User { id: 1 }
     value := user.idValue()
     user.bump(value)
-    return user.idValue()
+
+    mut box := Box[int64] { value: user.idValue() }
+    box.set(42)
+    return box.get()
 }

@@ -1,0 +1,4 @@
+# exit: 1
+lib.coppice:11:13: error: argument 1 to 'set' must be int64, got boolean
+      box.set(true)
+              ^
