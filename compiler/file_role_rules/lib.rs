@@ -1,22 +1,7 @@
 use compiler__diagnostics::Diagnostic;
+use compiler__phase_results::{PhaseResult, SemanticAnalysisEligibility};
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
-
-pub struct FileRoleRulesResult {
-    pub diagnostics: Vec<Diagnostic>,
-    pub semantic_analysis_eligibility: SemanticAnalysisEligibility,
-}
-
-pub enum SemanticAnalysisEligibility {
-    Eligible,
-    Ineligible {
-        reason: SemanticAnalysisIneligibilityReason,
-    },
-}
-
-pub enum SemanticAnalysisIneligibilityReason {
-    FileRolePolicyViolation,
-}
 
 /// Run file-role policy checks.
 ///
@@ -31,7 +16,7 @@ pub enum SemanticAnalysisIneligibilityReason {
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> FileRoleRulesResult {
+pub fn check_file(file: &ParsedFile) -> PhaseResult {
     let mut diagnostics = Vec::new();
     check_exports_declaration_roles(file, &mut diagnostics);
     check_public_declaration_roles(file, &mut diagnostics);
@@ -39,7 +24,7 @@ pub fn check_file(file: &ParsedFile) -> FileRoleRulesResult {
 
     let semantic_analysis_eligibility = SemanticAnalysisEligibility::Eligible;
 
-    FileRoleRulesResult {
+    PhaseResult {
         diagnostics,
         semantic_analysis_eligibility,
     }

@@ -14,6 +14,7 @@ use compiler__package_symbols::{
 };
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
+use compiler__phase_results::SemanticAnalysisEligibility;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__source::{FileRole, Span, compare_paths, path_to_key};
 use compiler__symbols::{self as symbols, PackageDiagnostic, PackageFile};
@@ -54,18 +55,18 @@ struct ParsedUnit {
 }
 
 struct FilePhaseState {
-    syntax_rules_eligibility: syntax_rules::SemanticAnalysisEligibility,
-    file_role_rules_eligibility: file_role_rules::SemanticAnalysisEligibility,
+    syntax_rules_eligibility: SemanticAnalysisEligibility,
+    file_role_rules_eligibility: SemanticAnalysisEligibility,
 }
 
 impl FilePhaseState {
     fn ready_for_semantic_analysis(&self) -> bool {
         matches!(
             self.syntax_rules_eligibility,
-            syntax_rules::SemanticAnalysisEligibility::Eligible
+            SemanticAnalysisEligibility::Eligible
         ) && matches!(
             self.file_role_rules_eligibility,
-            file_role_rules::SemanticAnalysisEligibility::Eligible
+            SemanticAnalysisEligibility::Eligible
         )
     }
 }
@@ -178,10 +179,8 @@ pub fn check_target_with_workspace_root(
                     source,
                     parsed,
                     phase_state: FilePhaseState {
-                        syntax_rules_eligibility:
-                            syntax_rules::SemanticAnalysisEligibility::Eligible,
-                        file_role_rules_eligibility:
-                            file_role_rules::SemanticAnalysisEligibility::Eligible,
+                        syntax_rules_eligibility: SemanticAnalysisEligibility::Eligible,
+                        file_role_rules_eligibility: SemanticAnalysisEligibility::Eligible,
                     },
                 }),
                 Err(diagnostics) => {

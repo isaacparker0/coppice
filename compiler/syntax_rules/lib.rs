@@ -1,4 +1,7 @@
 use compiler__diagnostics::Diagnostic;
+use compiler__phase_results::{
+    PhaseResult, SemanticAnalysisEligibility, SemanticAnalysisIneligibilityReason,
+};
 use compiler__source::Span;
 use compiler__syntax::{Declaration, FileItem, ParsedFile, StructMemberItem, TypeDeclarationKind};
 
@@ -13,24 +16,8 @@ struct SyntaxRuleViolation {
     span: Span,
 }
 
-pub struct SyntaxRulesResult {
-    pub diagnostics: Vec<Diagnostic>,
-    pub semantic_analysis_eligibility: SemanticAnalysisEligibility,
-}
-
-pub enum SemanticAnalysisEligibility {
-    Eligible,
-    Ineligible {
-        reason: SemanticAnalysisIneligibilityReason,
-    },
-}
-
-pub enum SemanticAnalysisIneligibilityReason {
-    StructuralValidityViolation,
-}
-
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> SyntaxRulesResult {
+pub fn check_file(file: &ParsedFile) -> PhaseResult {
     let mut violations = Vec::new();
     check_import_order(file, &mut violations);
     check_doc_comment_placement(file, &mut violations);
@@ -43,7 +30,7 @@ pub fn check_file(file: &ParsedFile) -> SyntaxRulesResult {
         }
     };
 
-    SyntaxRulesResult {
+    PhaseResult {
         diagnostics,
         semantic_analysis_eligibility,
     }
