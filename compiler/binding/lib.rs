@@ -28,7 +28,7 @@ pub fn check_bindings(
             }
         }
 
-        for declaration in &file.parsed.declarations {
+        for declaration in file.parsed.top_level_declarations() {
             let Some(symbol) = top_level_symbol(declaration) else {
                 continue;
             };

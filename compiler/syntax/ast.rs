@@ -30,7 +30,6 @@ pub struct ExportsMember {
 #[derive(Clone, Debug)]
 pub struct ParsedFile {
     pub role: FileRole,
-    pub declarations: Vec<Declaration>,
     pub items: Vec<FileItem>,
 }
 
@@ -38,6 +37,15 @@ pub struct ParsedFile {
 pub enum FileItem {
     DocComment(DocComment),
     Declaration(Box<Declaration>),
+}
+
+impl ParsedFile {
+    pub fn top_level_declarations(&self) -> impl Iterator<Item = &Declaration> {
+        self.items.iter().filter_map(|item| match item {
+            FileItem::DocComment(_) => None,
+            FileItem::Declaration(declaration) => Some(declaration.as_ref()),
+        })
+    }
 }
 
 #[derive(Clone, Debug)]

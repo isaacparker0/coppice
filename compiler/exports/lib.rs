@@ -31,7 +31,7 @@ pub fn build_exports(
             .entry(file.package_path.to_string())
             .or_default();
 
-        for declaration in &file.parsed.declarations {
+        for declaration in file.parsed.top_level_declarations() {
             let Declaration::Exports(exports) = declaration else {
                 continue;
             };

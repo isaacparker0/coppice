@@ -38,7 +38,7 @@ pub fn resolve_imports(
     let mut resolved_imports = Vec::new();
 
     for file in &ordered_files {
-        for declaration in &file.parsed.declarations {
+        for declaration in file.parsed.top_level_declarations() {
             let Declaration::Import(import_declaration) = declaration else {
                 continue;
             };

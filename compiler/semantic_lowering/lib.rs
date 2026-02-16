@@ -5,7 +5,7 @@ use compiler__syntax as syntax;
 pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageUnit {
     let mut declarations = Vec::new();
 
-    for declaration in &parsed_file.declarations {
+    for declaration in parsed_file.top_level_declarations() {
         match declaration {
             syntax::Declaration::Type(type_declaration) => {
                 let lowered = lower_type_declaration(type_declaration);

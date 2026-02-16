@@ -90,17 +90,12 @@ impl Parser {
     }
 
     pub fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
-        let (declarations, items) = self.parse_declarations();
+        let items = self.parse_declarations();
 
-        ParsedFile {
-            role,
-            declarations,
-            items,
-        }
+        ParsedFile { role, items }
     }
 
-    fn parse_declarations(&mut self) -> (Vec<Declaration>, Vec<FileItem>) {
-        let mut declarations = Vec::new();
+    fn parse_declarations(&mut self) -> Vec<FileItem> {
         let mut items = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
@@ -196,7 +191,6 @@ impl Parser {
                 match result {
                     Ok(declaration) => {
                         items.push(FileItem::Declaration(Box::new(declaration.clone())));
-                        declarations.push(declaration);
                     }
                     Err(error) => {
                         self.report_parse_error(&error);
@@ -205,7 +199,7 @@ impl Parser {
                 }
             }
         }
-        (declarations, items)
+        items
     }
 
     fn parse_visibility(&mut self) -> Visibility {

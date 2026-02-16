@@ -68,7 +68,7 @@ fn render_diagnostics(violations: &[SyntaxRuleViolation]) -> Vec<Diagnostic> {
 
 fn check_import_order(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
     let mut saw_non_import_declaration = false;
-    for declaration in &file.declarations {
+    for declaration in file.top_level_declarations() {
         match declaration {
             Declaration::Import(import_declaration) => {
                 if saw_non_import_declaration {
@@ -90,7 +90,7 @@ fn check_import_order(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolatio
 
 fn check_doc_comment_placement(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
     check_file_item_doc_comments(&file.items, violations);
-    for declaration in &file.declarations {
+    for declaration in file.top_level_declarations() {
         let Declaration::Type(type_declaration) = declaration else {
             continue;
         };

@@ -21,7 +21,7 @@ pub fn check_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
 }
 
 fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
-    for declaration in &file.declarations {
+    for declaration in file.top_level_declarations() {
         if file.role == FileRole::PackageManifest && !matches!(declaration, Declaration::Exports(_))
         {
             if is_main_function_declaration(declaration) {
@@ -64,7 +64,7 @@ fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagn
         }
     };
 
-    for declaration in &file.declarations {
+    for declaration in file.top_level_declarations() {
         match declaration {
             Declaration::Type(type_declaration) => {
                 if type_declaration.visibility == Visibility::Public {
@@ -88,8 +88,7 @@ fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagn
 
 fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
     let main_functions: Vec<&FunctionDeclaration> = file
-        .declarations
-        .iter()
+        .top_level_declarations()
         .filter_map(|declaration| match declaration {
             Declaration::Function(function) if function.name == "main" => Some(function),
             _ => None,
@@ -150,7 +149,7 @@ fn is_nil_type(type_name: &TypeName) -> bool {
 }
 
 fn fallback_file_span(file: &ParsedFile) -> Span {
-    if let Some(declaration) = file.declarations.first() {
+    if let Some(declaration) = file.top_level_declarations().next() {
         return declaration_span(declaration).clone();
     }
 

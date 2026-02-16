@@ -51,7 +51,7 @@ pub fn collect_symbols(
         let package_symbols = symbols_by_package
             .entry(file.package_path.to_string())
             .or_default();
-        for declaration in &file.parsed.declarations {
+        for declaration in file.parsed.top_level_declarations() {
             let Some(symbol) = top_level_symbol(declaration) else {
                 continue;
             };
