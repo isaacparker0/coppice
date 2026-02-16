@@ -138,6 +138,8 @@ parseable:
 Representative ownership:
 
 - imports-must-be-top-of-file: structural validity phase
+- doc-comment placement ("doc comment must document a declaration"): structural
+  validity phase (from syntax-owned ordered items)
 - unused imports: semantic/type analysis phase
 
 ### D. Explicit phase-status contract for downstream gating
@@ -215,6 +217,39 @@ Target final-form guidance:
    parser internals; they should live in a dedicated structural validity phase.
 10. Downstream phase gating should be driven by explicit phase status (per
     file), not by implicit heuristics such as "diagnostics vector is empty".
+11. Structural checks should be implemented in `syntax_rules` when syntax output
+    contains the required ordered source structure.
+
+## Syntax Representation Decision (Compiler + Tooling)
+
+Decision:
+
+1. Long-term, prefer a lossless syntax representation over permanent ad-hoc side
+   channels for comments/trivia.
+2. Keep semantic meaning in `semantic_program`; keep source-fidelity concerns in
+   `syntax`.
+
+Why:
+
+1. Clean ownership: parser builds structure, syntax rules validate structure,
+   semantic passes operate on meaning.
+2. Tooling/LSP needs stable source-fidelity data (comments/trivia/spans) for
+   documentation, refactors, and resilient editor workflows.
+3. Avoids long-term drift from scattered "side map" contracts that become
+   difficult to reason about and maintain.
+
+Alternatives considered:
+
+1. Permanent parser-local policy checks:
+   - lower implementation cost now
+   - worse ownership clarity and weaker tooling scalability
+2. Permanent AST + external side channel maps:
+   - workable short term
+   - acceptable only as a transitional step toward lossless syntax, not a target
+     end state
+3. Lossless syntax layer with derived AST/semantic views:
+   - higher upfront modeling work
+   - best long-term architecture for unified compiler + tooling behavior
 
 ## Ownership Rubric
 
@@ -309,6 +344,8 @@ Refinement:
 3. Keep parser focused on structure construction + recovery only.
 4. Preserve diagnostic ownership determinism and snapshot stability.
 5. Introduce explicit structural-phase status contract for driver gating.
+6. Continue moving remaining parser-owned structural exceptions to
+   `syntax_rules` as syntax representation is extended.
 
 ### Phase 5: phase-status contract formalization (incremental)
 
@@ -375,6 +412,8 @@ Refinement:
     validity phase, not parser internals.
 11. Driver gating for structural invalidity is based on explicit phase status,
     not incidental diagnostic side effects.
+12. Doc-comment placement diagnostics are owned by `syntax_rules` and derived
+    from syntax-owned ordered items.
 
 ## Target End State
 
@@ -537,24 +576,23 @@ with reality.
    previously `Option`-based failure paths.
 3. Boundary/recovery catch points now report parse errors through a centralized
    `report_parse_error(...)` path.
+4. Structural phase (`syntax_rules`) is implemented and integrated in driver
+   orchestration before semantic resolution.
+5. Imports-at-top and doc-comment placement diagnostics are owned by
+   `syntax_rules`.
+6. Syntax now preserves ordered doc-comment/declaration/member items needed for
+   structural validity ownership.
 
 ### Transitional (intentional, not final form)
 
-1. Lexer still emits some diagnostics directly.
-2. Parser includes an `AlreadyReported` parse-error variant to avoid duplicate
-   emission when lexer has already produced a diagnostic.
-3. Some direct `self.error(...)` calls remain for top-level/boundary policy
-   checks (notably in `parser/mod.rs` and doc-comment policy handling).
+1. Parser currently renders parse-error messages from typed `ParseError` kinds
+   at the parser boundary (`report_parse_error`); this is acceptable while the
+   parser owns those failures.
 
 ### Next Steps
 
-1. Continue moving remaining parser-internal direct `self.error(...)` sites to
-   structured parse errors + boundary reporting where appropriate.
-2. Define and implement final lexer/parser aggregation boundary (`LexError` +
-   `ParseError` -> diagnostics once) to remove transitional duplication bridges.
-3. Remove transitional constructs (for example `AlreadyReported`) once the
-   single parse-phase aggregation model is in place.
-4. Move parseable-but-policy invalid structural checks (for example imports
-   ordering) into dedicated structural validity phase ownership.
-5. Replace driver-local syntax invalid path tracking with explicit
-   `syntax_rules` phase status contract.
+1. Keep phase-status contracts explicit and phase-owned for downstream gating.
+2. Continue de-stringifying parser failure metadata where practical and keep
+   user-facing rendering centralized at boundaries.
+3. Expand syntax losslessness incrementally (beyond doc comments) as tooling
+   features require it.

@@ -5,7 +5,10 @@ use compiler__syntax::{
     UnaryOperator,
 };
 
-use super::{ExpressionSpan, ParseError, ParseResult, Parser};
+use super::{
+    ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind,
+    UnexpectedTokenKind,
+};
 
 impl Parser {
     pub(super) fn parse_expression(&mut self) -> ParseResult<Expression> {
@@ -66,7 +69,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::Equal) {
                 let operator_span = self.advance().span.clone();
                 self.report_parse_error(&ParseError::Recovered {
-                    message: "unexpected '=' in expression".to_string(),
+                    kind: RecoveredKind::UnexpectedEqualsInExpression,
                     span: operator_span,
                 });
                 let _ = self.parse_comparison();
@@ -226,7 +229,7 @@ impl Parser {
                 let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
                 let Ok(left_parenthesis) = self.expect_symbol(Symbol::LeftParenthesis) else {
                     return Err(ParseError::InvalidConstruct {
-                        message: "type arguments must be followed by a call".to_string(),
+                        kind: InvalidConstructKind::TypeArgumentsMustBeFollowedByCall,
                         span: right_bracket,
                     });
                 };
@@ -389,7 +392,7 @@ impl Parser {
             }
             TokenKind::Error => Err(ParseError::UnparsableToken),
             _ => Err(ParseError::UnexpectedToken {
-                message: "expected expression".to_string(),
+                kind: UnexpectedTokenKind::ExpectedExpression,
                 span: token.span,
             }),
         }

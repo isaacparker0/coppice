@@ -63,11 +63,21 @@ fn lower_type_declaration_kind(
     kind: &syntax::TypeDeclarationKind,
 ) -> semantic::TypeDeclarationKind {
     match kind {
-        syntax::TypeDeclarationKind::Struct { fields, methods } => {
-            semantic::TypeDeclarationKind::Struct {
-                fields: fields.iter().map(lower_field_declaration).collect(),
-                methods: methods.iter().map(lower_method_declaration).collect(),
+        syntax::TypeDeclarationKind::Struct { items } => {
+            let mut fields = Vec::new();
+            let mut methods = Vec::new();
+            for item in items {
+                match item {
+                    syntax::StructMemberItem::DocComment(_) => {}
+                    syntax::StructMemberItem::Field(field) => {
+                        fields.push(lower_field_declaration(field));
+                    }
+                    syntax::StructMemberItem::Method(method) => {
+                        methods.push(lower_method_declaration(method));
+                    }
+                }
             }
+            semantic::TypeDeclarationKind::Struct { fields, methods }
         }
         syntax::TypeDeclarationKind::Enum { variants } => semantic::TypeDeclarationKind::Enum {
             variants: variants.iter().map(lower_enum_variant).collect(),

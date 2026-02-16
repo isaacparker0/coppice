@@ -1,7 +1,7 @@
 use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 
-use super::{ParseError, ParseResult, Parser};
+use super::{MissingTokenKind, ParseError, ParseResult, Parser, UnexpectedTokenKind};
 
 impl Parser {
     pub(super) fn expect_identifier(&mut self) -> ParseResult<(String, Span)> {
@@ -9,14 +9,11 @@ impl Parser {
         match token.kind {
             TokenKind::Identifier(name) => Ok((name, token.span)),
             TokenKind::Keyword(keyword) => Err(ParseError::UnexpectedToken {
-                message: format!(
-                    "reserved keyword '{}' cannot be used as an identifier",
-                    keyword.as_str()
-                ),
+                kind: UnexpectedTokenKind::ReservedKeywordAsIdentifier { keyword },
                 span: token.span,
             }),
             _ => Err(ParseError::UnexpectedToken {
-                message: "expected identifier".to_string(),
+                kind: UnexpectedTokenKind::ExpectedIdentifier,
                 span: token.span,
             }),
         }
@@ -39,14 +36,11 @@ impl Parser {
             }
             TokenKind::Keyword(Keyword::Nil) => Ok((Keyword::Nil.as_str().to_string(), token.span)),
             TokenKind::Keyword(keyword) => Err(ParseError::UnexpectedToken {
-                message: format!(
-                    "reserved keyword '{}' cannot be used as an identifier",
-                    keyword.as_str()
-                ),
+                kind: UnexpectedTokenKind::ReservedKeywordAsIdentifier { keyword },
                 span: token.span,
             }),
             _ => Err(ParseError::UnexpectedToken {
-                message: "expected identifier".to_string(),
+                kind: UnexpectedTokenKind::ExpectedIdentifier,
                 span: token.span,
             }),
         }
@@ -57,7 +51,7 @@ impl Parser {
         match token.kind {
             TokenKind::Keyword(found) if found == keyword => Ok(token.span),
             _ => Err(ParseError::MissingToken {
-                message: format!("expected keyword '{keyword:?}'"),
+                kind: MissingTokenKind::Keyword { keyword },
                 span: token.span,
             }),
         }
@@ -68,7 +62,7 @@ impl Parser {
         match token.kind {
             TokenKind::Symbol(found) if found == symbol => Ok(token.span),
             _ => Err(ParseError::MissingToken {
-                message: "expected symbol".to_string(),
+                kind: MissingTokenKind::Symbol,
                 span: token.span,
             }),
         }

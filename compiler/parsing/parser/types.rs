@@ -2,7 +2,7 @@ use crate::lexer::Symbol;
 use compiler__source::Span;
 use compiler__syntax::{EnumVariant, TypeName, TypeNameAtom, TypeParameter};
 
-use super::{ParseResult, Parser};
+use super::{ParseResult, Parser, RecoveredKind};
 
 impl Parser {
     pub(super) fn parse_type_name(&mut self) -> ParseResult<TypeName> {
@@ -104,7 +104,7 @@ impl Parser {
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBracket) {
             self.report_parse_error(&super::ParseError::Recovered {
-                message: "type parameter list must not be empty".to_string(),
+                kind: RecoveredKind::TypeParameterListMustNotBeEmpty,
                 span: self.peek_span(),
             });
             self.expect_symbol(Symbol::RightBracket)?;
@@ -135,7 +135,7 @@ impl Parser {
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
             self.report_parse_error(&super::ParseError::Recovered {
-                message: "enum declaration must include at least one variant".to_string(),
+                kind: RecoveredKind::EnumDeclarationMustIncludeAtLeastOneVariant,
                 span: self.peek_span(),
             });
             return Ok(variants);
@@ -162,7 +162,7 @@ impl Parser {
                 break;
             }
             self.report_parse_error(&super::ParseError::Recovered {
-                message: "expected ',' or '}' after enum variant".to_string(),
+                kind: RecoveredKind::ExpectedCommaOrRightBraceAfterEnumVariant,
                 span: self.peek_span(),
             });
             self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);

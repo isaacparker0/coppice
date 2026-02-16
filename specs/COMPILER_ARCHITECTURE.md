@@ -59,6 +59,7 @@ not semantic/type information.
 Examples:
 
 - declaration-order constraints (for example imports-at-top-of-file)
+- doc-comment placement constraints (doc comments must attach to declarations)
 - file-level structural constraints independent of file role
 
 ## `compiler/file_role_rules`
@@ -151,6 +152,15 @@ Non-responsibility:
 ## Syntax boundary
 
 `compiler/syntax::ParsedFile` is the parser output contract only.
+
+Long-term direction for this boundary:
+
+1. `syntax` should be lossless enough for tooling and structural policy checks
+   (including comments/trivia/span fidelity where needed).
+2. Structural validity phases should not depend on parser-internal side effects
+   or transient parser-local state.
+3. Semantic lowering remains the boundary where syntax-trivia concerns are
+   dropped for semantic representation.
 
 ## Semantic boundary
 
@@ -286,6 +296,8 @@ layers (for example mid-level or codegen IR for Cranelift/LLVM paths).
 3. Introduce backend-oriented IR layers with distinct names and ownership.
 4. Maintain strict phase-owned diagnostics as language features grow (notably
    generics and trait/interface semantics).
+5. Evolve `syntax` toward lossless source representation suitable for unified
+   compiler + tooling front-end use (comments/trivia preserved where needed).
 
 ---
 

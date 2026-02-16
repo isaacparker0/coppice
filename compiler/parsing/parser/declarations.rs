@@ -2,10 +2,10 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{
     ConstantDeclaration, DocComment, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
-    ParameterDeclaration, TypeDeclaration, TypeDeclarationKind, Visibility,
+    ParameterDeclaration, StructMemberItem, TypeDeclaration, TypeDeclarationKind, Visibility,
 };
 
-use super::{ExpressionSpan, ParseError, ParseResult, Parser};
+use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
     pub(super) fn parse_type_declaration(
@@ -21,7 +21,7 @@ impl Parser {
         if self.peek_is_keyword(Keyword::Struct) {
             self.expect_keyword(Keyword::Struct)?;
             self.expect_symbol(Symbol::LeftBrace)?;
-            let (fields, methods) = self.parse_struct_members();
+            let items = self.parse_struct_members();
             let right_brace = self.expect_symbol(Symbol::RightBrace)?;
             let span = Span {
                 start: start.start,
@@ -32,7 +32,7 @@ impl Parser {
             return Ok(TypeDeclaration {
                 name,
                 type_parameters,
-                kind: TypeDeclarationKind::Struct { fields, methods },
+                kind: TypeDeclarationKind::Struct { items },
                 doc,
                 visibility,
                 span,
@@ -77,40 +77,32 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_struct_members(
-        &mut self,
-    ) -> (Vec<FieldDeclaration>, Vec<MethodDeclaration>) {
-        let mut fields = Vec::new();
-        let mut methods = Vec::new();
+    pub(super) fn parse_struct_members(&mut self) -> Vec<StructMemberItem> {
+        let mut items = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
-            return (fields, methods);
+            return items;
         }
         loop {
             self.skip_statement_terminators();
-            let mut doc = self.parse_leading_doc_comment_block();
+            let mut doc_comment = self.parse_leading_doc_comment_block();
+            if let Some(found_doc_comment) = doc_comment.as_ref() {
+                items.push(StructMemberItem::DocComment(found_doc_comment.clone()));
+            }
             if self.peek_is_symbol(Symbol::RightBrace) {
-                if let Some(doc) = doc {
-                    self.report_parse_error(&ParseError::Recovered {
-                        message: "doc comment must document a declaration".to_string(),
-                        span: doc.span,
-                    });
-                }
                 break;
             }
-            if let Some(found_doc) = doc.as_ref()
-                && self.peek_span().line != found_doc.end_line + 1
+            if let Some(found_doc_comment) = doc_comment.as_ref()
+                && self.peek_span().line != found_doc_comment.end_line + 1
             {
-                self.report_parse_error(&ParseError::Recovered {
-                    message: "doc comment must document a declaration".to_string(),
-                    span: found_doc.span.clone(),
-                });
-                doc = None;
+                doc_comment = None;
             }
             let visibility = self.parse_visibility();
             if self.peek_is_keyword(Keyword::Function) {
-                match self.parse_method_declaration(visibility, doc.clone()) {
-                    Ok(method) => methods.push(method),
+                match self.parse_method_declaration(visibility, doc_comment.clone()) {
+                    Ok(method) => {
+                        items.push(StructMemberItem::Method(Box::new(method.clone())));
+                    }
                     Err(error) => {
                         self.report_parse_error(&error);
                         self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
@@ -120,16 +112,12 @@ impl Parser {
                     }
                 }
             } else {
-                match self.parse_field_declaration(visibility, doc.clone()) {
-                    Ok(field) => fields.push(field),
+                match self.parse_field_declaration(visibility, doc_comment.clone()) {
+                    Ok(field) => {
+                        items.push(StructMemberItem::Field(Box::new(field.clone())));
+                    }
                     Err(error) => {
                         self.report_parse_error(&error);
-                        if let Some(doc) = doc {
-                            self.report_parse_error(&ParseError::Recovered {
-                                message: "doc comment must document a declaration".to_string(),
-                                span: doc.span,
-                            });
-                        }
                         self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
                         if self.peek_is_symbol(Symbol::RightBrace) {
                             break;
@@ -152,7 +140,7 @@ impl Parser {
             }
             break;
         }
-        (fields, methods)
+        items
     }
 
     pub(super) fn parse_field_declaration(
@@ -223,14 +211,14 @@ impl Parser {
         let (receiver_name, receiver_span) = self.expect_identifier()?;
         if receiver_name != "self" {
             return Err(ParseError::InvalidConstruct {
-                message: "first method parameter must be 'self'".to_string(),
+                kind: InvalidConstructKind::FirstMethodParameterMustBeSelf,
                 span: receiver_span,
             });
         }
         if self.peek_is_symbol(Symbol::Colon) {
             let span = self.expect_symbol(Symbol::Colon)?;
             self.report_parse_error(&ParseError::Recovered {
-                message: "method receiver 'self' must not have a type annotation".to_string(),
+                kind: RecoveredKind::MethodReceiverSelfMustNotHaveTypeAnnotation,
                 span,
             });
             let _ = self.parse_type_name();
@@ -313,7 +301,7 @@ impl Parser {
         if self.peek_is_symbol(Symbol::Assign) {
             let span = self.peek_span();
             return Err(ParseError::InvalidConstruct {
-                message: "constants require an explicit type annotation".to_string(),
+                kind: InvalidConstructKind::ConstantsRequireExplicitTypeAnnotation,
                 span,
             });
         }

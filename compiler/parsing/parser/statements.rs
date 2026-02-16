@@ -2,7 +2,7 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{Block, Statement};
 
-use super::{ExpressionSpan, ParseError, ParseResult, Parser};
+use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser};
 
 impl Parser {
     pub(super) fn parse_block(&mut self) -> ParseResult<Block> {
@@ -33,14 +33,14 @@ impl Parser {
 
     pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
         if self.peek_is_doc_comment() {
-            if let Some(doc) = self.parse_leading_doc_comment_block() {
+            if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
                 return Err(ParseError::InvalidConstruct {
-                    message: "doc comment must document a declaration".to_string(),
-                    span: doc.span,
+                    kind: InvalidConstructKind::DocCommentMustDocumentDeclaration,
+                    span: doc_comment.span,
                 });
             }
             return Err(ParseError::InvalidConstruct {
-                message: "doc comment must document a declaration".to_string(),
+                kind: InvalidConstructKind::DocCommentMustDocumentDeclaration,
                 span: self.peek_span(),
             });
         }

@@ -3,7 +3,7 @@ use compiler__diagnostics::Diagnostic;
 use compiler__source::FileRole;
 use compiler__source::Span;
 use compiler__syntax::{
-    ConstantDeclaration, Declaration, DocComment, Expression, ParsedFile, Visibility,
+    ConstantDeclaration, Declaration, DocComment, Expression, FileItem, ParsedFile, Visibility,
 };
 
 mod declarations;
@@ -15,11 +15,56 @@ mod statements;
 mod types;
 
 #[derive(Clone, Debug)]
+pub(super) enum UnexpectedTokenKind {
+    ExpectedIdentifier,
+    ReservedKeywordAsIdentifier { keyword: Keyword },
+    ExpectedExpression,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum MissingTokenKind {
+    Keyword { keyword: Keyword },
+    Symbol,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum InvalidConstructKind {
+    DocCommentMustDocumentDeclaration,
+    FirstMethodParameterMustBeSelf,
+    ConstantsRequireExplicitTypeAnnotation,
+    TypeArgumentsMustBeFollowedByCall,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum RecoveredKind {
+    ExpectedDeclarationAfterPublic,
+    ExpectedTypeKeywordBeforeTypeDeclaration,
+    ExpectedDeclaration,
+    MethodReceiverSelfMustNotHaveTypeAnnotation,
+    TypeParameterListMustNotBeEmpty,
+    EnumDeclarationMustIncludeAtLeastOneVariant,
+    ExpectedCommaOrRightBraceAfterEnumVariant,
+    UnexpectedEqualsInExpression,
+}
+
+#[derive(Clone, Debug)]
 pub(super) enum ParseError {
-    UnexpectedToken { message: String, span: Span },
-    MissingToken { message: String, span: Span },
-    InvalidConstruct { message: String, span: Span },
-    Recovered { message: String, span: Span },
+    UnexpectedToken {
+        kind: UnexpectedTokenKind,
+        span: Span,
+    },
+    MissingToken {
+        kind: MissingTokenKind,
+        span: Span,
+    },
+    InvalidConstruct {
+        kind: InvalidConstructKind,
+        span: Span,
+    },
+    Recovered {
+        kind: RecoveredKind,
+        span: Span,
+    },
     UnparsableToken,
 }
 
@@ -45,33 +90,31 @@ impl Parser {
     }
 
     pub fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
-        let declarations = self.parse_declarations();
+        let (declarations, items) = self.parse_declarations();
 
-        ParsedFile { role, declarations }
+        ParsedFile {
+            role,
+            declarations,
+            items,
+        }
     }
 
-    fn parse_declarations(&mut self) -> Vec<Declaration> {
+    fn parse_declarations(&mut self) -> (Vec<Declaration>, Vec<FileItem>) {
         let mut declarations = Vec::new();
+        let mut items = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
-            let mut doc = self.parse_leading_doc_comment_block();
+            let mut doc_comment = self.parse_leading_doc_comment_block();
+            if let Some(found_doc_comment) = doc_comment.as_ref() {
+                items.push(FileItem::DocComment(found_doc_comment.clone()));
+            }
             if self.at_eof() {
-                if let Some(doc) = doc {
-                    self.report_parse_error(&ParseError::Recovered {
-                        message: "doc comment must document a declaration".to_string(),
-                        span: doc.span,
-                    });
-                }
                 break;
             }
-            if let Some(found_doc) = doc.as_ref()
-                && self.peek_span().line != found_doc.end_line + 1
+            if let Some(found_doc_comment) = doc_comment.as_ref()
+                && self.peek_span().line != found_doc_comment.end_line + 1
             {
-                self.report_parse_error(&ParseError::Recovered {
-                    message: "doc comment must document a declaration".to_string(),
-                    span: found_doc.span.clone(),
-                });
-                doc = None;
+                doc_comment = None;
             }
 
             let parse_result: Option<ParseResult<Declaration>> = if self
@@ -80,12 +123,12 @@ impl Parser {
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
                     Some(
-                        self.parse_type_declaration(visibility, doc)
+                        self.parse_type_declaration(visibility, doc_comment)
                             .map(Declaration::Type),
                     )
                 } else if self.peek_is_keyword(Keyword::Function) {
                     Some(
-                        self.parse_function(visibility, doc)
+                        self.parse_function(visibility, doc_comment)
                             .map(Declaration::Function),
                     )
                 } else if self.peek_is_identifier() {
@@ -93,21 +136,15 @@ impl Parser {
                         self.parse_constant_declaration(visibility)
                             .map(|constant_declaration| {
                                 Declaration::Constant(ConstantDeclaration {
-                                    doc,
+                                    doc: doc_comment,
                                     ..constant_declaration
                                 })
                             }),
                     )
                 } else {
-                    if let Some(doc) = doc {
-                        self.report_parse_error(&ParseError::Recovered {
-                            message: "doc comment must document a declaration".to_string(),
-                            span: doc.span,
-                        });
-                    }
                     let span = self.peek_span();
                     self.report_parse_error(&ParseError::Recovered {
-                        message: "expected declaration after 'public'".to_string(),
+                        kind: RecoveredKind::ExpectedDeclarationAfterPublic,
                         span,
                     });
                     self.synchronize();
@@ -115,7 +152,7 @@ impl Parser {
                 }
             } else if self.peek_is_keyword(Keyword::Type) {
                 Some(
-                    self.parse_type_declaration(Visibility::Private, doc)
+                    self.parse_type_declaration(Visibility::Private, doc_comment)
                         .map(Declaration::Type),
                 )
             } else if self.peek_is_keyword(Keyword::Import) {
@@ -124,19 +161,13 @@ impl Parser {
                 Some(self.parse_exports_declaration().map(Declaration::Exports))
             } else if self.peek_is_keyword(Keyword::Function) {
                 Some(
-                    self.parse_function(Visibility::Private, doc)
+                    self.parse_function(Visibility::Private, doc_comment)
                         .map(Declaration::Function),
                 )
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
-                if let Some(doc) = doc {
-                    self.report_parse_error(&ParseError::Recovered {
-                        message: "doc comment must document a declaration".to_string(),
-                        span: doc.span,
-                    });
-                }
                 let span = self.peek_span();
                 self.report_parse_error(&ParseError::Recovered {
-                    message: "expected keyword 'type' before type declaration".to_string(),
+                    kind: RecoveredKind::ExpectedTypeKeywordBeforeTypeDeclaration,
                     span,
                 });
                 self.advance();
@@ -146,21 +177,15 @@ impl Parser {
                 Some(self.parse_constant_declaration(Visibility::Private).map(
                     |constant_declaration| {
                         Declaration::Constant(ConstantDeclaration {
-                            doc,
+                            doc: doc_comment,
                             ..constant_declaration
                         })
                     },
                 ))
             } else {
-                if let Some(doc) = doc {
-                    self.report_parse_error(&ParseError::Recovered {
-                        message: "doc comment must document a declaration".to_string(),
-                        span: doc.span,
-                    });
-                }
                 let span = self.peek_span();
                 self.report_parse_error(&ParseError::Recovered {
-                    message: "expected declaration".to_string(),
+                    kind: RecoveredKind::ExpectedDeclaration,
                     span,
                 });
                 self.synchronize();
@@ -169,7 +194,10 @@ impl Parser {
 
             if let Some(result) = parse_result {
                 match result {
-                    Ok(declaration) => declarations.push(declaration),
+                    Ok(declaration) => {
+                        items.push(FileItem::Declaration(Box::new(declaration.clone())));
+                        declarations.push(declaration);
+                    }
                     Err(error) => {
                         self.report_parse_error(&error);
                         self.synchronize();
@@ -177,7 +205,7 @@ impl Parser {
                 }
             }
         }
-        declarations
+        (declarations, items)
     }
 
     fn parse_visibility(&mut self) -> Visibility {
@@ -278,11 +306,69 @@ impl Parser {
 
     fn report_parse_error(&mut self, error: &ParseError) {
         match error {
-            ParseError::UnexpectedToken { message, span }
-            | ParseError::MissingToken { message, span }
-            | ParseError::InvalidConstruct { message, span }
-            | ParseError::Recovered { message, span } => {
-                self.error(message.clone(), span.clone());
+            ParseError::UnexpectedToken { kind, span } => {
+                let message = match kind {
+                    UnexpectedTokenKind::ExpectedIdentifier => "expected identifier".to_string(),
+                    UnexpectedTokenKind::ReservedKeywordAsIdentifier { keyword } => format!(
+                        "reserved keyword '{}' cannot be used as an identifier",
+                        keyword.as_str()
+                    ),
+                    UnexpectedTokenKind::ExpectedExpression => "expected expression".to_string(),
+                };
+                self.error(message, span.clone());
+            }
+            ParseError::MissingToken { kind, span } => {
+                let message = match kind {
+                    MissingTokenKind::Keyword { keyword } => {
+                        format!("expected keyword '{keyword:?}'")
+                    }
+                    MissingTokenKind::Symbol => "expected symbol".to_string(),
+                };
+                self.error(message, span.clone());
+            }
+            ParseError::InvalidConstruct { kind, span } => {
+                let message = match kind {
+                    InvalidConstructKind::DocCommentMustDocumentDeclaration => {
+                        "doc comment must document a declaration".to_string()
+                    }
+                    InvalidConstructKind::FirstMethodParameterMustBeSelf => {
+                        "first method parameter must be 'self'".to_string()
+                    }
+                    InvalidConstructKind::ConstantsRequireExplicitTypeAnnotation => {
+                        "constants require an explicit type annotation".to_string()
+                    }
+                    InvalidConstructKind::TypeArgumentsMustBeFollowedByCall => {
+                        "type arguments must be followed by a call".to_string()
+                    }
+                };
+                self.error(message, span.clone());
+            }
+            ParseError::Recovered { kind, span } => {
+                let message = match kind {
+                    RecoveredKind::ExpectedDeclarationAfterPublic => {
+                        "expected declaration after 'public'".to_string()
+                    }
+                    RecoveredKind::ExpectedTypeKeywordBeforeTypeDeclaration => {
+                        "expected keyword 'type' before type declaration".to_string()
+                    }
+                    RecoveredKind::ExpectedDeclaration => "expected declaration".to_string(),
+                    RecoveredKind::MethodReceiverSelfMustNotHaveTypeAnnotation => {
+                        "method receiver 'self' must not have a type annotation".to_string()
+                    }
+                    RecoveredKind::TypeParameterListMustNotBeEmpty => {
+                        "type parameter list must not be empty".to_string()
+                    }
+                    RecoveredKind::EnumDeclarationMustIncludeAtLeastOneVariant => {
+                        "enum declaration must include at least one variant".to_string()
+                    }
+                    RecoveredKind::ExpectedCommaOrRightBraceAfterEnumVariant => {
+                        "expected ',' or '}' after enum variant".to_string()
+                    }
+                    RecoveredKind::UnexpectedEqualsInExpression => {
+                        "unexpected '=' in expression".to_string()
+                    }
+                };
+                self.error(message, span.clone());
             }
             ParseError::UnparsableToken => {}
         }

@@ -31,6 +31,13 @@ pub struct ExportsMember {
 pub struct ParsedFile {
     pub role: FileRole,
     pub declarations: Vec<Declaration>,
+    pub items: Vec<FileItem>,
+}
+
+#[derive(Clone, Debug)]
+pub enum FileItem {
+    DocComment(DocComment),
+    Declaration(Box<Declaration>),
 }
 
 #[derive(Clone, Debug)]
@@ -67,16 +74,16 @@ pub struct TypeDeclaration {
 
 #[derive(Clone, Debug)]
 pub enum TypeDeclarationKind {
-    Struct {
-        fields: Vec<FieldDeclaration>,
-        methods: Vec<MethodDeclaration>,
-    },
-    Enum {
-        variants: Vec<EnumVariant>,
-    },
-    Union {
-        variants: Vec<TypeName>,
-    },
+    Struct { items: Vec<StructMemberItem> },
+    Enum { variants: Vec<EnumVariant> },
+    Union { variants: Vec<TypeName> },
+}
+
+#[derive(Clone, Debug)]
+pub enum StructMemberItem {
+    DocComment(DocComment),
+    Field(Box<FieldDeclaration>),
+    Method(Box<MethodDeclaration>),
 }
 
 #[derive(Clone, Debug)]
