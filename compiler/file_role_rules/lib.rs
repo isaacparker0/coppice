@@ -2,6 +2,22 @@ use compiler__diagnostics::Diagnostic;
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
 
+pub struct FileRoleRulesResult {
+    pub diagnostics: Vec<Diagnostic>,
+    pub semantic_analysis_eligibility: SemanticAnalysisEligibility,
+}
+
+pub enum SemanticAnalysisEligibility {
+    Eligible,
+    Ineligible {
+        reason: SemanticAnalysisIneligibilityReason,
+    },
+}
+
+pub enum SemanticAnalysisIneligibilityReason {
+    FileRolePolicyViolation,
+}
+
 /// Run file-role policy checks.
 ///
 /// Every check that requires knowledge of file role belongs here.
@@ -14,10 +30,19 @@ use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, V
 /// Keeping role-conditional rules in one owner pass avoids brittle cross-pass
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
-pub fn check_file(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
-    check_exports_declaration_roles(file, diagnostics);
-    check_public_declaration_roles(file, diagnostics);
-    check_main_function_roles(file, diagnostics);
+#[must_use]
+pub fn check_file(file: &ParsedFile) -> FileRoleRulesResult {
+    let mut diagnostics = Vec::new();
+    check_exports_declaration_roles(file, &mut diagnostics);
+    check_public_declaration_roles(file, &mut diagnostics);
+    check_main_function_roles(file, &mut diagnostics);
+
+    let semantic_analysis_eligibility = SemanticAnalysisEligibility::Eligible;
+
+    FileRoleRulesResult {
+        diagnostics,
+        semantic_analysis_eligibility,
+    }
 }
 
 fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {

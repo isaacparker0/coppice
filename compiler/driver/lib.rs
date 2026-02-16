@@ -50,7 +50,24 @@ struct ParsedUnit {
     path: PathBuf,
     source: String,
     parsed: compiler__syntax::ParsedFile,
-    semantic_analysis_eligibility: syntax_rules::SemanticAnalysisEligibility,
+    phase_state: FilePhaseState,
+}
+
+struct FilePhaseState {
+    syntax_rules_eligibility: syntax_rules::SemanticAnalysisEligibility,
+    file_role_rules_eligibility: file_role_rules::SemanticAnalysisEligibility,
+}
+
+impl FilePhaseState {
+    fn ready_for_semantic_analysis(&self) -> bool {
+        matches!(
+            self.syntax_rules_eligibility,
+            syntax_rules::SemanticAnalysisEligibility::Eligible
+        ) && matches!(
+            self.file_role_rules_eligibility,
+            file_role_rules::SemanticAnalysisEligibility::Eligible
+        )
+    }
 }
 
 pub fn check_target(path: &str) -> Result<CheckedTarget, CheckFileError> {
@@ -160,8 +177,12 @@ pub fn check_target_with_workspace_root(
                     path: relative_path,
                     source,
                     parsed,
-                    semantic_analysis_eligibility:
-                        syntax_rules::SemanticAnalysisEligibility::Eligible,
+                    phase_state: FilePhaseState {
+                        syntax_rules_eligibility:
+                            syntax_rules::SemanticAnalysisEligibility::Eligible,
+                        file_role_rules_eligibility:
+                            file_role_rules::SemanticAnalysisEligibility::Eligible,
+                    },
                 }),
                 Err(diagnostics) => {
                     if package_in_scope {
@@ -181,8 +202,11 @@ pub fn check_target_with_workspace_root(
 
     for parsed_unit in &mut parsed_units {
         let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
-        parsed_unit.semantic_analysis_eligibility =
+        parsed_unit.phase_state.syntax_rules_eligibility =
             syntax_rules_result.semantic_analysis_eligibility;
+        let file_role_rules_result = file_role_rules::check_file(&parsed_unit.parsed);
+        parsed_unit.phase_state.file_role_rules_eligibility =
+            file_role_rules_result.semantic_analysis_eligibility;
 
         if !scope_is_workspace
             && !scoped_package_paths
@@ -193,7 +217,7 @@ pub fn check_target_with_workspace_root(
         }
         let mut file_diagnostics = Vec::new();
         file_diagnostics.extend(syntax_rules_result.diagnostics);
-        file_role_rules::check_file(&parsed_unit.parsed, &mut file_diagnostics);
+        file_diagnostics.extend(file_role_rules_result.diagnostics);
         for diagnostic in file_diagnostics {
             rendered_diagnostics.push(render_diagnostic(
                 &diagnostic_display_base,
@@ -207,12 +231,7 @@ pub fn check_target_with_workspace_root(
     let mut resolution_diagnostics = Vec::new();
     let package_files: Vec<PackageFile<'_>> = parsed_units
         .iter()
-        .filter(|unit| {
-            matches!(
-                unit.semantic_analysis_eligibility,
-                syntax_rules::SemanticAnalysisEligibility::Eligible
-            )
-        })
+        .filter(|unit| unit.phase_state.ready_for_semantic_analysis())
         .map(|unit| PackageFile {
             package_path: &unit.package_path,
             path: &unit.path,
@@ -260,12 +279,7 @@ pub fn check_target_with_workspace_root(
     let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
         parsed_units
             .iter()
-            .filter(|unit| {
-                matches!(
-                    unit.semantic_analysis_eligibility,
-                    syntax_rules::SemanticAnalysisEligibility::Eligible
-                )
-            })
+            .filter(|unit| unit.phase_state.ready_for_semantic_analysis())
             .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
             .collect();
     let package_units: Vec<PackageUnit<'_>> = parsed_units
