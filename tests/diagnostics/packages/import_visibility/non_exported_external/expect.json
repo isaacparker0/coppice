@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "imported symbol 'helper' in package 'workspace/auth' is not exported",
+            "span": {
+                "start": 24,
+                "end": 30,
+                "line": 1,
+                "column": 25
+            }
+        }
+    ]
+}

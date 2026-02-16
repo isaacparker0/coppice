@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unknown type 'foo'",
+            "span": {
+                "start": 34,
+                "end": 37,
+                "line": 2,
+                "column": 8
+            }
+        }
+    ]
+}

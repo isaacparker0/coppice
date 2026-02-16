@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:13: error: invalid call target
-      return (1)(2)
-              ^

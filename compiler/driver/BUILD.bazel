@@ -11,6 +11,7 @@ rust_library(
         "//compiler/packages",
         "//compiler/parsing",
         "//compiler/phase_results",
+        "//compiler/reports",
         "//compiler/resolution",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",

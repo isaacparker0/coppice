@@ -6,7 +6,8 @@ Every fixture uses a three-level layout:
 tests/diagnostics/<area>/<feature>/<case>/
   input/PACKAGE.coppice
   input/<files>.coppice
-  expect.txt
+  expect.text
+  expect.json
 ```
 
 ## Layout rules
@@ -35,11 +36,15 @@ tests/diagnostics/<area>/<feature>/<case>/
   missing-root-manifest behavior.
 - `minimal_valid` is the only success case for a feature and should cover all
   valid sub-kinds for that feature in one file.
-- `expect.txt` starts with `# exit: <code>` and the exact expected output after
-  running `compiler/cli` with `check`.
+- `expect.text` is the exact expected output from
+  `compiler/cli check --format text`.
+- `expect.json` is the exact expected output from
+  `compiler/cli check --format json`.
 - Avoid adding new case names for variations that can be covered by the existing
   `minimal_valid` fixture.
 - Non-`minimal_valid` fixtures must produce exactly one `: error:` diagnostic in
-  `expect.txt` to keep case intent obvious and avoid diagnostic cascades.
+  `expect.text`; in `expect.json` they must contain exactly one diagnostics
+  entry or one top-level `error` object (but not both) to keep case intent
+  obvious and avoid diagnostic cascades.
 - Name error cases after the single behavior they validate (for example,
   `duplicate_name`, `return_type_mismatch`, `if_condition_not_boolean`).

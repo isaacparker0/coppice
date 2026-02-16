@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:6:16: error: argument 1 to 'add' must be int64, got string
-      return add("x", 2)
-                 ^

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unreachable code",
+            "span": {
+                "start": 66,
+                "end": 72,
+                "line": 4,
+                "column": 9
+            }
+        }
+    ]
+}

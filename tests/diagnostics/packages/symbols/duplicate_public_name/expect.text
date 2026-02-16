@@ -1,0 +1,3 @@
+two.coppice:1:8: error: duplicate package-visible symbol 'token'
+  public function token() -> nil {
+         ^

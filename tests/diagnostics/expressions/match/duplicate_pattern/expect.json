@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "duplicate match arm for type 'int64'",
+            "span": {
+                "start": 140,
+                "end": 145,
+                "line": 7,
+                "column": 9
+            }
+        }
+    ]
+}

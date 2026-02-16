@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:3:9: error: assignment type mismatch: expected int64, got boolean
-      x = true
-          ^

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "enum type 'Outcome' cannot declare type parameters",
+            "span": {
+                "start": 5,
+                "end": 44,
+                "line": 1,
+                "column": 6
+            }
+        }
+    ]
+}

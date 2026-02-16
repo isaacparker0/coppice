@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:12: error: use 'matches' for single-pattern boolean checks
-      return match value {
-             ^

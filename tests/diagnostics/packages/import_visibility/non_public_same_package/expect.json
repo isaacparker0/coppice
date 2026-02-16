@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "imported symbol 'helper' in package 'workspace' must be declared public",
+            "span": {
+                "start": 19,
+                "end": 25,
+                "line": 1,
+                "column": 20
+            }
+        }
+    ]
+}

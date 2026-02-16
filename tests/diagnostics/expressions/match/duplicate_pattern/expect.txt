@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:7:9: error: duplicate match arm for type 'int64'
-          int64 => 2
-          ^

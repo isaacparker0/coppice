@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:11: error: abort message must be string
-      abort(1)
-            ^

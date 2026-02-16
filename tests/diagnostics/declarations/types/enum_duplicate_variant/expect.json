@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "duplicate enum variant 'North'",
+            "span": {
+                "start": 40,
+                "end": 45,
+                "line": 3,
+                "column": 5
+            }
+        }
+    ]
+}

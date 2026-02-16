@@ -6,5 +6,9 @@ rust_test(
     data = [
         "//compiler/cli:main",
     ] + glob(["**"]),
-    deps = ["@rules_rust//tools/runfiles"],
+    deps = [
+        "//compiler/reports",
+        "@crates//:serde_json",
+        "@rules_rust//tools/runfiles",
+    ],
 )

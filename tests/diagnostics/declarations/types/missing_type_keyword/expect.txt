@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:1:1: error: expected keyword 'type' before type declaration
-  User :: struct { id: int64 }
-  ^

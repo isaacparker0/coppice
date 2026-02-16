@@ -1,0 +1,3 @@
+lib.coppice:2:26: error: matches pattern type 'boolean' is not in target type
+      return value matches boolean
+                           ^

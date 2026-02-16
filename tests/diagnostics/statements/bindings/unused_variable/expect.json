@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unused variable 'x'",
+            "span": {
+                "start": 30,
+                "end": 36,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

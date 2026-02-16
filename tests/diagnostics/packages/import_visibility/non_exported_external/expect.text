@@ -1,0 +1,3 @@
+lib.coppice:1:25: error: imported symbol 'helper' in package 'workspace/auth' is not exported
+  import workspace/auth { helper }
+                          ^

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "PACKAGE.coppice",
+            "message": "exported symbol 'Missing' is not declared in this package",
+            "span": {
+                "start": 10,
+                "end": 17,
+                "line": 1,
+                "column": 11
+            }
+        }
+    ]
+}

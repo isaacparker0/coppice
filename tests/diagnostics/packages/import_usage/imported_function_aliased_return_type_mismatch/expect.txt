@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:8:16: error: return type mismatch: expected string, got int64
-      return idOf(makeToken())
-                 ^

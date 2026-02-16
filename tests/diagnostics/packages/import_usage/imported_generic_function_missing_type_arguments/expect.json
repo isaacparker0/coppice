@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "generic function 'make' requires 1 explicit type arguments",
+            "span": {
+                "start": 60,
+                "end": 64,
+                "line": 4,
+                "column": 5
+            }
+        }
+    ]
+}

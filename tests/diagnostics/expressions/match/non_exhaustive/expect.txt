@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:5:12: error: non-exhaustive match, missing: string
-      return match value {
-             ^

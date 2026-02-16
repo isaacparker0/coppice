@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "missing field 'y' in Point literal",
+            "span": {
+                "start": 80,
+                "end": 85,
+                "line": 4,
+                "column": 10
+            }
+        }
+    ]
+}

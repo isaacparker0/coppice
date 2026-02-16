@@ -1,0 +1,39 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "reports",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/source",
+        "@crates//:serde",
+    ],
+)
+
+dependency_enforcement_test(
+    name = "reports_forbidden_dependencies",
+    forbidden = [
+        "//compiler/binding",
+        "//compiler/diagnostics",
+        "//compiler/driver",
+        "//compiler/exports",
+        "//compiler/file_role_rules",
+        "//compiler/package_graph",
+        "//compiler/package_symbols",
+        "//compiler/packages",
+        "//compiler/parsing",
+        "//compiler/phase_results",
+        "//compiler/resolution",
+        "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
+        "//compiler/semantic_types",
+        "//compiler/symbols",
+        "//compiler/syntax",
+        "//compiler/syntax_rules",
+        "//compiler/type_analysis",
+        "//compiler/visibility",
+        "//compiler/workspace",
+    ],
+    target = ":reports",
+)

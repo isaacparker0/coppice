@@ -6,7 +6,9 @@ rust_binary(
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/driver",
-        "//compiler/source",
+        "//compiler/reports",
         "@crates//:clap",
+        "@crates//:serde",
+        "@crates//:serde_json",
     ],
 )

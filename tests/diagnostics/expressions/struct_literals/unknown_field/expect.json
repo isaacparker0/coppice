@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unknown field 'y' on Point",
+            "span": {
+                "start": 89,
+                "end": 90,
+                "line": 4,
+                "column": 29
+            }
+        }
+    ]
+}

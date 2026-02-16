@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.coppice",
+            "message": "unexpected '=' in expression",
+            "span": {
+                "start": 41,
+                "end": 42,
+                "line": 2,
+                "column": 14
+            }
+        }
+    ]
+}

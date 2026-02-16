@@ -1,4 +1,0 @@
-# exit: 1
-PACKAGE.coppice:1:6: error: PACKAGE.coppice may only contain exports declarations
-  type Token :: struct {
-       ^

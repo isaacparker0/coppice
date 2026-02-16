@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "top-level declaration 'Token' conflicts with imported name",
+            "span": {
+                "start": 38,
+                "end": 56,
+                "line": 3,
+                "column": 6
+            }
+        }
+    ]
+}

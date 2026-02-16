@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "cannot call mutating method 'User.bump' on immutable binding 'user'",
+            "span": {
+                "start": 236,
+                "end": 240,
+                "line": 11,
+                "column": 17
+            }
+        }
+    ]
+}

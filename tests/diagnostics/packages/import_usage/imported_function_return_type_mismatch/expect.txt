@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:14: error: return type mismatch: expected string, got int64
-      return id(1)
-               ^

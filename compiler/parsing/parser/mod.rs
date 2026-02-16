@@ -1,5 +1,5 @@
 use crate::lexer::{Keyword, Symbol, Token, TokenKind};
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::FileRole;
 use compiler__source::Span;
 use compiler__syntax::{Declaration, DocComment, Expression, FileItem, ParsedFile, Visibility};
@@ -76,7 +76,7 @@ pub(super) type ParseResult<T> = Result<T, ParseError>;
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
-    diagnostics: Vec<Diagnostic>,
+    diagnostics: Vec<PhaseDiagnostic>,
 }
 
 impl Parser {
@@ -88,7 +88,7 @@ impl Parser {
         }
     }
 
-    pub fn into_diagnostics(self) -> Vec<Diagnostic> {
+    pub fn into_diagnostics(self) -> Vec<PhaseDiagnostic> {
         self.diagnostics
     }
 
@@ -280,7 +280,7 @@ impl Parser {
     }
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
-        self.diagnostics.push(Diagnostic::new(message, span));
+        self.diagnostics.push(PhaseDiagnostic::new(message, span));
     }
 
     fn report_parse_error(&mut self, error: &ParseError) {

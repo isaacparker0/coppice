@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__exports::ExportsByPackage;
 use compiler__source::Span;
 use compiler__symbols::{PackageDiagnostic, PackageFile, SymbolsByPackage};
@@ -71,7 +71,7 @@ fn resolve_import_declaration(
             Err(message) => {
                 diagnostics.push(PackageDiagnostic {
                     path: file.path.to_path_buf(),
-                    diagnostic: Diagnostic::new(message, import_declaration.span.clone()),
+                    diagnostic: PhaseDiagnostic::new(message, import_declaration.span.clone()),
                 });
                 return None;
             }
@@ -80,7 +80,7 @@ fn resolve_import_declaration(
     let Some(target_package_symbols) = symbols_by_package.get(&target_package_path) else {
         diagnostics.push(PackageDiagnostic {
             path: file.path.to_path_buf(),
-            diagnostic: Diagnostic::new(
+            diagnostic: PhaseDiagnostic::new(
                 format!("unknown package '{}'", import_declaration.package_path),
                 import_declaration.span.clone(),
             ),
@@ -95,7 +95,7 @@ fn resolve_import_declaration(
         if !target_package_symbols.declared.contains(name) {
             diagnostics.push(PackageDiagnostic {
                 path: file.path.to_path_buf(),
-                diagnostic: Diagnostic::new(
+                diagnostic: PhaseDiagnostic::new(
                     format!(
                         "imported symbol '{name}' is not declared in package '{}'",
                         import_declaration.package_path
@@ -108,7 +108,7 @@ fn resolve_import_declaration(
         if !target_package_symbols.package_visible.contains(name) {
             diagnostics.push(PackageDiagnostic {
                 path: file.path.to_path_buf(),
-                diagnostic: Diagnostic::new(
+                diagnostic: PhaseDiagnostic::new(
                     format!(
                         "imported symbol '{name}' in package '{}' must be declared public",
                         import_declaration.package_path
@@ -121,7 +121,7 @@ fn resolve_import_declaration(
         if !same_package && !is_exported(name, exported_symbols) {
             diagnostics.push(PackageDiagnostic {
                 path: file.path.to_path_buf(),
-                diagnostic: Diagnostic::new(
+                diagnostic: PhaseDiagnostic::new(
                     format!(
                         "imported symbol '{name}' in package '{}' is not exported",
                         import_declaration.package_path

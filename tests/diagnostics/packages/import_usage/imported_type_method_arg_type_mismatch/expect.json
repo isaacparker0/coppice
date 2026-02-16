@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "argument 1 to 'plus' must be int64, got boolean",
+            "span": {
+                "start": 106,
+                "end": 110,
+                "line": 5,
+                "column": 22
+            }
+        }
+    ]
+}

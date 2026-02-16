@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:19: error: argument 2 to 'add' must be int64, got boolean
-      return add(1, true)
-                    ^

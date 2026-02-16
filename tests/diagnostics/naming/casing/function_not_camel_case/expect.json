@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "function name must be camelCase",
+            "span": {
+                "start": 9,
+                "end": 16,
+                "line": 1,
+                "column": 10
+            }
+        }
+    ]
+}

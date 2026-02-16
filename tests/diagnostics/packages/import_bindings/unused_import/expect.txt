@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:1:25: error: unused import 'Token'
-  import workspace/auth { Token }
-                          ^

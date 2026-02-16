@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use compiler__source::Span;
 
 #[derive(Clone, Debug)]
-pub struct Diagnostic {
+pub struct PhaseDiagnostic {
     pub message: String,
     pub span: Span,
 }
 
-impl Diagnostic {
+impl PhaseDiagnostic {
     pub fn new(message: impl Into<String>, span: Span) -> Self {
         Self {
             message: message.into(),

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "missing return in function body",
+            "span": {
+                "start": 36,
+                "end": 73,
+                "line": 1,
+                "column": 37
+            }
+        }
+    ]
+}

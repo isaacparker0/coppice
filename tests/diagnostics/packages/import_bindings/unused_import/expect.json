@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unused import 'Token'",
+            "span": {
+                "start": 24,
+                "end": 29,
+                "line": 1,
+                "column": 25
+            }
+        }
+    ]
+}

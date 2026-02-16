@@ -1,4 +1,4 @@
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
@@ -35,7 +35,7 @@ pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     }
 }
 
-fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
     for declaration in file.top_level_declarations() {
         if file.role == FileRole::PackageManifest && !matches!(declaration, Declaration::Exports(_))
         {
@@ -43,7 +43,7 @@ fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diag
                 // `main` has a dedicated role diagnostic.
                 continue;
             }
-            diagnostics.push(Diagnostic::new(
+            diagnostics.push(PhaseDiagnostic::new(
                 "PACKAGE.coppice may only contain exports declarations",
                 declaration_span(declaration).clone(),
             ));
@@ -52,7 +52,7 @@ fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diag
 
         if file.role != FileRole::PackageManifest && matches!(declaration, Declaration::Exports(_))
         {
-            diagnostics.push(Diagnostic::new(
+            diagnostics.push(PhaseDiagnostic::new(
                 "exports declarations are only allowed in PACKAGE.coppice",
                 declaration_span(declaration).clone(),
             ));
@@ -67,7 +67,7 @@ fn is_main_function_declaration(declaration: &Declaration) -> bool {
     )
 }
 
-fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
     if file.role != FileRole::BinaryEntrypoint && file.role != FileRole::Test {
         return;
     }
@@ -83,25 +83,31 @@ fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagn
         match declaration {
             Declaration::Type(type_declaration) => {
                 if type_declaration.visibility == Visibility::Public {
-                    diagnostics.push(Diagnostic::new(message, type_declaration.span.clone()));
+                    diagnostics.push(PhaseDiagnostic::new(message, type_declaration.span.clone()));
                 }
             }
             Declaration::Constant(constant_declaration)
                 if constant_declaration.visibility == Visibility::Public =>
             {
-                diagnostics.push(Diagnostic::new(message, constant_declaration.span.clone()));
+                diagnostics.push(PhaseDiagnostic::new(
+                    message,
+                    constant_declaration.span.clone(),
+                ));
             }
             Declaration::Function(function_declaration)
                 if function_declaration.visibility == Visibility::Public =>
             {
-                diagnostics.push(Diagnostic::new(message, function_declaration.span.clone()));
+                diagnostics.push(PhaseDiagnostic::new(
+                    message,
+                    function_declaration.span.clone(),
+                ));
             }
             _ => {}
         }
     }
 }
 
-fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic>) {
+fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
     let main_functions: Vec<&FunctionDeclaration> = file
         .top_level_declarations()
         .filter_map(|declaration| match declaration {
@@ -113,7 +119,7 @@ fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic
     match file.role {
         FileRole::BinaryEntrypoint => {
             if main_functions.is_empty() {
-                diagnostics.push(Diagnostic::new(
+                diagnostics.push(PhaseDiagnostic::new(
                     ".bin.coppice files must declare exactly one main function",
                     fallback_file_span(file),
                 ));
@@ -121,7 +127,7 @@ fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic
             }
             if main_functions.len() > 1 {
                 for function in main_functions {
-                    diagnostics.push(Diagnostic::new(
+                    diagnostics.push(PhaseDiagnostic::new(
                         ".bin.coppice files must declare exactly one main function",
                         function.name_span.clone(),
                     ));
@@ -132,7 +138,7 @@ fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic
         }
         FileRole::Library | FileRole::Test | FileRole::PackageManifest => {
             for function in main_functions {
-                diagnostics.push(Diagnostic::new(
+                diagnostics.push(PhaseDiagnostic::new(
                     "main is only allowed in .bin.coppice files",
                     function.name_span.clone(),
                 ));
@@ -143,16 +149,16 @@ fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<Diagnostic
 
 fn check_binary_main_signature(
     main_function: &FunctionDeclaration,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
 ) {
     if !main_function.parameters.is_empty() {
-        diagnostics.push(Diagnostic::new(
+        diagnostics.push(PhaseDiagnostic::new(
             "main in .bin.coppice must not declare parameters",
             main_function.name_span.clone(),
         ));
     }
     if !is_nil_type(&main_function.return_type) {
-        diagnostics.push(Diagnostic::new(
+        diagnostics.push(PhaseDiagnostic::new(
             "main in .bin.coppice must return nil",
             main_function.return_type.span.clone(),
         ));

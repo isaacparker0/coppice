@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:6:5: error: generic function 'make' requires 1 explicit type arguments
-      make()
-      ^

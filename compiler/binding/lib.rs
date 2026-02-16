@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__symbols::{PackageDiagnostic, PackageFile, top_level_symbol};
 use compiler__visibility::ResolvedImportBinding;
 
@@ -16,7 +16,7 @@ pub fn check_bindings(
                 if !imported_names.insert(binding.local_name.clone()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
-                        diagnostic: Diagnostic::new(
+                        diagnostic: PhaseDiagnostic::new(
                             format!(
                                 "duplicate imported name '{}'; use an alias",
                                 binding.local_name
@@ -35,7 +35,7 @@ pub fn check_bindings(
             if imported_names.contains(&symbol.name) {
                 diagnostics.push(PackageDiagnostic {
                     path: file.path.to_path_buf(),
-                    diagnostic: Diagnostic::new(
+                    diagnostic: PhaseDiagnostic::new(
                         format!(
                             "top-level declaration '{}' conflicts with imported name",
                             symbol.name

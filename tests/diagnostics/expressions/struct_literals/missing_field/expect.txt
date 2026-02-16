@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:10: error: missing field 'y' in Point literal
-      p := Point { x: 1 }
-           ^

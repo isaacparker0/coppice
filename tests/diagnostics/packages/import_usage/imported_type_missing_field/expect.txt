@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:12: error: missing field 'id' in User literal
-      return User {}
-             ^

@@ -1,0 +1,3 @@
+lib.coppice:5:1: error: import declarations must appear before top-level declarations
+  import workspace/platform/auth { Token }
+  ^

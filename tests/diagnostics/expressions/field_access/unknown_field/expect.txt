@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:5:14: error: unknown field 'y' on Point
-      return p.y
-               ^

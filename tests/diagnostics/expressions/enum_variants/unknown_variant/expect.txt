@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:7:22: error: unknown enum variant 'Direction.West'
-      return Direction.West
-                       ^

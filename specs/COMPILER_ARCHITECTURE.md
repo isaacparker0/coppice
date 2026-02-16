@@ -30,6 +30,19 @@ This architecture supports Coppice language goals:
 6. Type analysis (`compiler/type_analysis`)
 7. Driver orchestration and rendering (`compiler/driver`)
 
+## Shared Reporting Contracts
+
+`compiler/reports` owns shared frontend output/failure reporting contracts used
+across command entrypoints (`check` today, extensible to future `build`/`run`):
+
+1. `DiagnosticPhase`
+2. `RenderedDiagnostic`
+3. `CompilerFailure` (+ `CompilerFailureKind`)
+4. `ReportFormat`
+
+`compiler/driver` produces these contracts; CLI/tooling consumers render or
+serialize them.
+
 ## Package Ownership
 
 ### `compiler/parsing`
@@ -126,7 +139,7 @@ All phase boundaries use the shared envelope from `compiler/phase_results`:
 ```rust
 pub struct PhaseOutput<T> {
     pub value: T,
-    pub diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<PhaseDiagnostic>,
     pub status: PhaseStatus,
 }
 
@@ -150,6 +163,12 @@ Boundary failure semantics:
    channels at orchestration boundaries.
 3. Infrastructure failures must not be emitted as synthetic language-rule
    diagnostics.
+
+Current shared failure contract:
+
+1. Hard failures are represented via `compiler/reports::CompilerFailure`.
+2. This remains distinct from phase diagnostics and does not carry synthetic
+   phase provenance.
 
 ## Current Gating Policy
 

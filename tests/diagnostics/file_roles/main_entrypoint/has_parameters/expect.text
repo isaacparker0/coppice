@@ -1,0 +1,3 @@
+main.bin.coppice:1:10: error: main in .bin.coppice must not declare parameters
+  function main(value: int64) -> nil {
+           ^

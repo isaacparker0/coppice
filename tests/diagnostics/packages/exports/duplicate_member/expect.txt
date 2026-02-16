@@ -1,4 +1,0 @@
-# exit: 1
-PACKAGE.coppice:1:18: error: duplicate exported symbol 'Token'
-  exports { Token, Token }
-                   ^

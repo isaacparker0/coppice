@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "imported symbol 'Missing' is not declared in package 'workspace/auth'",
+            "span": {
+                "start": 24,
+                "end": 31,
+                "line": 1,
+                "column": 25
+            }
+        }
+    ]
+}

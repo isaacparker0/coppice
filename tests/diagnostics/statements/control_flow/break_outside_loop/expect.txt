@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:5: error: break can only be used inside a loop
-      break
-      ^

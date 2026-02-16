@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:5: error: unknown name 'x'
-      x = 1
-      ^

@@ -1,7 +1,7 @@
 mod lexer;
 mod parser;
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::FileRole;
 use compiler__syntax::ParsedFile;
@@ -10,10 +10,10 @@ use compiler__syntax::ParsedFile;
 pub fn parse_file(source: &str, role: FileRole) -> PhaseOutput<ParsedFile> {
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.lex_all_tokens();
-    let mut diagnostics: Vec<Diagnostic> = lexer
+    let mut diagnostics: Vec<PhaseDiagnostic> = lexer
         .into_errors()
         .into_iter()
-        .map(|lex_error| Diagnostic::new(lex_error.message, lex_error.span))
+        .map(|lex_error| PhaseDiagnostic::new(lex_error.message, lex_error.span))
         .collect();
 
     let mut parser = parser::Parser::new(tokens);

@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:12: error: boolean operators require boolean operands
-      return 1 and true
-             ^

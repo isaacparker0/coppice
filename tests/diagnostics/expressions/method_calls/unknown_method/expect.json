@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unknown method 'User.missing'",
+            "span": {
+                "start": 109,
+                "end": 116,
+                "line": 7,
+                "column": 17
+            }
+        }
+    ]
+}

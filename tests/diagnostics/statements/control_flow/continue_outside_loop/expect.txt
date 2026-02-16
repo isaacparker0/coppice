@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:5: error: continue can only be used inside a loop
-      continue
-      ^

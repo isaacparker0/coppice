@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "continue can only be used inside a loop",
+            "span": {
+                "start": 30,
+                "end": 38,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

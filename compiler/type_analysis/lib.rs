@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
@@ -51,7 +51,7 @@ pub fn analyze_package_unit(
     package_id: PackageId,
     package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> FileTypecheckSummary {
     check_package_unit_declarations(package_id, package_unit, imported_bindings, diagnostics)
 }
@@ -60,7 +60,7 @@ fn check_package_unit_declarations(
     package_id: PackageId,
     package_unit: &SemanticPackageUnit,
     imported_bindings: &[ImportedBinding],
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> FileTypecheckSummary {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
@@ -89,7 +89,7 @@ fn check_package_unit_declarations(
 
 fn check_declarations(
     package_id: PackageId,
-    diagnostics: &mut Vec<Diagnostic>,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
     type_declarations: &[TypeDeclaration],
     constant_declarations: &[ConstantDeclaration],
     function_declarations: &[FunctionDeclaration],
@@ -173,7 +173,7 @@ struct TypeChecker<'a> {
     methods: HashMap<MethodKey, MethodInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
     type_parameter_scopes: Vec<HashMap<String, Span>>,
-    diagnostics: &'a mut Vec<Diagnostic>,
+    diagnostics: &'a mut Vec<PhaseDiagnostic>,
     current_return_type: Type,
     loop_depth: usize,
 }
@@ -206,7 +206,7 @@ impl<'a> TypeChecker<'a> {
     fn new(
         package_id: PackageId,
         imported_bindings: &[ImportedBinding],
-        diagnostics: &'a mut Vec<Diagnostic>,
+        diagnostics: &'a mut Vec<PhaseDiagnostic>,
     ) -> Self {
         let mut imported_binding_map = HashMap::new();
         for imported in imported_bindings {
@@ -339,7 +339,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
-        self.diagnostics.push(Diagnostic::new(message, span));
+        self.diagnostics.push(PhaseDiagnostic::new(message, span));
     }
 
     fn push_type_parameters(&mut self, names_and_spans: &[(String, Span)]) {

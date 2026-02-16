@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "PACKAGE.coppice",
+            "message": "duplicate exported symbol 'Token'",
+            "span": {
+                "start": 17,
+                "end": 22,
+                "line": 1,
+                "column": 18
+            }
+        }
+    ]
+}

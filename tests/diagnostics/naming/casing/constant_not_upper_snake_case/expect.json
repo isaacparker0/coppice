@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "constant name must be UPPER_SNAKE_CASE",
+            "span": {
+                "start": 0,
+                "end": 26,
+                "line": 1,
+                "column": 1
+            }
+        }
+    ]
+}

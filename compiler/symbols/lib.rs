@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{Declaration, ParsedFile, Visibility};
 
@@ -13,7 +13,7 @@ pub struct PackageFile<'a> {
 
 pub struct PackageDiagnostic {
     pub path: PathBuf,
-    pub diagnostic: Diagnostic,
+    pub diagnostic: PhaseDiagnostic,
 }
 
 pub struct TopLevelSymbol {
@@ -61,7 +61,7 @@ pub fn collect_symbols(
             {
                 diagnostics.push(PackageDiagnostic {
                     path: file.path.to_path_buf(),
-                    diagnostic: Diagnostic::new(
+                    diagnostic: PhaseDiagnostic::new(
                         format!("duplicate package-visible symbol '{}'", symbol.name),
                         symbol.span,
                     ),

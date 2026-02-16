@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:9: error: for condition must be boolean
-      for 1 {
-          ^

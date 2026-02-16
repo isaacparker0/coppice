@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "import path must start with import origin 'workspace', 'std/', or 'external/'",
+            "span": {
+                "start": 0,
+                "end": 25,
+                "line": 1,
+                "column": 1
+            }
+        }
+    ]
+}

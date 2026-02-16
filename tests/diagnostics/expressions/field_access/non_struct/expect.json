@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "cannot access field 'y' on non-struct type int64",
+            "span": {
+                "start": 50,
+                "end": 51,
+                "line": 3,
+                "column": 14
+            }
+        }
+    ]
+}

@@ -10,6 +10,7 @@ rust_library(
         "span.rs",
     ],
     visibility = ["//:__subpackages__"],
+    deps = ["@crates//:serde"],
 )
 
 dependency_enforcement_test(

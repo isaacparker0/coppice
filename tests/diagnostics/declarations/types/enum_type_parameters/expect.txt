@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:1:6: error: enum type 'Outcome' cannot declare type parameters
-  type Outcome[T] :: enum {
-       ^

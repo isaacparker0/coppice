@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
-use compiler__diagnostics::{Diagnostic, FileScopedDiagnostic};
+use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
     PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
@@ -12,41 +11,27 @@ use compiler__package_symbols::{
 use compiler__packages::PackageId;
 use compiler__parsing::parse_file;
 use compiler__phase_results::PhaseStatus;
+use compiler__reports::{
+    CompilerFailure, CompilerFailureDetail, CompilerFailureKind, DiagnosticPhase,
+    RenderedDiagnostic,
+};
 use compiler__resolution as resolution;
 use compiler__semantic_lowering::lower_parsed_file;
-use compiler__source::{FileRole, Span, compare_paths, path_to_key};
+use compiler__source::{FileRole, compare_paths, path_to_key};
 use compiler__syntax_rules as syntax_rules;
 use compiler__type_analysis as type_analysis;
 use compiler__visibility::ResolvedImport;
-use compiler__workspace::{DiscoveryError, Workspace, discover_workspace};
-
-pub struct RenderedDiagnostic {
-    pub path: String,
-    pub source: String,
-    pub message: String,
-    pub span: Span,
-}
+use compiler__workspace::{Workspace, discover_workspace};
 
 pub struct CheckedTarget {
     pub diagnostics: Vec<RenderedDiagnostic>,
-}
-
-pub enum CheckFileError {
-    ReadSource { path: String, error: io::Error },
-    InvalidWorkspaceRoot { path: String, error: io::Error },
-    WorkspaceRootNotDirectory { path: String },
-    WorkspaceRootMissingManifest { path: String },
-    InvalidCheckTarget,
-    TargetOutsideWorkspace,
-    PackageNotFound,
-    WorkspaceDiscoveryFailed(Vec<DiscoveryError>),
+    pub source_by_path: BTreeMap<String, String>,
 }
 
 struct ParsedUnit {
     package_id: PackageId,
     package_path: String,
     path: PathBuf,
-    source: String,
     parsed: compiler__syntax::ParsedFile,
     phase_state: FilePhaseState,
 }
@@ -79,19 +64,20 @@ impl FilePhaseState {
     }
 }
 
-pub fn check_target(path: &str) -> Result<CheckedTarget, CheckFileError> {
+pub fn check_target(path: &str) -> Result<CheckedTarget, CompilerFailure> {
     check_target_with_workspace_root(path, None)
 }
 
 pub fn check_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
-) -> Result<CheckedTarget, CheckFileError> {
-    let current_directory =
-        std::env::current_dir().map_err(|error| CheckFileError::ReadSource {
-            path: ".".to_string(),
-            error,
-        })?;
+) -> Result<CheckedTarget, CompilerFailure> {
+    let current_directory = std::env::current_dir().map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: error.to_string(),
+        path: Some(".".to_string()),
+        details: Vec::new(),
+    })?;
     let workspace_root_display =
         workspace_root_override.map_or_else(|| ".".to_string(), std::string::ToString::to_string);
     let workspace_root = if let Some(root) = workspace_root_override {
@@ -105,18 +91,26 @@ pub fn check_target_with_workspace_root(
         current_directory
     };
     let workspace_root_metadata =
-        fs::metadata(&workspace_root).map_err(|error| CheckFileError::InvalidWorkspaceRoot {
-            path: workspace_root_display.clone(),
-            error,
+        fs::metadata(&workspace_root).map_err(|error| CompilerFailure {
+            kind: CompilerFailureKind::InvalidWorkspaceRoot,
+            message: format!("invalid workspace root: {error}"),
+            path: Some(workspace_root_display.clone()),
+            details: Vec::new(),
         })?;
     if !workspace_root_metadata.is_dir() {
-        return Err(CheckFileError::WorkspaceRootNotDirectory {
-            path: workspace_root_display.clone(),
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootNotDirectory,
+            message: "workspace root must be a directory".to_string(),
+            path: Some(workspace_root_display.clone()),
+            details: Vec::new(),
         });
     }
     if !workspace_root.join("PACKAGE.coppice").is_file() {
-        return Err(CheckFileError::WorkspaceRootMissingManifest {
-            path: workspace_root_display,
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootMissingManifest,
+            message: "not a Coppice workspace root (missing PACKAGE.coppice)".to_string(),
+            path: Some(workspace_root_display),
+            details: Vec::new(),
         });
     }
 
@@ -126,16 +120,27 @@ pub fn check_target_with_workspace_root(
     } else {
         workspace_root.join(&target_path)
     };
-    let metadata =
-        fs::metadata(&absolute_target_path).map_err(|error| CheckFileError::ReadSource {
-            path: path.to_string(),
-            error,
-        })?;
+    let metadata = fs::metadata(&absolute_target_path).map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: error.to_string(),
+        path: Some(path.to_string()),
+        details: Vec::new(),
+    })?;
     if !metadata.is_file() && !metadata.is_dir() {
-        return Err(CheckFileError::InvalidCheckTarget);
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::InvalidCheckTarget,
+            message: "expected a file or directory path".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
     }
     if !absolute_target_path.starts_with(&workspace_root) {
-        return Err(CheckFileError::TargetOutsideWorkspace);
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::TargetOutsideWorkspace,
+            message: "target is outside the current workspace root".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
     }
 
     let diagnostic_display_base = workspace_root.clone();
@@ -143,10 +148,25 @@ pub fn check_target_with_workspace_root(
     if metadata.is_file()
         && find_owning_package_root(&workspace_root, &absolute_target_path).is_none()
     {
-        return Err(CheckFileError::PackageNotFound);
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::PackageNotFound,
+            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
     }
-    let workspace =
-        discover_workspace(&workspace_root).map_err(CheckFileError::WorkspaceDiscoveryFailed)?;
+    let workspace = discover_workspace(&workspace_root).map_err(|errors| CompilerFailure {
+        kind: CompilerFailureKind::WorkspaceDiscoveryFailed,
+        message: "workspace discovery failed".to_string(),
+        path: Some(path.to_string()),
+        details: errors
+            .into_iter()
+            .map(|error| CompilerFailureDetail {
+                message: error.message,
+                path: error.path.map(|path| path.display().to_string()),
+            })
+            .collect(),
+    })?;
     let scoped_package_paths = scoped_package_paths_for_target(
         &workspace,
         &workspace_root,
@@ -156,6 +176,7 @@ pub fn check_target_with_workspace_root(
     let scope_is_workspace = scoped_package_paths.is_none();
 
     let mut rendered_diagnostics = Vec::new();
+    let mut source_by_path = BTreeMap::new();
     let mut parsed_units = Vec::new();
     for package in workspace.packages() {
         let package_in_scope = scope_is_workspace
@@ -174,18 +195,20 @@ pub fn check_target_with_workspace_root(
 
         for (relative_path, role) in file_entries {
             let absolute_path = workspace_root.join(&relative_path);
-            let source =
-                fs::read_to_string(&absolute_path).map_err(|error| CheckFileError::ReadSource {
-                    path: display_path(&absolute_path),
-                    error,
-                })?;
+            let source = fs::read_to_string(&absolute_path).map_err(|error| CompilerFailure {
+                kind: CompilerFailureKind::ReadSource,
+                message: error.to_string(),
+                path: Some(display_path(&absolute_path)),
+                details: Vec::new(),
+            })?;
+            let rendered_path = display_path(&absolute_path);
+            source_by_path.insert(rendered_path.clone(), source.clone());
             let parse_result = parse_file(&source, role);
             if package_in_scope {
                 for diagnostic in &parse_result.diagnostics {
                     rendered_diagnostics.push(render_diagnostic(
-                        &diagnostic_display_base,
-                        &relative_path,
-                        &source,
+                        DiagnosticPhase::Parsing,
+                        rendered_path.clone(),
                         diagnostic.clone(),
                     ));
                 }
@@ -194,7 +217,6 @@ pub fn check_target_with_workspace_root(
                 package_id: package.id,
                 package_path: package.package_path.clone(),
                 path: relative_path,
-                source,
                 parsed: parse_result.value,
                 phase_state: FilePhaseState {
                     parsing: parse_result.status,
@@ -223,14 +245,17 @@ pub fn check_target_with_workspace_root(
         {
             continue;
         }
-        let mut file_diagnostics = Vec::new();
-        file_diagnostics.extend(syntax_rules_result.diagnostics);
-        file_diagnostics.extend(file_role_rules_result.diagnostics);
-        for diagnostic in file_diagnostics {
+        for diagnostic in syntax_rules_result.diagnostics {
             rendered_diagnostics.push(render_diagnostic(
-                &diagnostic_display_base,
-                &parsed_unit.path,
-                &parsed_unit.source,
+                DiagnosticPhase::SyntaxRules,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                diagnostic,
+            ));
+        }
+        for diagnostic in file_role_rules_result.diagnostics {
+            rendered_diagnostics.push(render_diagnostic(
+                DiagnosticPhase::FileRoleRules,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
                 diagnostic,
             ));
         }
@@ -267,10 +292,9 @@ pub fn check_target_with_workspace_root(
                 continue;
             }
             rendered_diagnostics.push(render_diagnostic(
-                &diagnostic_display_base,
-                &path,
-                &parsed_unit.source,
-                Diagnostic::new(message, span),
+                DiagnosticPhase::Resolution,
+                display_path(&diagnostic_display_base.join(&path)),
+                PhaseDiagnostic::new(message, span),
             ));
         }
     }
@@ -298,9 +322,8 @@ pub fn check_target_with_workspace_root(
         }
         for diagnostic in diagnostics {
             rendered_diagnostics.push(render_diagnostic(
-                &diagnostic_display_base,
-                &parsed_unit.path,
-                &parsed_unit.source,
+                DiagnosticPhase::SemanticLowering,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
                 diagnostic,
             ));
         }
@@ -338,7 +361,6 @@ pub fn check_target_with_workspace_root(
         if !parsed_unit.phase_state.can_run_type_analysis() {
             continue;
         }
-        let mut file_diagnostics = Vec::new();
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
@@ -350,12 +372,10 @@ pub fn check_target_with_workspace_root(
             semantic_unit,
             imported_bindings,
         );
-        file_diagnostics.extend(type_analysis_result.diagnostics);
-        for diagnostic in file_diagnostics {
+        for diagnostic in type_analysis_result.diagnostics {
             rendered_diagnostics.push(render_diagnostic(
-                &diagnostic_display_base,
-                &parsed_unit.path,
-                &parsed_unit.source,
+                DiagnosticPhase::TypeAnalysis,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
                 diagnostic,
             ));
         }
@@ -367,10 +387,12 @@ pub fn check_target_with_workspace_root(
             .then(left.span.line.cmp(&right.span.line))
             .then(left.span.column.cmp(&right.span.column))
             .then(left.message.cmp(&right.message))
+            .then(left.phase.cmp(&right.phase))
     });
 
     Ok(CheckedTarget {
         diagnostics: rendered_diagnostics,
+        source_by_path,
     })
 }
 
@@ -415,7 +437,7 @@ fn scoped_package_paths_for_target(
     workspace_root: &Path,
     absolute_target_path: &Path,
     target_metadata: &fs::Metadata,
-) -> Result<Option<BTreeSet<String>>, CheckFileError> {
+) -> Result<Option<BTreeSet<String>>, CompilerFailure> {
     if absolute_target_path == workspace_root {
         return Ok(None);
     }
@@ -426,13 +448,28 @@ fn scoped_package_paths_for_target(
         find_owning_package_root_for_directory(workspace_root, absolute_target_path)
     };
     let Some(owning_package_root) = owning_package_root else {
-        return Err(CheckFileError::PackageNotFound);
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::PackageNotFound,
+            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            path: Some(path_to_key(absolute_target_path)),
+            details: Vec::new(),
+        });
     };
 
     let owning_package_path = relative_package_path(workspace_root, &owning_package_root)
-        .ok_or(CheckFileError::PackageNotFound)?;
+        .ok_or_else(|| CompilerFailure {
+            kind: CompilerFailureKind::PackageNotFound,
+            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            path: Some(path_to_key(absolute_target_path)),
+            details: Vec::new(),
+        })?;
     if workspace.package_by_path(&owning_package_path).is_none() {
-        return Err(CheckFileError::PackageNotFound);
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::PackageNotFound,
+            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            path: Some(path_to_key(absolute_target_path)),
+            details: Vec::new(),
+        });
     }
 
     let mut scoped = BTreeSet::new();
@@ -489,14 +526,13 @@ fn find_owning_package_root(workspace_root: &Path, target_path: &Path) -> Option
 }
 
 fn render_diagnostic(
-    display_base: &Path,
-    path: &Path,
-    source: &str,
-    diagnostic: Diagnostic,
+    phase: DiagnosticPhase,
+    path: String,
+    diagnostic: PhaseDiagnostic,
 ) -> RenderedDiagnostic {
     RenderedDiagnostic {
-        path: display_path(&display_base.join(path)),
-        source: source.to_string(),
+        phase,
+        path,
         message: diagnostic.message,
         span: diagnostic.span,
     }

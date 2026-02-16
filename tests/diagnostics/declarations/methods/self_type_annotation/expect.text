@@ -1,0 +1,3 @@
+lib.coppice:3:26: error: method receiver 'self' must not have a type annotation
+      function idValue(self: User) -> int64 {
+                           ^

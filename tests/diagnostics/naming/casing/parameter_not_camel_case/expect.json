@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "parameter name must be camelCase",
+            "span": {
+                "start": 14,
+                "end": 29,
+                "line": 1,
+                "column": 15
+            }
+        }
+    ]
+}

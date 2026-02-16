@@ -3,7 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use compiler__reports::ReportFormat;
 use runfiles::{Runfiles, rlocation};
+use serde_json::Value;
 
 enum Mode {
     Check,
@@ -43,7 +45,7 @@ fn collect_cases(dir: &Path, runfiles_directory: &Path, case_paths: &mut Vec<Pat
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_dir() {
-            if path.join("expect.txt").is_file() {
+            if path.join("expect.text").is_file() {
                 let case_path = path.strip_prefix(runfiles_directory).unwrap();
                 case_paths.push(case_path.to_path_buf());
             } else {
@@ -61,9 +63,86 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
         "missing input directory for diagnostics case: {}",
         case_path.display()
     );
+    let text_run = run_check(compiler, &input_directory, ReportFormat::Text);
+    let json_run = run_check(compiler, &input_directory, ReportFormat::Json);
+    let expected_exit = expected_exit_code(case_path);
+    match mode {
+        Mode::Update {
+            workspace_directory,
+        } => {
+            let source_expect_text = workspace_directory.join(case_path).join("expect.text");
+            let existing_text = fs::read_to_string(&source_expect_text).unwrap_or_default();
+            if existing_text != format!("{}\n", text_run.output) {
+                fs::write(&source_expect_text, format!("{}\n", text_run.output)).unwrap();
+                println!("updated: {}", case_path.display());
+            }
+
+            let source_expect_json = workspace_directory.join(case_path).join("expect.json");
+            let existing_json = fs::read_to_string(&source_expect_json).unwrap_or_default();
+            if existing_json != format!("{}\n", json_run.output) {
+                fs::write(&source_expect_json, format!("{}\n", json_run.output)).unwrap();
+                println!("updated: {}", case_path.display());
+            }
+        }
+        Mode::Check => {
+            let expect_text_path = runfiles_directory.join(case_path).join("expect.text");
+            let expect_json_path = runfiles_directory.join(case_path).join("expect.json");
+            assert!(
+                expect_text_path.is_file(),
+                "missing expect.text for diagnostics case: {}",
+                case_path.display()
+            );
+            assert!(
+                expect_json_path.is_file(),
+                "missing expect.json for diagnostics case: {}",
+                case_path.display()
+            );
+            let expected_text = fs::read_to_string(&expect_text_path).unwrap();
+            let expected_json = fs::read_to_string(&expect_json_path).unwrap();
+            let expected_text = expected_text.trim_end_matches('\n');
+            let expected_json = expected_json.trim_end_matches('\n');
+            let expected_json_value: Value =
+                serde_json::from_str(expected_json).unwrap_or_else(|error| {
+                    panic!("invalid expected JSON for {}: {error}", case_path.display())
+                });
+            let actual_json_value: Value =
+                serde_json::from_str(&json_run.output).unwrap_or_else(|error| {
+                    panic!("invalid actual JSON for {}: {error}", case_path.display())
+                });
+
+            assert_exit_and_case_naming(case_path, expected_exit, text_run.exit_code, "text");
+            assert_exit_and_case_naming(case_path, expected_exit, json_run.exit_code, "json");
+            assert_single_error_diagnostic(case_path, expected_exit, &text_run.output);
+            assert_json_output_contract(case_path, expected_exit, &json_run.output);
+            assert_eq!(
+                expected_text,
+                text_run.output,
+                "text output mismatch for {}\n\n\
+                 To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
+                case_path.display()
+            );
+            assert_eq!(
+                expected_json_value,
+                actual_json_value,
+                "json output mismatch for {}\n\n\
+                 To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
+                case_path.display()
+            );
+        }
+    }
+}
+
+struct CheckRun {
+    exit_code: i32,
+    output: String,
+}
+
+fn run_check(compiler: &Path, input_directory: &Path, format: ReportFormat) -> CheckRun {
     let output = Command::new(compiler)
         .arg("check")
-        .current_dir(&input_directory)
+        .arg("--format")
+        .arg(format.as_str())
+        .current_dir(input_directory)
         .output()
         .unwrap();
 
@@ -73,84 +152,33 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     if combined.ends_with('\n') {
         combined.pop();
     }
-
-    let actual_exit = output.status.code().unwrap_or(1);
-    match mode {
-        Mode::Update {
-            workspace_directory,
-        } => {
-            let actual_expect = format!("# exit: {actual_exit}\n{combined}\n");
-            let source_expect = workspace_directory.join(case_path).join("expect.txt");
-            let existing = fs::read_to_string(&source_expect).unwrap_or_default();
-            if existing != actual_expect {
-                fs::write(&source_expect, &actual_expect).unwrap();
-                println!("updated: {}", case_path.display());
-            }
-        }
-        Mode::Check => {
-            let expect_contents =
-                fs::read_to_string(runfiles_directory.join(case_path).join("expect.txt")).unwrap();
-            let (expected_exit, expected_output) = parse_expect(&expect_contents);
-            assert_case_name_matches_exit(case_path, expected_exit);
-            assert_single_error_diagnostic(case_path, expected_exit, &expected_output);
-            assert_eq!(
-                expected_exit,
-                actual_exit,
-                "exit code mismatch for {}\n\n\
-                 To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
-                case_path.display()
-            );
-            assert_eq!(
-                expected_output,
-                combined,
-                "output mismatch for {}\n\n\
-                 To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
-                case_path.display()
-            );
-        }
+    CheckRun {
+        exit_code: output.status.code().unwrap_or(1),
+        output: combined,
     }
 }
 
-fn assert_case_name_matches_exit(case_path: &Path, exit_code: i32) {
+fn expected_exit_code(case_path: &Path) -> i32 {
     let case_name = case_path
         .file_name()
         .and_then(|name| name.to_str())
         .expect("case path must end with a valid UTF-8 directory name");
-    if exit_code == 0 {
-        assert_eq!(
-            case_name,
-            "minimal_valid",
-            "success fixtures must be named 'minimal_valid': {}",
-            case_path.display()
-        );
-    } else {
-        assert_ne!(
-            case_name,
-            "minimal_valid",
-            "error fixtures must not be named 'minimal_valid': {}",
-            case_path.display()
-        );
-    }
+    i32::from(case_name != "minimal_valid")
 }
 
-fn parse_expect(contents: &str) -> (i32, String) {
-    let mut lines = contents.lines();
-    let header = lines.next().unwrap();
-    let expected_exit = header
-        .strip_prefix("# exit: ")
-        .unwrap()
-        .trim()
-        .parse::<i32>()
-        .unwrap();
-
-    let mut remainder = String::new();
-    if let Some((_, rest)) = contents.split_once('\n') {
-        remainder.push_str(rest);
-    }
-    if remainder.ends_with('\n') {
-        remainder.pop();
-    }
-    (expected_exit, remainder)
+fn assert_exit_and_case_naming(
+    case_path: &Path,
+    expected_exit: i32,
+    actual_exit: i32,
+    format: &str,
+) {
+    assert_eq!(
+        expected_exit,
+        actual_exit,
+        "{format} exit code mismatch for {}\n\n\
+         To update: UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test",
+        case_path.display()
+    );
 }
 
 fn assert_single_error_diagnostic(case_path: &Path, exit_code: i32, output: &str) {
@@ -165,7 +193,72 @@ fn assert_single_error_diagnostic(case_path: &Path, exit_code: i32, output: &str
     assert_eq!(
         1,
         error_count,
-        "error fixtures must contain exactly one ': error:' diagnostic in expect.txt: {}",
+        "error fixtures must contain exactly one ': error:' diagnostic in expect.text: {}",
         case_path.display()
     );
+}
+
+fn assert_json_output_contract(case_path: &Path, exit_code: i32, output: &str) {
+    let value: Value = serde_json::from_str(output)
+        .unwrap_or_else(|error| panic!("invalid JSON output for {}: {error}", case_path.display()));
+
+    let ok = value
+        .get("ok")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| panic!("JSON output missing boolean 'ok': {}", case_path.display()));
+    let diagnostics = value
+        .get("diagnostics")
+        .and_then(Value::as_array)
+        .unwrap_or_else(|| {
+            panic!(
+                "JSON output missing array 'diagnostics': {}",
+                case_path.display()
+            )
+        });
+    let error = value.get("error");
+
+    if exit_code == 0 {
+        assert!(
+            ok,
+            "success fixtures must have ok=true in expect.json: {}",
+            case_path.display()
+        );
+        assert!(
+            diagnostics.is_empty(),
+            "success fixtures must have empty diagnostics in expect.json: {}",
+            case_path.display()
+        );
+        assert!(
+            error.is_none(),
+            "success fixtures must not contain error in expect.json: {}",
+            case_path.display()
+        );
+        return;
+    }
+
+    assert!(
+        !ok,
+        "error fixtures must have ok=false in expect.json: {}",
+        case_path.display()
+    );
+    let has_error = error.is_some_and(|value| !value.is_null());
+    let has_diagnostics = !diagnostics.is_empty();
+    assert!(
+        has_error || has_diagnostics,
+        "error fixtures must include diagnostics or error in expect.json: {}",
+        case_path.display()
+    );
+    assert!(
+        !(has_error && has_diagnostics),
+        "error fixtures must not include both diagnostics and error in expect.json: {}",
+        case_path.display()
+    );
+    if has_diagnostics {
+        assert_eq!(
+            1,
+            diagnostics.len(),
+            "error fixtures with diagnostics must contain exactly one diagnostic in expect.json: {}",
+            case_path.display()
+        );
+    }
 }

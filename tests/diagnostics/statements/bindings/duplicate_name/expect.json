@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "duplicate binding 'x'",
+            "span": {
+                "start": 41,
+                "end": 47,
+                "line": 3,
+                "column": 5
+            }
+        }
+    ]
+}

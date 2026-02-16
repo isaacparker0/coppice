@@ -1,0 +1,3 @@
+lib.coppice:1:1: error: doc comment must document a declaration
+  /// This should not attach because of an intervening line comment.
+  ^

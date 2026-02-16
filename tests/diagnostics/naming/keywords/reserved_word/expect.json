@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.coppice",
+            "message": "reserved keyword 'mut' cannot be used as an identifier",
+            "span": {
+                "start": 9,
+                "end": 12,
+                "line": 1,
+                "column": 10
+            }
+        }
+    ]
+}

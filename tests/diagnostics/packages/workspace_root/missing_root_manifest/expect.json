@@ -1,0 +1,9 @@
+{
+    "ok": false,
+    "diagnostics": [],
+    "error": {
+        "kind": "workspace_root_missing_manifest",
+        "message": "not a Coppice workspace root (missing PACKAGE.coppice)",
+        "path": "."
+    }
+}

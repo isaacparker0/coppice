@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "boolean operators require boolean operands",
+            "span": {
+                "start": 39,
+                "end": 40,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

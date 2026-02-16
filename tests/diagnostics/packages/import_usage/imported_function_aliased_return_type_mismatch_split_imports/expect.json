@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "return type mismatch: expected string, got int64",
+            "span": {
+                "start": 188,
+                "end": 205,
+                "line": 9,
+                "column": 16
+            }
+        }
+    ]
+}

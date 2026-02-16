@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "two.coppice",
+            "message": "duplicate package-visible symbol 'token'",
+            "span": {
+                "start": 7,
+                "end": 49,
+                "line": 1,
+                "column": 8
+            }
+        }
+    ]
+}

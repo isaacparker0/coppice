@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "type 'Maybe' expects 1 type arguments, got 0",
+            "span": {
+                "start": 68,
+                "end": 73,
+                "line": 4,
+                "column": 12
+            }
+        }
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unary minus requires int64 operand",
+            "span": {
+                "start": 38,
+                "end": 42,
+                "line": 2,
+                "column": 13
+            }
+        }
+    ]
+}

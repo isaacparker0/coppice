@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:5: error: cannot assign to constant 'ANSWER'
-      ANSWER = 2
-      ^

@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:4:28: error: argument 1 to 'identity' must be int64, got boolean
-      return identity[int64](true)
-                             ^

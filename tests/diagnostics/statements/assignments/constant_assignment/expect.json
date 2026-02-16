@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "cannot assign to constant 'ANSWER'",
+            "span": {
+                "start": 51,
+                "end": 57,
+                "line": 4,
+                "column": 5
+            }
+        }
+    ]
+}

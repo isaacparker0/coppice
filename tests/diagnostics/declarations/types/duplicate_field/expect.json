@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "duplicate field 'id' in 'User'",
+            "span": {
+                "start": 41,
+                "end": 51,
+                "line": 3,
+                "column": 5
+            }
+        }
+    ]
+}

@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:22: error: type mismatch: expected int64, got nil
-      _value: int64 := nil
-                       ^

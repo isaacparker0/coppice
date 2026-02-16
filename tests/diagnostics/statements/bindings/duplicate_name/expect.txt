@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:3:5: error: duplicate binding 'x'
-      x := 2
-      ^

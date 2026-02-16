@@ -1,4 +1,0 @@
-# exit: 1
-main.bin.coppice:1:1: error: exports declarations are only allowed in PACKAGE.coppice
-  exports { Token }
-  ^

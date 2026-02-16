@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:7:19: error: match arm type mismatch: expected int64, got string
-          string => "nope"
-                    ^

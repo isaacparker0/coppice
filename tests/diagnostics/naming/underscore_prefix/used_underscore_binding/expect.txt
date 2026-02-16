@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:5: error: bindings prefixed with '_' must be unused: '_value' is used
-      _value := 1
-      ^

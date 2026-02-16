@@ -1,0 +1,3 @@
+lib.coppice:1:10: error: function name must be camelCase
+  function BadName() -> int64 {
+           ^

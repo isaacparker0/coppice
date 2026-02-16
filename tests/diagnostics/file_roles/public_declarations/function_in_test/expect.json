@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "file_role_rules",
+            "path": "lib.test.coppice",
+            "message": "public declarations are not allowed in .test.coppice files",
+            "span": {
+                "start": 7,
+                "end": 47,
+                "line": 1,
+                "column": 8
+            }
+        }
+    ]
+}

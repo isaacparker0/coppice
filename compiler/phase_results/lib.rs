@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use compiler__diagnostics::{Diagnostic, FileScopedDiagnostic};
+use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
 
 pub struct PhaseOutput<T> {
     pub value: T,
-    pub diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<PhaseDiagnostic>,
     pub status: PhaseStatus,
 }
 

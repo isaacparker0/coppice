@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.coppice",
+            "message": "unterminated string literal",
+            "span": {
+                "start": 36,
+                "end": 40,
+                "line": 2,
+                "column": 10
+            }
+        }
+    ]
+}

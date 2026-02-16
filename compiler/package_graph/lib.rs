@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::Span;
 use compiler__symbols::PackageDiagnostic;
 use compiler__visibility::ResolvedImport;
@@ -39,7 +39,7 @@ pub fn check_cycles(resolved_imports: &[ResolvedImport], diagnostics: &mut Vec<P
         .join(" -> ");
     diagnostics.push(PackageDiagnostic {
         path: import_site.path.clone(),
-        diagnostic: Diagnostic::new(
+        diagnostic: PhaseDiagnostic::new(
             format!("package import cycle detected: {cycle_display}"),
             import_site.span.clone(),
         ),

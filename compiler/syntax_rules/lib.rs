@@ -1,4 +1,4 @@
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__syntax::{
@@ -36,7 +36,7 @@ pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     }
 }
 
-fn render_diagnostics(violations: &[SyntaxRuleViolation]) -> Vec<Diagnostic> {
+fn render_diagnostics(violations: &[SyntaxRuleViolation]) -> Vec<PhaseDiagnostic> {
     violations
         .iter()
         .map(|violation| {
@@ -48,7 +48,7 @@ fn render_diagnostics(violations: &[SyntaxRuleViolation]) -> Vec<Diagnostic> {
                     "doc comment must document a declaration"
                 }
             };
-            Diagnostic::new(message, violation.span.clone())
+            PhaseDiagnostic::new(message, violation.span.clone())
         })
         .collect()
 }

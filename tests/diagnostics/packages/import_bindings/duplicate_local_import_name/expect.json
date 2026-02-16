@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "resolution",
+            "path": "lib.coppice",
+            "message": "duplicate imported name 'Token'; use an alias",
+            "span": {
+                "start": 59,
+                "end": 64,
+                "line": 2,
+                "column": 28
+            }
+        }
+    ]
+}

@@ -1,0 +1,3 @@
+lib.coppice:2:8: error: unknown type 'foo'
+      x: foo := 1
+         ^

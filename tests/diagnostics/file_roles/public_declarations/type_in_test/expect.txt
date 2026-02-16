@@ -1,4 +1,0 @@
-# exit: 1
-lib.test.coppice:1:13: error: public declarations are not allowed in .test.coppice files
-  public type Helper :: struct {
-              ^

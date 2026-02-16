@@ -1,4 +1,0 @@
-# exit: 1
-lib.coppice:2:28: error: duplicate imported name 'Token'; use an alias
-  import workspace/session { Token }
-                             ^

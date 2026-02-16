@@ -1,4 +1,0 @@
-# exit: 1
-main.bin.coppice:5:8: error: public declarations are not allowed in .bin.coppice files
-  public ANSWER: int64 := 42
-         ^

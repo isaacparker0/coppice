@@ -1,0 +1,3 @@
+PACKAGE.coppice:1:1: error: PACKAGE.coppice may only contain exports declarations
+  function helper() -> nil {
+  ^

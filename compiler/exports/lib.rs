@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::FileRole;
 use compiler__symbols::{PackageDiagnostic, PackageFile, SymbolsByPackage};
 use compiler__syntax::Declaration;
@@ -42,7 +42,7 @@ pub fn build_exports(
                 if !exported_symbols.insert(name.clone()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
-                        diagnostic: Diagnostic::new(
+                        diagnostic: PhaseDiagnostic::new(
                             format!("duplicate exported symbol '{name}'"),
                             member.span.clone(),
                         ),
@@ -52,7 +52,7 @@ pub fn build_exports(
                 let Some(package_symbols) = package_symbols else {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
-                        diagnostic: Diagnostic::new(
+                        diagnostic: PhaseDiagnostic::new(
                             format!("exported symbol '{name}' is not declared in this package"),
                             member.span.clone(),
                         ),
@@ -62,7 +62,7 @@ pub fn build_exports(
                 if !package_symbols.declared.contains(&name) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
-                        diagnostic: Diagnostic::new(
+                        diagnostic: PhaseDiagnostic::new(
                             format!("exported symbol '{name}' is not declared in this package"),
                             member.span.clone(),
                         ),
@@ -72,7 +72,7 @@ pub fn build_exports(
                 if !package_symbols.package_visible.contains(&name) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
-                        diagnostic: Diagnostic::new(
+                        diagnostic: PhaseDiagnostic::new(
                             format!("exported symbol '{name}' must be declared public"),
                             member.span.clone(),
                         ),
