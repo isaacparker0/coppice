@@ -104,7 +104,7 @@ pub enum TokenKind {
     /// Semantic statement terminator inserted during newline normalization.
     StatementTerminator,
     EndOfFile,
-    Error(String),
+    Error,
 }
 
 #[derive(Clone, Debug)]
@@ -318,7 +318,7 @@ impl<'a> Lexer<'a> {
             },
         });
         Token {
-            kind: TokenKind::Error("unterminated string literal".to_string()),
+            kind: TokenKind::Error,
             span: Span {
                 start,
                 end: self.index,
@@ -358,7 +358,7 @@ impl<'a> Lexer<'a> {
                 },
             });
             Token {
-                kind: TokenKind::Error("integer literal out of range".to_string()),
+                kind: TokenKind::Error,
                 span: Span {
                     start,
                     end: self.index,
@@ -454,7 +454,7 @@ impl<'a> Lexer<'a> {
             },
         });
         Token {
-            kind: TokenKind::Error(message),
+            kind: TokenKind::Error,
             span: Span {
                 start,
                 end: self.index,

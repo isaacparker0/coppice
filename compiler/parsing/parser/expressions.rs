@@ -387,7 +387,7 @@ impl Parser {
                 self.expect_symbol(Symbol::RightParenthesis)?;
                 Ok(expression)
             }
-            TokenKind::Error(_message) => Err(ParseError::UnparsableToken),
+            TokenKind::Error => Err(ParseError::UnparsableToken),
             _ => Err(ParseError::UnexpectedToken {
                 message: "expected expression".to_string(),
                 span: token.span,
