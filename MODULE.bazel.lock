@@ -233,8 +233,8 @@
     "https://bcr.bazel.build/modules/rules_python/1.6.0/MODULE.bazel": "7e04ad8f8d5bea40451cf80b1bd8262552aa73f841415d20db96b7241bd027d8",
     "https://bcr.bazel.build/modules/rules_python/1.7.0/MODULE.bazel": "d01f995ecd137abf30238ad9ce97f8fc3ac57289c8b24bd0bf53324d937a14f8",
     "https://bcr.bazel.build/modules/rules_python/1.7.0/source.json": "028a084b65dcf8f4dc4f82f8778dbe65df133f234b316828a82e060d81bdce32",
-    "https://bcr.bazel.build/modules/rules_rs/0.0.28/MODULE.bazel": "3c3830eda824d0476818443dd4a3a2fa0765484589db874d18e94fb6ee50a60f",
-    "https://bcr.bazel.build/modules/rules_rs/0.0.28/source.json": "3480135f6ef8111ec7abe2b7cc164af40354b4eaf8f885170567922a70a2dc99",
+    "https://bcr.bazel.build/modules/rules_rs/0.0.29/MODULE.bazel": "1becd0ec574c9b5752690d27f6918202649616868bd5e36c280d766d5adf68ff",
+    "https://bcr.bazel.build/modules/rules_rs/0.0.29/source.json": "60622e0b594399a6f01e9401bc48403d0d4927ec13b4ec001997db642281bd09",
     "https://bcr.bazel.build/modules/rules_rust/0.45.1/MODULE.bazel": "a69d0db3a958fab2c6520961e1b2287afcc8b36690fd31bbc4f6f7391397150d",
     "https://bcr.bazel.build/modules/rules_rust/0.66.0/MODULE.bazel": "86ef763a582f4739a27029bdcc6c562258ed0ea6f8d58294b049e215ceb251b3",
     "https://bcr.bazel.build/modules/rules_rust/0.68.1/MODULE.bazel": "8d3332ef4079673385eb81f8bd68b012decc04ac00c9d5a01a40eff90301732c",
@@ -284,7 +284,7 @@
     "@@aspect_tools_telemetry+//:extension.bzl%telemetry": {
       "general": {
         "bzlTransitiveDigest": "dnnhvKMf9MIXMulhbhHBblZdDAfAkiSVjApIXpUz9Y8=",
-        "usagesDigest": "g6nLSa+LyuTbSM06nQLXd4q4/f9U/zUeLtRJoeyeOkI=",
+        "usagesDigest": "oryz/h0/GCG2cc8rESPNZZNQK8RiRKvT7PEHaLy8pdU=",
         "recordedInputs": [
           "REPO_MAPPING:aspect_tools_telemetry+,bazel_lib bazel_lib+",
           "REPO_MAPPING:aspect_tools_telemetry+,bazel_skylib bazel_skylib+"
@@ -311,7 +311,7 @@
                 "nlohmann_json": "3.6.1",
                 "package_metadata": "0.0.5",
                 "platforms": "1.0.0",
-                "protobuf": "33.4",
+                "protobuf": "33.5",
                 "pybind11_bazel": "2.12.0",
                 "re2": "2024-07-02.bcr.1",
                 "rules_android": "0.1.1",
@@ -326,7 +326,7 @@
                 "rules_pkg": "1.0.1",
                 "rules_proto": "7.1.0",
                 "rules_python": "1.7.0",
-                "rules_rs": "0.0.27",
+                "rules_rs": "0.0.28",
                 "rules_rust": "0.68.1",
                 "rules_rust_prost": "0.68.1",
                 "rules_shell": "0.6.1",
@@ -334,7 +334,7 @@
                 "stardoc": "0.7.2",
                 "swift_argument_parser": "1.3.1.2",
                 "tar.bzl": "0.6.0",
-                "toolchains_llvm_bootstrapped": "0.5.4",
+                "toolchains_llvm_bootstrapped": "0.5.5",
                 "with_cfg.bzl": "0.12.0",
                 "yq.bzl": "0.1.1",
                 "zlib": "1.3.1.bcr.5"
