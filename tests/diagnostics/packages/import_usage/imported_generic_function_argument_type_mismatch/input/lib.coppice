@@ -1,0 +1,5 @@
+import workspace/auth { identity }
+
+function run() -> int64 {
+    return identity[int64](true)
+}

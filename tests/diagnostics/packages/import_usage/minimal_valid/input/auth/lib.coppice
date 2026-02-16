@@ -5,8 +5,19 @@ public type Token :: struct {
     },
 }
 
+public type Box[T] :: struct {
+    value: T,
+    function get(self) -> T {
+        return self.value
+    },
+}
+
 public START_ID: int64 := 1
 
 public function makeToken(id: int64) -> Token {
     return Token { id: id }
+}
+
+public function identity[T](value: T) -> T {
+    return value
 }
