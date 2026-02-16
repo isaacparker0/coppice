@@ -7,9 +7,10 @@ rust_library(
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/packages",
+        "//compiler/semantic_types",
         "//compiler/source",
         "//compiler/syntax",
-        "//compiler/typecheck",
+        "//compiler/type_analysis",
     ],
 )
 
@@ -23,6 +24,7 @@ dependency_enforcement_test(
         "//compiler/package_graph",
         "//compiler/parsing",
         "//compiler/symbols",
+        "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",
     ],

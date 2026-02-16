@@ -283,6 +283,7 @@ pub fn check_target_with_workspace_root(
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
         typecheck::check_package_unit(
+            parsed_unit.package_id,
             &parsed_unit.parsed,
             imported_bindings,
             &mut file_diagnostics,

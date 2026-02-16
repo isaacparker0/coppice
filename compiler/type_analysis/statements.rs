@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::Type;
+use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 use compiler__syntax::{
     Block, Expression, FunctionDeclaration, MethodDeclaration, Statement, TypeDeclaration,
     TypeDeclarationKind,
@@ -63,7 +63,10 @@ impl TypeChecker<'_> {
         self.scopes.push(HashMap::new());
 
         let method_key = super::MethodKey {
-            receiver_type_name: type_declaration.name.clone(),
+            receiver_type_id: NominalTypeId {
+                package_id: self.package_id,
+                symbol_name: type_declaration.name.clone(),
+            },
             method_name: method.name.clone(),
         };
         let (parameter_types, return_type) = if let Some(info) = self.methods.get(&method_key) {
@@ -75,7 +78,13 @@ impl TypeChecker<'_> {
 
         self.define_variable(
             "self".to_string(),
-            Type::Named(type_declaration.name.clone()),
+            Type::Named(NominalTypeRef {
+                id: NominalTypeId {
+                    package_id: self.package_id,
+                    symbol_name: type_declaration.name.clone(),
+                },
+                display_name: type_declaration.name.clone(),
+            }),
             method.self_mutable,
             method.self_span.clone(),
         );

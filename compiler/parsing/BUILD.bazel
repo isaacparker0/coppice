@@ -34,6 +34,8 @@ dependency_enforcement_test(
         "//compiler/package_symbols",
         "//compiler/packages",
         "//compiler/symbols",
+        "//compiler/semantic_types",
+        "//compiler/type_analysis",
         "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",

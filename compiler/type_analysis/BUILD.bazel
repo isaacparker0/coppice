@@ -2,17 +2,29 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "diagnostics",
+    name = "type_analysis",
     srcs = [
-        "diagnostic.rs",
+        "assignability.rs",
+        "declarations.rs",
+        "expressions.rs",
         "lib.rs",
+        "naming_rules.rs",
+        "statements.rs",
+        "type_narrowing.rs",
+        "unused_bindings.rs",
     ],
-    visibility = ["//:__subpackages__"],
-    deps = ["//compiler/source"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/packages",
+        "//compiler/semantic_types",
+        "//compiler/source",
+        "//compiler/syntax",
+    ],
 )
 
 dependency_enforcement_test(
-    name = "diagnostics_forbidden_dependencies",
+    name = "type_analysis_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
         "//compiler/driver",
@@ -20,15 +32,11 @@ dependency_enforcement_test(
         "//compiler/file_role_rules",
         "//compiler/package_graph",
         "//compiler/package_symbols",
-        "//compiler/packages",
         "//compiler/parsing",
         "//compiler/symbols",
-        "//compiler/syntax",
-        "//compiler/semantic_types",
-        "//compiler/type_analysis",
         "//compiler/typecheck",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":diagnostics",
+    target = ":type_analysis",
 )

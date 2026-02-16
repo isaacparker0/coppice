@@ -1,6 +1,6 @@
 use compiler__syntax::{BinaryOperator, Block, Expression, MatchArm};
 
-use crate::types::Type;
+use compiler__semantic_types::Type;
 
 use super::{BranchNarrowing, TypeChecker};
 

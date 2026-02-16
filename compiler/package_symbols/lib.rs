@@ -2,15 +2,17 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
+use compiler__semantic_types::{
+    ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
+    ImportedTypeShape, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature, TypedSymbol,
+    type_from_builtin_name,
+};
 use compiler__source::{FileRole, Span, compare_paths};
 use compiler__syntax::{
     ConstantDeclaration, Declaration, Expression, FunctionDeclaration, MatchPattern, ParsedFile,
     TypeDeclaration, TypeDeclarationKind, TypeName, Visibility,
 };
-use compiler__typecheck::{
-    ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
-    ImportedTypeShape, Type, TypedFunctionSignature, TypedSymbol, analyze_package_unit,
-};
+use compiler__type_analysis::analyze_package_unit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct PublicSymbolId(usize);
@@ -703,6 +705,7 @@ fn resolve_constant_component(
                 .map_or(&[][..], Vec::as_slice);
             let mut ignored_diagnostics = Vec::new();
             let summary = analyze_package_unit(
+                package_unit.package_id,
                 package_unit.parsed,
                 imported_bindings,
                 &mut ignored_diagnostics,
@@ -740,45 +743,10 @@ fn build_imported_bindings_by_file(
     typed_symbol_by_id: &BTreeMap<PublicSymbolId, TypedPublicSymbol>,
 ) -> BTreeMap<PathBuf, Vec<ImportedBinding>> {
     let mut imported_by_file: BTreeMap<PathBuf, Vec<ImportedBinding>> = BTreeMap::new();
-    let mut local_type_name_by_declared_type_name_by_source_and_target: BTreeMap<
-        (PathBuf, PackageId),
-        HashMap<String, String>,
-    > = BTreeMap::new();
+    let nominal_type_id_by_lookup_key =
+        nominal_type_id_by_lookup_key(symbol_id_by_lookup_key, typed_symbol_by_id);
 
     for resolved_import in resolved_imports {
-        for binding in &resolved_import.bindings {
-            let lookup_key = PublicSymbolLookupKey {
-                package_id: resolved_import.target_package_id,
-                symbol_name: binding.imported_name.clone(),
-            };
-            let Some(symbol_id) = symbol_id_by_lookup_key.get(&lookup_key) else {
-                continue;
-            };
-            if matches!(
-                typed_symbol_by_id.get(symbol_id),
-                Some(TypedPublicSymbol::Type(_))
-            ) {
-                local_type_name_by_declared_type_name_by_source_and_target
-                    .entry((
-                        resolved_import.source_path.clone(),
-                        resolved_import.target_package_id,
-                    ))
-                    .or_default()
-                    .insert(binding.imported_name.clone(), binding.local_name.clone());
-            }
-        }
-    }
-
-    for resolved_import in resolved_imports {
-        let local_type_name_by_declared_type_name =
-            local_type_name_by_declared_type_name_by_source_and_target
-                .get(&(
-                    resolved_import.source_path.clone(),
-                    resolved_import.target_package_id,
-                ))
-                .cloned()
-                .unwrap_or_default();
-
         for binding in &resolved_import.bindings {
             let lookup_key = PublicSymbolLookupKey {
                 package_id: resolved_import.target_package_id,
@@ -793,15 +761,17 @@ fn build_imported_bindings_by_file(
 
             let symbol = match typed_symbol {
                 TypedPublicSymbol::Type(type_declaration) => {
-                    ImportedSymbol::Type(imported_type_declaration_with_aliases(
+                    ImportedSymbol::Type(imported_type_declaration(
                         type_declaration,
-                        &local_type_name_by_declared_type_name,
+                        resolved_import.target_package_id,
+                        &nominal_type_id_by_lookup_key,
                     ))
                 }
                 TypedPublicSymbol::Function(function_declaration) => {
-                    ImportedSymbol::Function(imported_function_signature_with_aliases(
+                    ImportedSymbol::Function(imported_function_signature(
                         function_declaration,
-                        &local_type_name_by_declared_type_name,
+                        resolved_import.target_package_id,
+                        &nominal_type_id_by_lookup_key,
                     ))
                 }
                 TypedPublicSymbol::Constant(value_type) => {
@@ -823,10 +793,38 @@ fn build_imported_bindings_by_file(
     imported_by_file
 }
 
-fn imported_type_declaration_with_aliases(
+fn nominal_type_id_by_lookup_key(
+    symbol_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
+    typed_symbol_by_id: &BTreeMap<PublicSymbolId, TypedPublicSymbol>,
+) -> BTreeMap<PublicSymbolLookupKey, NominalTypeId> {
+    let mut nominal_type_id_by_lookup_key = BTreeMap::new();
+    for (lookup_key, symbol_id) in symbol_id_by_lookup_key {
+        if !matches!(
+            typed_symbol_by_id.get(symbol_id),
+            Some(TypedPublicSymbol::Type(_))
+        ) {
+            continue;
+        }
+        nominal_type_id_by_lookup_key.insert(
+            lookup_key.clone(),
+            NominalTypeId {
+                package_id: lookup_key.package_id,
+                symbol_name: lookup_key.symbol_name.clone(),
+            },
+        );
+    }
+    nominal_type_id_by_lookup_key
+}
+
+fn imported_type_declaration(
     type_declaration: &TypeDeclaration,
-    local_type_name_by_declared_type_name: &HashMap<String, String>,
+    target_package_id: PackageId,
+    nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> ImportedTypeDeclaration {
+    let declared_nominal_type_id = NominalTypeId {
+        package_id: target_package_id,
+        symbol_name: type_declaration.name.clone(),
+    };
     let kind = match &type_declaration.kind {
         TypeDeclarationKind::Struct { fields, methods } => {
             let typed_fields = fields
@@ -834,9 +832,10 @@ fn imported_type_declaration_with_aliases(
                 .map(|field| {
                     (
                         field.name.clone(),
-                        rewrite_type_name_aliases_to_type(
+                        resolve_type_name_to_semantic_type(
                             &field.type_name,
-                            local_type_name_by_declared_type_name,
+                            target_package_id,
+                            nominal_type_id_by_lookup_key,
                         ),
                     )
                 })
@@ -850,15 +849,17 @@ fn imported_type_declaration_with_aliases(
                         .parameters
                         .iter()
                         .map(|parameter| {
-                            rewrite_type_name_aliases_to_type(
+                            resolve_type_name_to_semantic_type(
                                 &parameter.type_name,
-                                local_type_name_by_declared_type_name,
+                                target_package_id,
+                                nominal_type_id_by_lookup_key,
                             )
                         })
                         .collect(),
-                    return_type: rewrite_type_name_aliases_to_type(
+                    return_type: resolve_type_name_to_semantic_type(
                         &method.return_type,
-                        local_type_name_by_declared_type_name,
+                        target_package_id,
+                        nominal_type_id_by_lookup_key,
                     ),
                 })
                 .collect();
@@ -871,9 +872,10 @@ fn imported_type_declaration_with_aliases(
             variants: variants
                 .iter()
                 .map(|variant| {
-                    rewrite_type_name_aliases_to_type(
+                    resolve_type_name_to_semantic_type(
                         variant,
-                        local_type_name_by_declared_type_name,
+                        target_package_id,
+                        nominal_type_id_by_lookup_key,
                     )
                 })
                 .collect(),
@@ -881,58 +883,87 @@ fn imported_type_declaration_with_aliases(
     };
 
     ImportedTypeDeclaration {
-        name: type_declaration.name.clone(),
+        nominal_type_id: declared_nominal_type_id,
         kind,
     }
 }
 
-fn imported_function_signature_with_aliases(
+fn imported_function_signature(
     function_declaration: &FunctionDeclaration,
-    local_type_name_by_declared_type_name: &HashMap<String, String>,
+    target_package_id: PackageId,
+    nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> TypedFunctionSignature {
     let parameter_types = function_declaration
         .parameters
         .iter()
         .map(|parameter| {
-            rewrite_type_name_aliases_to_type(
+            resolve_type_name_to_semantic_type(
                 &parameter.type_name,
-                local_type_name_by_declared_type_name,
+                target_package_id,
+                nominal_type_id_by_lookup_key,
             )
         })
         .collect();
 
     TypedFunctionSignature {
         parameter_types,
-        return_type: rewrite_type_name_aliases_to_type(
+        return_type: resolve_type_name_to_semantic_type(
             &function_declaration.return_type,
-            local_type_name_by_declared_type_name,
+            target_package_id,
+            nominal_type_id_by_lookup_key,
         ),
     }
 }
 
-fn rewrite_type_name_aliases_to_type(
+fn resolve_type_name_to_semantic_type(
     type_name: &TypeName,
-    local_type_name_by_declared_type_name: &HashMap<String, String>,
+    target_package_id: PackageId,
+    nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> Type {
-    if type_name.names.is_empty() {
+    let mut resolved = Vec::new();
+    for atom in &type_name.names {
+        if let Some(value_type) = type_from_builtin_name(&atom.name) {
+            resolved.push(value_type);
+            continue;
+        }
+        let lookup_key = PublicSymbolLookupKey {
+            package_id: target_package_id,
+            symbol_name: atom.name.clone(),
+        };
+        let Some(nominal_type_id) = nominal_type_id_by_lookup_key.get(&lookup_key) else {
+            return Type::Unknown;
+        };
+        resolved.push(Type::Named(NominalTypeRef {
+            id: nominal_type_id.clone(),
+            display_name: atom.name.clone(),
+        }));
+    }
+    if resolved.is_empty() {
         return Type::Unknown;
     }
-    let name = local_type_name_by_declared_type_name
-        .get(&type_name.names[0].name)
-        .cloned()
-        .unwrap_or_else(|| type_name.names[0].name.clone());
-    if let Some(value_type) = builtin_type_from_name(&name) {
-        return value_type;
+    if resolved.len() == 1 {
+        return resolved.remove(0);
     }
-    Type::Named(name)
-}
 
-fn builtin_type_from_name(name: &str) -> Option<Type> {
-    match name {
-        "int64" => Some(Type::Integer64),
-        "boolean" => Some(Type::Boolean),
-        "string" => Some(Type::String),
-        "nil" => Some(Type::Nil),
-        _ => None,
+    let mut flattened = Vec::new();
+    let mut seen = BTreeSet::new();
+    for value_type in resolved {
+        if let Type::Union(inner) = value_type {
+            for inner_type in inner {
+                let key = inner_type.display();
+                if seen.insert(key) {
+                    flattened.push(inner_type);
+                }
+            }
+        } else {
+            let key = value_type.display();
+            if seen.insert(key) {
+                flattened.push(value_type);
+            }
+        }
     }
+    if flattened.len() == 1 {
+        return flattened.remove(0);
+    }
+    Type::Union(flattened)
 }

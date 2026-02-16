@@ -2,30 +2,32 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "package_graph",
+    name = "semantic_types",
     srcs = ["lib.rs"],
-    visibility = ["//:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = [
-        "//compiler/diagnostics",
+        "//compiler/packages",
         "//compiler/source",
-        "//compiler/symbols",
-        "//compiler/visibility",
+        "//compiler/syntax",
     ],
 )
 
 dependency_enforcement_test(
-    name = "package_graph_forbidden_dependencies",
+    name = "semantic_types_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
+        "//compiler/diagnostics",
         "//compiler/driver",
+        "//compiler/exports",
         "//compiler/file_role_rules",
+        "//compiler/package_graph",
         "//compiler/package_symbols",
-        "//compiler/packages",
         "//compiler/parsing",
-        "//compiler/semantic_types",
-        "//compiler/type_analysis",
+        "//compiler/symbols",
         "//compiler/typecheck",
+        "//compiler/type_analysis",
+        "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":package_graph",
+    target = ":semantic_types",
 )

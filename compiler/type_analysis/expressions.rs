@@ -5,7 +5,7 @@ use compiler__syntax::{
     BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName,
 };
 
-use crate::types::Type;
+use compiler__semantic_types::Type;
 
 use super::{ExpressionSpan, MethodKey, TypeChecker, TypeKind};
 
@@ -72,8 +72,8 @@ impl TypeChecker<'_> {
                 } = callee.as_ref()
                 {
                     let receiver_type = self.check_expression(target);
-                    let receiver_type_name = if let Type::Named(type_name) = &receiver_type {
-                        type_name.clone()
+                    let receiver_type = if let Type::Named(named) = &receiver_type {
+                        named.clone()
                     } else {
                         if receiver_type != Type::Unknown {
                             self.error(
@@ -90,9 +90,10 @@ impl TypeChecker<'_> {
                         }
                         return Type::Unknown;
                     };
+                    let receiver_type_name = receiver_type.display_name.clone();
 
                     let method_key = MethodKey {
-                        receiver_type_name: receiver_type_name.clone(),
+                        receiver_type_id: receiver_type.id.clone(),
                         method_name: field.clone(),
                     };
                     if let Some(info) = self.methods.get(&method_key) {
@@ -555,7 +556,11 @@ impl TypeChecker<'_> {
             return Type::Unknown;
         };
 
-        let Some(info) = self.types.get(type_name) else {
+        let Some(info) = self
+            .types
+            .values()
+            .find(|info| info.nominal_type_id == type_name.id)
+        else {
             return Type::Unknown;
         };
         if let TypeKind::Struct { fields } = &info.kind {
@@ -564,13 +569,16 @@ impl TypeChecker<'_> {
             }
         } else {
             self.error(
-                format!("cannot access field '{field}' on non-struct type {type_name}"),
+                format!(
+                    "cannot access field '{field}' on non-struct type {}",
+                    type_name.display_name
+                ),
                 span.clone(),
             );
             return Type::Unknown;
         }
         self.error(
-            format!("unknown field '{field}' on {type_name}"),
+            format!("unknown field '{field}' on {}", type_name.display_name),
             span.clone(),
         );
         Type::Unknown

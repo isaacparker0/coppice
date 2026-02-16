@@ -3,22 +3,14 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
     name = "typecheck",
-    srcs = [
-        "assignability.rs",
-        "declarations.rs",
-        "expressions.rs",
-        "lib.rs",
-        "naming_rules.rs",
-        "statements.rs",
-        "type_narrowing.rs",
-        "types.rs",
-        "unused_bindings.rs",
-    ],
+    srcs = ["lib.rs"],
     visibility = ["//visibility:public"],
     deps = [
         "//compiler/diagnostics",
-        "//compiler/source",
+        "//compiler/packages",
+        "//compiler/semantic_types",
         "//compiler/syntax",
+        "//compiler/type_analysis",
     ],
 )
 
@@ -31,7 +23,6 @@ dependency_enforcement_test(
         "//compiler/file_role_rules",
         "//compiler/package_graph",
         "//compiler/package_symbols",
-        "//compiler/packages",
         "//compiler/parsing",
         "//compiler/symbols",
         "//compiler/visibility",

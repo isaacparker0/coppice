@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::types::Type;
+use compiler__semantic_types::Type;
 
 use super::TypeChecker;
 

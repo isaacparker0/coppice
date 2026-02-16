@@ -5,6 +5,8 @@
 Active draft. This document defines current compiler phase ownership, target
 architecture, and migration invariants.
 
+Last refreshed for repository state on February 16, 2026.
+
 ---
 
 ## Purpose
@@ -84,11 +86,33 @@ Subpass ownership:
 4. `compiler/package_graph`: package dependency edges and cycle checks
 5. `compiler/binding`: local name-binding conflicts from imports/declarations
 6. `compiler/package_symbols`: typed cross-package symbol contracts for
-   typecheck import environments
+   downstream type analysis
+
+## Semantic Type Model
+
+`compiler/semantic_types` owns stable semantic typing contracts shared across
+analysis phases.
+
+Examples:
+
+1. Canonical semantic type enum used outside parser internals
+2. Stable nominal type identity (`NominalTypeId`)
+3. Imported/public symbol contract transport models
+
+## Type Analysis
+
+`compiler/type_analysis` owns AST-based type analysis implementation in the
+current transition state.
+
+It consumes parsed files plus typed import contracts and emits typing
+diagnostics and file summaries.
 
 ## Typechecking
 
-Typechecking owns expression/statement typing semantics and related diagnostics.
+`compiler/typecheck` is currently a thin public compatibility facade over
+`compiler/type_analysis`.
+
+It preserves external entrypoints while architectural migration is in progress.
 
 Examples:
 
@@ -122,9 +146,13 @@ Driver must not become semantic owner; it wires owned passes together.
    - `compiler/package_graph/*`
    - `compiler/binding/*`
    - `compiler/package_symbols/*`
-4. Typechecking
+4. Semantic type contracts
+   - `compiler/semantic_types/*`
+5. Type analysis implementation
+   - `compiler/type_analysis/*`
+6. Typecheck compatibility facade
    - `compiler/typecheck/*`
-5. Driver
+7. Driver
    - `compiler/driver/*`
 
 ---
@@ -137,8 +165,12 @@ Current intended high-level direction:
 2. `symbols + exports -> visibility`
 3. `visibility -> package_graph`
 4. `visibility + symbols -> binding`
-5. `package_symbols + binding -> typecheck` (driver orchestrated)
-6. `driver` depends on all phase crates; phase crates do not depend on `driver`
+5. `semantic_types` is shared by `package_symbols` and `type_analysis`
+6. `type_analysis -> package_symbols` (temporary; used for exported constant
+   type inference)
+7. `type_analysis + semantic_types -> typecheck` (facade only)
+8. `driver` orchestrates `package_symbols` outputs and `typecheck` execution
+9. `driver` depends on phase crates; phase crates do not depend on `driver`
 
 ---
 
@@ -148,7 +180,7 @@ The long-term clean architecture is:
 
 1. `compiler/syntax`
    - parser AST only
-2. `compiler/semantic_types` (name may be `compiler/types` if preferred)
+2. `compiler/semantic_types`
    - canonical semantic type representation
    - includes stable IDs for nominal references
 3. `compiler/semantic_ir`
@@ -164,6 +196,12 @@ The long-term clean architecture is:
 In this endpoint, cross-package imports are identity-based and typed; aliasing
 is purely local name binding and does not require type-name string rewrites.
 
+Current progress already achieved toward this endpoint:
+
+1. Shared semantic type contracts live in `compiler/semantic_types`.
+2. Cross-package nominal type identity is stable-ID-based in semantic types.
+3. Alias rewriting for cross-package type identity has been removed.
+
 ---
 
 ## Hard Dependency Invariants (Target)
@@ -176,6 +214,20 @@ These are normative target invariants:
 4. `package_symbols` owns cross-package symbol contracts; `typecheck` does not
    own driver-facing transport models.
 5. Driver is orchestration-only and does not duplicate pass semantics.
+
+Invariants already realized in current code:
+
+1. Cross-package named-type identity is stable-ID-based.
+2. `package_symbols` owns cross-package typed contracts.
+3. `package_symbols` has an enforced forbidden dependency on
+   `//compiler/typecheck`.
+
+Temporary coupling still present (known debt):
+
+1. `package_symbols` currently depends on `type_analysis` to infer public
+   constant types.
+2. This coupling is expected to be removed during semantic IR/lowering migration
+   so package contracts do not require AST type-analysis internals.
 
 ---
 
@@ -247,32 +299,38 @@ sufficient information and no duplication.
 
 ## Migration Plan To Target Invariants
 
-## Phase A: Boundary Cleanup (complete/in progress)
+## Phase A: Boundary Cleanup (complete)
 
 1. Move typed package symbol contracts out of `typecheck` into
    `compiler/package_symbols`.
 2. Ensure driver consumes `package_symbols` API directly.
 3. Keep behavior stable and diagnostics unchanged.
 
-## Phase B: Semantic Type Identity
+## Phase B: Semantic Type Identity (complete)
 
 1. Introduce stable IDs for nominal type identity in semantic type model.
 2. Replace stringly named-type joins at package boundaries.
 3. Ensure import aliasing remains local-binding only.
 
-## Phase C: Semantic IR Introduction
+## Phase C: Type Analysis Extraction (complete)
+
+1. Move AST-based type analysis implementation into `compiler/type_analysis`.
+2. Keep `compiler/typecheck` as a thin compatibility facade.
+3. Ensure diagnostics parity while changing dependency direction.
+
+## Phase D: Semantic IR Introduction (not started)
 
 1. Define semantic IR structures for declarations/statements/expressions.
 2. Add lowering from AST to semantic IR with span preservation.
 3. Keep diagnostics parity while migrating pass consumers.
 
-## Phase D: Typecheck Migration
+## Phase E: Typecheck Migration To Semantic IR (not started)
 
 1. Switch typecheck to semantic IR.
 2. Remove `compiler/syntax` dependency from `compiler/typecheck`.
 3. Add colocated `dependency_enforcement_test` invariant and enforce in CI.
 
-## Phase E: Enforcement
+## Phase F: Enforcement Tightening (ongoing)
 
 1. Encode phase-boundary invariants as colocated `dependency_enforcement_test`
    targets.

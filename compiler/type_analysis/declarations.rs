@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
+use compiler__semantic_types::{ImportedTypeShape, NominalTypeId};
 use compiler__syntax::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
 
 use super::{
-    FunctionInfo, ImportedTypeDeclaration, ImportedTypeShape, MethodInfo, MethodKey, TypeChecker,
-    TypeInfo, TypeKind, TypedFunctionSignature,
+    FunctionInfo, ImportedTypeDeclaration, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind,
+    TypedFunctionSignature,
 };
 
 struct ImportedTypeBinding {
@@ -43,8 +44,13 @@ impl TypeChecker<'_> {
                     variants: Vec::new(),
                 },
             };
-            self.types
-                .insert(imported_binding.local_name.clone(), TypeInfo { kind });
+            self.types.insert(
+                imported_binding.local_name.clone(),
+                TypeInfo {
+                    nominal_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
+                    kind,
+                },
+            );
         }
 
         for imported_binding in imported_type_bindings {
@@ -129,7 +135,7 @@ impl TypeChecker<'_> {
 
             for method in methods {
                 let method_key = MethodKey {
-                    receiver_type_name: imported_binding.local_name.clone(),
+                    receiver_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
                     method_name: method.name.clone(),
                 };
                 if self.methods.contains_key(&method_key) {
@@ -164,8 +170,16 @@ impl TypeChecker<'_> {
                     variants: Vec::new(),
                 },
             };
-            self.types
-                .insert(type_declaration.name.clone(), TypeInfo { kind });
+            self.types.insert(
+                type_declaration.name.clone(),
+                TypeInfo {
+                    nominal_type_id: NominalTypeId {
+                        package_id: self.package_id,
+                        symbol_name: type_declaration.name.clone(),
+                    },
+                    kind,
+                },
+            );
         }
 
         for type_declaration in types {
@@ -260,7 +274,10 @@ impl TypeChecker<'_> {
             for method in methods {
                 self.check_function_name(&method.name, &method.name_span);
                 let method_key = MethodKey {
-                    receiver_type_name: type_declaration.name.clone(),
+                    receiver_type_id: NominalTypeId {
+                        package_id: self.package_id,
+                        symbol_name: type_declaration.name.clone(),
+                    },
                     method_name: method.name.clone(),
                 };
                 if self.methods.contains_key(&method_key) {
