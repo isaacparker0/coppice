@@ -1,31 +1,28 @@
 use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 
-use super::Parser;
+use super::{ParseError, ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn expect_identifier(&mut self) -> Option<(String, Span)> {
+    pub(super) fn expect_identifier(&mut self) -> ParseResult<(String, Span)> {
         let token = self.advance();
         match token.kind {
-            TokenKind::Identifier(name) => Some((name, token.span)),
-            TokenKind::Keyword(keyword) => {
-                self.error(
-                    format!(
-                        "reserved keyword '{}' cannot be used as an identifier",
-                        keyword.as_str()
-                    ),
-                    token.span,
-                );
-                None
-            }
-            _ => {
-                self.error("expected identifier", token.span);
-                None
-            }
+            TokenKind::Identifier(name) => Ok((name, token.span)),
+            TokenKind::Keyword(keyword) => Err(ParseError::UnexpectedToken {
+                message: format!(
+                    "reserved keyword '{}' cannot be used as an identifier",
+                    keyword.as_str()
+                ),
+                span: token.span,
+            }),
+            _ => Err(ParseError::UnexpectedToken {
+                message: "expected identifier".to_string(),
+                span: token.span,
+            }),
         }
     }
 
-    pub(super) fn expect_type_name_part(&mut self) -> Option<(String, Span)> {
+    pub(super) fn expect_type_name_part(&mut self) -> ParseResult<(String, Span)> {
         let token = self.advance();
         match token.kind {
             TokenKind::Identifier(name) => {
@@ -38,47 +35,42 @@ impl Parser {
                     full_name.push_str(&segment);
                     span.end = segment_span.end;
                 }
-                Some((full_name, span))
+                Ok((full_name, span))
             }
-            TokenKind::Keyword(Keyword::Nil) => {
-                Some((Keyword::Nil.as_str().to_string(), token.span))
-            }
-            TokenKind::Keyword(keyword) => {
-                self.error(
-                    format!(
-                        "reserved keyword '{}' cannot be used as an identifier",
-                        keyword.as_str()
-                    ),
-                    token.span,
-                );
-                None
-            }
-            _ => {
-                self.error("expected identifier", token.span);
-                None
-            }
+            TokenKind::Keyword(Keyword::Nil) => Ok((Keyword::Nil.as_str().to_string(), token.span)),
+            TokenKind::Keyword(keyword) => Err(ParseError::UnexpectedToken {
+                message: format!(
+                    "reserved keyword '{}' cannot be used as an identifier",
+                    keyword.as_str()
+                ),
+                span: token.span,
+            }),
+            _ => Err(ParseError::UnexpectedToken {
+                message: "expected identifier".to_string(),
+                span: token.span,
+            }),
         }
     }
 
-    pub(super) fn expect_keyword(&mut self, keyword: Keyword) -> Option<Span> {
+    pub(super) fn expect_keyword(&mut self, keyword: Keyword) -> ParseResult<Span> {
         let token = self.advance();
         match token.kind {
-            TokenKind::Keyword(found) if found == keyword => Some(token.span),
-            _ => {
-                self.error(format!("expected keyword '{keyword:?}'"), token.span);
-                None
-            }
+            TokenKind::Keyword(found) if found == keyword => Ok(token.span),
+            _ => Err(ParseError::MissingToken {
+                message: format!("expected keyword '{keyword:?}'"),
+                span: token.span,
+            }),
         }
     }
 
-    pub(super) fn expect_symbol(&mut self, symbol: Symbol) -> Option<Span> {
+    pub(super) fn expect_symbol(&mut self, symbol: Symbol) -> ParseResult<Span> {
         let token = self.advance();
         match token.kind {
-            TokenKind::Symbol(found) if found == symbol => Some(token.span),
-            _ => {
-                self.error("expected symbol", token.span);
-                None
-            }
+            TokenKind::Symbol(found) if found == symbol => Ok(token.span),
+            _ => Err(ParseError::MissingToken {
+                message: "expected symbol".to_string(),
+                span: token.span,
+            }),
         }
     }
 

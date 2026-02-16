@@ -66,6 +66,13 @@ Keep diagnostics emission in parser context during initial migration
 (side-effect diagnostics remain), while `ParseError` drives control flow and
 recovery.
 
+Target final form:
+
+- Leaf parser helpers (for example `expect_*`) return structured parse failures
+  and are not primary user-diagnostic emitters.
+- Recovery/boundary points own diagnostic emission because they have sufficient
+  syntactic context to emit clearer, non-duplicative diagnostics.
+
 Why this is valuable:
 
 - Makes parser intent explicit: parse failure vs optional grammar.
@@ -137,6 +144,17 @@ Rationale:
 - Better debuggability for parser maintenance.
 - Better tooling behavior when presenting inline syntax issues.
 
+Target final-form guidance:
+
+- `ParseError` should carry machine-usable metadata:
+  - failing span/token position
+  - expected vs found token class where available
+  - recovery guidance (for example whether caller should synchronize)
+  - consumption/recovery state where needed to prevent error cascades
+- `ParseError` should not require finalized user-facing message strings at leaf
+  sites.
+- User-facing diagnostic text should be rendered at recovery/boundary points.
+
 ## Design Rules
 
 1. Parser internals use `ParseResult<T>` for syntax control flow.
@@ -154,6 +172,9 @@ Rationale:
 7. Boundary unification should only be adopted where it improves semantic
    clarity, composability, or tooling outputs (not as a blanket mechanical
    rule).
+8. Parser internals should separate:
+   - control-flow failure (`ParseError`)
+   - user diagnostic rendering (recovery/boundary ownership)
 
 ## Example
 
@@ -202,6 +223,8 @@ Why this sequence is valuable:
 - Sequence/list conversion next removes the highest ambiguity (`Option` chains).
 - Top-level conversion last preserves recovery behavior while internals settle.
 - Snapshot stability ensures regressions are intentional and reviewable.
+- Temporary mixed diagnostic ownership can exist during migration, but final
+  ownership should converge to recovery/boundary sites.
 
 ### Phase 2: boundary unification
 
@@ -220,6 +243,15 @@ Refinement:
 - Apply to boundaries where partial outputs and explicit fatal handling are
   beneficial (not necessarily every internal pass API immediately).
 
+### Phase 3: parser final-form cleanup
+
+1. Move remaining leaf-site `self.error(...)` emission to explicit
+   recovery/boundary points where practical.
+2. Enrich `ParseError` metadata to support robust recovery and tooling.
+3. Define and enforce deduplication policy for error cascades.
+4. Preserve parser resilience so errorful files still yield useful syntax output
+   plus diagnostics for tooling.
+
 ## Compatibility and Risk
 
 ### What should remain stable
@@ -236,6 +268,8 @@ Refinement:
 - Confusion between phase diagnostics and fatal errors if contracts are
   underspecified.
 - Over-abstracting phase contracts without real semantic benefit.
+- Mixed long-term patterns where some parser paths emit diagnostics at leaf
+  sites while others rely on boundary emission.
 
 ### Mitigations
 
@@ -246,6 +280,7 @@ Refinement:
 - For boundary unification, require a concrete before/after benefit at each
   adoption site (clearer composition, better tooling output, or stronger
   invariants).
+- Track diagnostic emission ownership by parser layer during migration.
 
 ## Acceptance Criteria
 
@@ -259,6 +294,30 @@ Refinement:
    parsing/editing workflows.
 7. If boundary unification is adopted, it demonstrates concrete semantic/tooling
    value rather than only API-shape consistency.
+8. Parser final form clearly separates structured parse failures from user
+   diagnostic rendering responsibilities.
+9. Errorful files still produce useful parse outputs and diagnostics for tooling
+   flows.
+
+## Target End State
+
+The intended parser end state is:
+
+1. Structured control-flow failures:
+   - parser internals use `ParseResult<T>`
+   - `ParseError` carries actionable parse/recovery metadata
+
+2. Explicit recovery ownership:
+   - callers decide synchronization/recovery from `Err(ParseError)`
+   - recovery/boundary points emit user diagnostics once per incident
+
+3. Clear diagnostic boundary:
+   - leaf helpers avoid long-term user-diagnostic ownership
+   - user-facing message rendering happens with broader syntactic context
+
+4. Tooling-compatible outputs:
+   - parser generally provides syntax output + diagnostics under syntax errors
+   - fatal errors remain reserved for infrastructure/invariant failures
 
 ## LSP/Tooling Implications
 
@@ -279,8 +338,131 @@ tools:
      outputs and clear fatal/error semantics.
    - They are not a goal by themselves; tooling value is the goal.
 
+## Lexer/Parser Final Ownership Model
+
+To avoid long-term diagnostic drift and duplication, the intended end state is:
+
+1. Lexing owns lexical failures as structured `LexError` values.
+2. Parsing owns syntactic failures as structured `ParseError` values.
+3. Parse-phase boundaries own user-facing diagnostic materialization.
+
+Implications:
+
+- Lexer and parser internals should prefer returning structured errors over
+  directly emitting user diagnostics from deep helper functions.
+- `parse_file` (or equivalent parse-phase boundary) should aggregate lex+parse
+  structured failures into user-facing diagnostics once, with deterministic
+  ordering and de-duplication policy.
+- Temporary migration bridges are acceptable, but should converge toward this
+  model.
+
+## Unified Frontend Goal (Compiler + Tooling)
+
+If compiler checking and LSP/tooling are expected to remain as unified as
+possible, this migration should optimize for a shared frontend core:
+
+1. Shared lexer/parser/type front-end libraries with stable contracts.
+2. One internal diagnostic data model (machine-readable first).
+3. Multiple consumers/adapters:
+   - CLI formatting/reporting
+   - LSP diagnostics and related tooling features
+
+This favors:
+
+- structured errors internally
+- boundary-level user diagnostic rendering
+- minimal mode-specific branching inside parser internals
+
+and disfavors:
+
+- duplicated parser logic across compiler/tooling
+- ad-hoc side-effect diagnostics scattered through deep parse helpers
+
+## Alternatives Considered
+
+### A. Keep widespread direct side-effect diagnostics in lexer/parser internals
+
+Pros:
+
+- low short-term migration effort
+
+Cons:
+
+- harder to prevent duplicate diagnostics
+- weaker failure contracts as grammar complexity grows
+- higher risk of divergence between CLI and tooling behavior
+
+### B. Parser-only diagnostics, lexer never reports lexical failures directly
+
+Pros:
+
+- one emitter surface
+
+Cons:
+
+- lexical error fidelity can be degraded or awkwardly represented
+- parser layer takes on failure modes it does not own conceptually
+
+### C. Emit everywhere, deduplicate later with heuristics
+
+Pros:
+
+- easiest incremental wiring
+
+Cons:
+
+- brittle dedup logic
+- less deterministic behavior
+- harder to audit/maintain as language features expand
+
+### Preferred Long-Term Direction
+
+Use owner-typed structured errors (`LexError` / `ParseError`) plus one
+parse-phase aggregation boundary for user diagnostics. This best supports:
+
+1. full language expansion without diagnostic chaos
+2. clean maintainable architecture boundaries
+3. unified compiler + tooling front-end behavior
+
 ## Non-Goals (this migration)
 
 - Rewriting all diagnostics formatting.
 - Adding advanced parser combinator framework.
 - Introducing inference or other semantic/type-system changes.
+
+## Implementation Status (Current)
+
+This section records current implementation state so the spec remains aligned
+with reality.
+
+### Completed
+
+1. `ParseResult` migration is implemented across major parser modules:
+   - recovery helpers (`expect_*`)
+   - types
+   - imports/exports
+   - statements
+   - expressions
+   - declarations
+   - top-level declaration dispatch
+2. Parser control-flow now uses structured `ParseError` variants in many
+   previously `Option`-based failure paths.
+3. Boundary/recovery catch points now report parse errors through a centralized
+   `report_parse_error(...)` path.
+
+### Transitional (intentional, not final form)
+
+1. Lexer still emits some diagnostics directly.
+2. Parser includes an `AlreadyReported` parse-error variant to avoid duplicate
+   emission when lexer has already produced a diagnostic.
+3. Some direct `self.error(...)` calls remain for top-level/boundary policy
+   checks (notably in `parser/mod.rs` and doc-comment policy handling).
+
+### Next Steps
+
+1. Continue moving remaining parser-internal direct `self.error(...)` sites to
+   structured parse errors + boundary reporting where appropriate.
+2. Define and implement final lexer/parser aggregation boundary (`LexError` +
+   `ParseError` -> diagnostics once) to remove transitional duplication bridges.
+3. Remove transitional constructs (for example `AlreadyReported`) once the
+   single parse-phase aggregation model is in place.

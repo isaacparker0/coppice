@@ -5,14 +5,14 @@ use compiler__syntax::{
     UnaryOperator,
 };
 
-use super::{ExpressionSpan, Parser};
+use super::{ExpressionSpan, ParseError, ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_expression(&mut self) -> Option<Expression> {
+    pub(super) fn parse_expression(&mut self) -> ParseResult<Expression> {
         self.parse_or()
     }
 
-    pub(super) fn parse_or(&mut self) -> Option<Expression> {
+    pub(super) fn parse_or(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_and()?;
         loop {
             if !self.peek_is_keyword(Keyword::Or) {
@@ -33,10 +33,10 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_and(&mut self) -> Option<Expression> {
+    pub(super) fn parse_and(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_equality()?;
         loop {
             if !self.peek_is_keyword(Keyword::And) {
@@ -57,15 +57,18 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_equality(&mut self) -> Option<Expression> {
+    pub(super) fn parse_equality(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_comparison()?;
         loop {
             if self.peek_is_symbol(Symbol::Equal) {
                 let operator_span = self.advance().span.clone();
-                self.error("unexpected '=' in expression", operator_span);
+                self.report_parse_error(&ParseError::Recovered {
+                    message: "unexpected '=' in expression".to_string(),
+                    span: operator_span,
+                });
                 let _ = self.parse_comparison();
                 continue;
             }
@@ -91,10 +94,10 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_comparison(&mut self) -> Option<Expression> {
+    pub(super) fn parse_comparison(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_additive()?;
         loop {
             if self.peek_is_keyword(Keyword::Matches) {
@@ -139,10 +142,10 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_additive(&mut self) -> Option<Expression> {
+    pub(super) fn parse_additive(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_multiplicative()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Plus) {
@@ -167,10 +170,10 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_multiplicative(&mut self) -> Option<Expression> {
+    pub(super) fn parse_multiplicative(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_unary()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Star) {
@@ -195,10 +198,10 @@ impl Parser {
                 span,
             };
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_postfix(&mut self) -> Option<Expression> {
+    pub(super) fn parse_postfix(&mut self) -> ParseResult<Expression> {
         let mut expression = self.parse_primary()?;
         loop {
             if self.peek_is_symbol(Symbol::LeftParenthesis) {
@@ -221,9 +224,11 @@ impl Parser {
             }
             if self.peek_is_symbol(Symbol::LeftBracket) {
                 let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
-                let Some(left_parenthesis) = self.expect_symbol(Symbol::LeftParenthesis) else {
-                    self.error("type arguments must be followed by a call", right_bracket);
-                    return None;
+                let Ok(left_parenthesis) = self.expect_symbol(Symbol::LeftParenthesis) else {
+                    return Err(ParseError::InvalidConstruct {
+                        message: "type arguments must be followed by a call".to_string(),
+                        span: right_bracket,
+                    });
                 };
                 let arguments = self.parse_arguments();
                 let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
@@ -260,10 +265,10 @@ impl Parser {
             }
             break;
         }
-        Some(expression)
+        Ok(expression)
     }
 
-    pub(super) fn parse_unary(&mut self) -> Option<Expression> {
+    pub(super) fn parse_unary(&mut self) -> ParseResult<Expression> {
         if self.peek_is_keyword(Keyword::Not) {
             let operator_span = self.advance().span.clone();
             let expression = self.parse_unary()?;
@@ -273,7 +278,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            return Some(Expression::Unary {
+            return Ok(Expression::Unary {
                 operator: UnaryOperator::Not,
                 expression: Box::new(expression),
                 span,
@@ -288,7 +293,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            return Some(Expression::Unary {
+            return Ok(Expression::Unary {
                 operator: UnaryOperator::Negate,
                 expression: Box::new(expression),
                 span,
@@ -305,12 +310,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(argument) = self.parse_expression() {
-                arguments.push(argument);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
-                if self.peek_is_symbol(Symbol::RightParenthesis) {
-                    break;
+            match self.parse_expression() {
+                Ok(argument) => arguments.push(argument),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                    if self.peek_is_symbol(Symbol::RightParenthesis) {
+                        break;
+                    }
                 }
             }
 
@@ -328,19 +335,19 @@ impl Parser {
         arguments
     }
 
-    pub(super) fn parse_primary(&mut self) -> Option<Expression> {
+    pub(super) fn parse_primary(&mut self) -> ParseResult<Expression> {
         let token = self.advance();
         match token.kind {
-            TokenKind::IntegerLiteral(value) => Some(Expression::IntegerLiteral {
+            TokenKind::IntegerLiteral(value) => Ok(Expression::IntegerLiteral {
                 value,
                 span: token.span,
             }),
-            TokenKind::Keyword(Keyword::Nil) => Some(Expression::NilLiteral { span: token.span }),
-            TokenKind::StringLiteral(value) => Some(Expression::StringLiteral {
+            TokenKind::Keyword(Keyword::Nil) => Ok(Expression::NilLiteral { span: token.span }),
+            TokenKind::StringLiteral(value) => Ok(Expression::StringLiteral {
                 value,
                 span: token.span,
             }),
-            TokenKind::BooleanLiteral(value) => Some(Expression::BooleanLiteral {
+            TokenKind::BooleanLiteral(value) => Ok(Expression::BooleanLiteral {
                 value,
                 span: token.span,
             }),
@@ -369,7 +376,7 @@ impl Parser {
                     };
                     return self.parse_struct_literal(type_name);
                 }
-                Some(Expression::Identifier {
+                Ok(Expression::Identifier {
                     name,
                     span: token.span,
                 })
@@ -378,17 +385,17 @@ impl Parser {
             TokenKind::Symbol(Symbol::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
                 self.expect_symbol(Symbol::RightParenthesis)?;
-                Some(expression)
+                Ok(expression)
             }
-            TokenKind::Error(_message) => None,
-            _ => {
-                self.error("expected expression", token.span);
-                None
-            }
+            TokenKind::Error(_message) => Err(ParseError::AlreadyReported),
+            _ => Err(ParseError::UnexpectedToken {
+                message: "expected expression".to_string(),
+                span: token.span,
+            }),
         }
     }
 
-    pub(super) fn parse_struct_literal(&mut self, type_name: TypeName) -> Option<Expression> {
+    pub(super) fn parse_struct_literal(&mut self, type_name: TypeName) -> ParseResult<Expression> {
         let left_brace = self.expect_symbol(Symbol::LeftBrace)?;
         let fields = self.parse_struct_literal_fields();
         let right_brace = self.expect_symbol(Symbol::RightBrace)?;
@@ -398,14 +405,14 @@ impl Parser {
             line: left_brace.line,
             column: left_brace.column,
         };
-        Some(Expression::StructLiteral {
+        Ok(Expression::StructLiteral {
             type_name,
             fields,
             span,
         })
     }
 
-    pub(super) fn parse_match_expression(&mut self, start_span: &Span) -> Option<Expression> {
+    pub(super) fn parse_match_expression(&mut self, start_span: &Span) -> ParseResult<Expression> {
         let target = self.parse_expression()?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let arms = self.parse_match_arms();
@@ -416,7 +423,7 @@ impl Parser {
             line: start_span.line,
             column: start_span.column,
         };
-        Some(Expression::Match {
+        Ok(Expression::Match {
             target: Box::new(target),
             arms,
             span,
@@ -431,12 +438,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(arm) = self.parse_match_arm() {
-                arms.push(arm);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                if self.peek_is_symbol(Symbol::RightBrace) {
-                    break;
+            match self.parse_match_arm() {
+                Ok(arm) => arms.push(arm),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
                 }
             }
 
@@ -460,7 +469,7 @@ impl Parser {
         arms
     }
 
-    pub(super) fn parse_match_arm(&mut self) -> Option<MatchArm> {
+    pub(super) fn parse_match_arm(&mut self) -> ParseResult<MatchArm> {
         let pattern = self.parse_match_pattern()?;
         self.expect_symbol(Symbol::FatArrow)?;
         let value = self.parse_expression()?;
@@ -470,14 +479,14 @@ impl Parser {
             line: pattern.span().line,
             column: pattern.span().column,
         };
-        Some(MatchArm {
+        Ok(MatchArm {
             pattern,
             value,
             span,
         })
     }
 
-    pub(super) fn parse_match_pattern(&mut self) -> Option<MatchPattern> {
+    pub(super) fn parse_match_pattern(&mut self) -> ParseResult<MatchPattern> {
         let (name, name_span) = self.expect_identifier()?;
         if self.peek_is_symbol(Symbol::Colon) {
             self.advance();
@@ -488,7 +497,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Some(MatchPattern::Binding {
+            return Ok(MatchPattern::Binding {
                 name,
                 name_span,
                 type_name,
@@ -514,7 +523,7 @@ impl Parser {
             }],
             span: qualified_span.clone(),
         };
-        Some(MatchPattern::Type {
+        Ok(MatchPattern::Type {
             type_name,
             span: qualified_span,
         })
@@ -528,12 +537,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(field) = self.parse_struct_literal_field() {
-                fields.push(field);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                if self.peek_is_symbol(Symbol::RightBrace) {
-                    break;
+            match self.parse_struct_literal_field() {
+                Ok(field) => fields.push(field),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
                 }
             }
 
@@ -551,7 +562,7 @@ impl Parser {
         fields
     }
 
-    pub(super) fn parse_struct_literal_field(&mut self) -> Option<StructLiteralField> {
+    pub(super) fn parse_struct_literal_field(&mut self) -> ParseResult<StructLiteralField> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let value = self.parse_expression()?;
@@ -561,7 +572,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Some(StructLiteralField {
+        Ok(StructLiteralField {
             name,
             name_span,
             value,

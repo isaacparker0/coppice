@@ -2,16 +2,16 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{ImportDeclaration, ImportMember};
 
-use super::Parser;
+use super::{ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_import_declaration(&mut self) -> Option<ImportDeclaration> {
+    pub(super) fn parse_import_declaration(&mut self) -> ParseResult<ImportDeclaration> {
         let start = self.expect_keyword(Keyword::Import)?;
         let package_path = self.parse_import_package_path()?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let members = self.parse_import_members();
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Some(ImportDeclaration {
+        Ok(ImportDeclaration {
             package_path,
             members,
             span: Span {
@@ -23,7 +23,7 @@ impl Parser {
         })
     }
 
-    fn parse_import_package_path(&mut self) -> Option<String> {
+    fn parse_import_package_path(&mut self) -> ParseResult<String> {
         let (first_segment, _) = self.expect_identifier()?;
         let mut segments = vec![first_segment];
         while self.peek_is_symbol(Symbol::Slash) {
@@ -31,7 +31,7 @@ impl Parser {
             let (segment, _) = self.expect_identifier()?;
             segments.push(segment);
         }
-        Some(segments.join("/"))
+        Ok(segments.join("/"))
     }
 
     fn parse_import_members(&mut self) -> Vec<ImportMember> {
@@ -43,12 +43,14 @@ impl Parser {
 
         loop {
             self.skip_statement_terminators();
-            if let Some(member) = self.parse_import_member() {
-                members.push(member);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                if self.peek_is_symbol(Symbol::RightBrace) {
-                    break;
+            match self.parse_import_member() {
+                Ok(member) => members.push(member),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
                 }
             }
 
@@ -67,7 +69,7 @@ impl Parser {
         members
     }
 
-    fn parse_import_member(&mut self) -> Option<ImportMember> {
+    fn parse_import_member(&mut self) -> ParseResult<ImportMember> {
         let (name, name_span) = self.expect_identifier()?;
         let mut alias = None;
         let mut alias_span = None;
@@ -79,7 +81,7 @@ impl Parser {
             end = parsed_alias_span.end;
             alias_span = Some(parsed_alias_span);
         }
-        Some(ImportMember {
+        Ok(ImportMember {
             name,
             alias,
             alias_span,

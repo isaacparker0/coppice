@@ -14,6 +14,17 @@ mod recovery;
 mod statements;
 mod types;
 
+#[derive(Clone, Debug)]
+pub(super) enum ParseError {
+    UnexpectedToken { message: String, span: Span },
+    MissingToken { message: String, span: Span },
+    InvalidConstruct { message: String, span: Span },
+    Recovered { message: String, span: Span },
+    AlreadyReported,
+}
+
+pub(super) type ParseResult<T> = Result<T, ParseError>;
+
 pub struct Parser {
     tokens: Vec<Token>,
     position: usize,
@@ -60,31 +71,32 @@ impl Parser {
                 );
                 doc = None;
             }
-            if self.peek_is_keyword(Keyword::Public) {
+
+            let parse_result: Option<ParseResult<Declaration>> = if self
+                .peek_is_keyword(Keyword::Public)
+            {
                 saw_non_import_declaration = true;
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
-                    if let Some(type_declaration) = self.parse_type_declaration(visibility, doc) {
-                        declarations.push(Declaration::Type(type_declaration));
-                    } else {
-                        self.synchronize();
-                    }
+                    Some(
+                        self.parse_type_declaration(visibility, doc)
+                            .map(Declaration::Type),
+                    )
                 } else if self.peek_is_keyword(Keyword::Function) {
-                    if let Some(function_declaration) = self.parse_function(visibility, doc) {
-                        declarations.push(Declaration::Function(function_declaration));
-                    } else {
-                        self.synchronize();
-                    }
+                    Some(
+                        self.parse_function(visibility, doc)
+                            .map(Declaration::Function),
+                    )
                 } else if self.peek_is_identifier() {
-                    if let Some(constant_declaration) = self.parse_constant_declaration(visibility)
-                    {
-                        declarations.push(Declaration::Constant(ConstantDeclaration {
-                            doc,
-                            ..constant_declaration
-                        }));
-                    } else {
-                        self.synchronize();
-                    }
+                    Some(
+                        self.parse_constant_declaration(visibility)
+                            .map(|constant_declaration| {
+                                Declaration::Constant(ConstantDeclaration {
+                                    doc,
+                                    ..constant_declaration
+                                })
+                            }),
+                    )
                 } else {
                     if let Some(doc) = doc {
                         self.error("doc comment must document a declaration", doc.span);
@@ -92,43 +104,33 @@ impl Parser {
                     let span = self.peek_span();
                     self.error("expected declaration after 'public'", span);
                     self.synchronize();
+                    None
                 }
             } else if self.peek_is_keyword(Keyword::Type) {
-                if let Some(type_declaration) =
+                saw_non_import_declaration = true;
+                Some(
                     self.parse_type_declaration(Visibility::Private, doc)
-                {
-                    saw_non_import_declaration = true;
-                    declarations.push(Declaration::Type(type_declaration));
-                } else {
-                    saw_non_import_declaration = true;
-                    self.synchronize();
-                }
+                        .map(Declaration::Type),
+                )
             } else if self.peek_is_keyword(Keyword::Import) {
-                if let Some(import_declaration) = self.parse_import_declaration() {
+                Some(self.parse_import_declaration().map(|import_declaration| {
                     if saw_non_import_declaration {
                         self.error(
                             "import declarations must appear before top-level declarations",
                             import_declaration.span.clone(),
                         );
                     }
-                    declarations.push(Declaration::Import(import_declaration));
-                } else {
-                    self.synchronize();
-                }
+                    Declaration::Import(import_declaration)
+                }))
             } else if self.peek_is_keyword(Keyword::Exports) {
                 saw_non_import_declaration = true;
-                if let Some(exports_declaration) = self.parse_exports_declaration() {
-                    declarations.push(Declaration::Exports(exports_declaration));
-                } else {
-                    self.synchronize();
-                }
+                Some(self.parse_exports_declaration().map(Declaration::Exports))
             } else if self.peek_is_keyword(Keyword::Function) {
                 saw_non_import_declaration = true;
-                if let Some(function_declaration) = self.parse_function(Visibility::Private, doc) {
-                    declarations.push(Declaration::Function(function_declaration));
-                } else {
-                    self.synchronize();
-                }
+                Some(
+                    self.parse_function(Visibility::Private, doc)
+                        .map(Declaration::Function),
+                )
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
                 saw_non_import_declaration = true;
                 if let Some(doc) = doc {
@@ -138,18 +140,17 @@ impl Parser {
                 self.error("expected keyword 'type' before type declaration", span);
                 self.advance();
                 self.synchronize();
+                None
             } else if self.peek_is_identifier() {
                 saw_non_import_declaration = true;
-                if let Some(constant_declaration) =
-                    self.parse_constant_declaration(Visibility::Private)
-                {
-                    declarations.push(Declaration::Constant(ConstantDeclaration {
-                        doc,
-                        ..constant_declaration
-                    }));
-                } else {
-                    self.synchronize();
-                }
+                Some(self.parse_constant_declaration(Visibility::Private).map(
+                    |constant_declaration| {
+                        Declaration::Constant(ConstantDeclaration {
+                            doc,
+                            ..constant_declaration
+                        })
+                    },
+                ))
             } else {
                 saw_non_import_declaration = true;
                 if let Some(doc) = doc {
@@ -158,6 +159,17 @@ impl Parser {
                 let span = self.peek_span();
                 self.error("expected declaration", span);
                 self.synchronize();
+                None
+            };
+
+            if let Some(result) = parse_result {
+                match result {
+                    Ok(declaration) => declarations.push(declaration),
+                    Err(error) => {
+                        self.report_parse_error(&error);
+                        self.synchronize();
+                    }
+                }
             }
         }
         declarations
@@ -257,6 +269,18 @@ impl Parser {
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(Diagnostic::new(message, span));
+    }
+
+    fn report_parse_error(&mut self, error: &ParseError) {
+        match error {
+            ParseError::UnexpectedToken { message, span }
+            | ParseError::MissingToken { message, span }
+            | ParseError::InvalidConstruct { message, span }
+            | ParseError::Recovered { message, span } => {
+                self.error(message.clone(), span.clone());
+            }
+            ParseError::AlreadyReported => {}
+        }
     }
 }
 

@@ -5,14 +5,14 @@ use compiler__syntax::{
     ParameterDeclaration, TypeDeclaration, TypeDeclarationKind, Visibility,
 };
 
-use super::{ExpressionSpan, Parser};
+use super::{ExpressionSpan, ParseError, ParseResult, Parser};
 
 impl Parser {
     pub(super) fn parse_type_declaration(
         &mut self,
         visibility: Visibility,
         doc: Option<DocComment>,
-    ) -> Option<TypeDeclaration> {
+    ) -> ParseResult<TypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
         let type_parameters = self.parse_type_parameter_list()?;
@@ -29,7 +29,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Some(TypeDeclaration {
+            return Ok(TypeDeclaration {
                 name,
                 type_parameters,
                 kind: TypeDeclarationKind::Struct { fields, methods },
@@ -48,7 +48,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Some(TypeDeclaration {
+            return Ok(TypeDeclaration {
                 name,
                 type_parameters,
                 kind: TypeDeclarationKind::Enum { variants },
@@ -67,7 +67,7 @@ impl Parser {
             line: start.line,
             column: start.column,
         };
-        Some(TypeDeclaration {
+        Ok(TypeDeclaration {
             name,
             type_parameters,
             kind: TypeDeclarationKind::Union { variants },
@@ -106,23 +106,29 @@ impl Parser {
             }
             let visibility = self.parse_visibility();
             if self.peek_is_keyword(Keyword::Function) {
-                if let Some(method) = self.parse_method_declaration(visibility, doc.clone()) {
-                    methods.push(method);
-                } else {
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                    if self.peek_is_symbol(Symbol::RightBrace) {
-                        break;
+                match self.parse_method_declaration(visibility, doc.clone()) {
+                    Ok(method) => methods.push(method),
+                    Err(error) => {
+                        self.report_parse_error(&error);
+                        self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                        if self.peek_is_symbol(Symbol::RightBrace) {
+                            break;
+                        }
                     }
                 }
-            } else if let Some(field) = self.parse_field_declaration(visibility, doc.clone()) {
-                fields.push(field);
             } else {
-                if let Some(doc) = doc {
-                    self.error("doc comment must document a declaration", doc.span);
-                }
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                if self.peek_is_symbol(Symbol::RightBrace) {
-                    break;
+                match self.parse_field_declaration(visibility, doc.clone()) {
+                    Ok(field) => fields.push(field),
+                    Err(error) => {
+                        self.report_parse_error(&error);
+                        if let Some(doc) = doc {
+                            self.error("doc comment must document a declaration", doc.span);
+                        }
+                        self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                        if self.peek_is_symbol(Symbol::RightBrace) {
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -147,7 +153,7 @@ impl Parser {
         &mut self,
         visibility: Visibility,
         doc: Option<DocComment>,
-    ) -> Option<FieldDeclaration> {
+    ) -> ParseResult<FieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -157,7 +163,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Some(FieldDeclaration {
+        Ok(FieldDeclaration {
             name,
             type_name,
             doc,
@@ -170,7 +176,7 @@ impl Parser {
         &mut self,
         visibility: Visibility,
         doc: Option<DocComment>,
-    ) -> Option<MethodDeclaration> {
+    ) -> ParseResult<MethodDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
@@ -180,7 +186,7 @@ impl Parser {
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
-        Some(MethodDeclaration {
+        Ok(MethodDeclaration {
             name,
             name_span,
             self_span,
@@ -201,7 +207,7 @@ impl Parser {
 
     pub(super) fn parse_method_parameters(
         &mut self,
-    ) -> Option<(Span, bool, Vec<ParameterDeclaration>)> {
+    ) -> ParseResult<(Span, bool, Vec<ParameterDeclaration>)> {
         let self_mutable = if self.peek_is_keyword(Keyword::Mut) {
             self.advance();
             true
@@ -210,35 +216,39 @@ impl Parser {
         };
         let (receiver_name, receiver_span) = self.expect_identifier()?;
         if receiver_name != "self" {
-            self.error("first method parameter must be 'self'", receiver_span);
-            return None;
+            return Err(ParseError::InvalidConstruct {
+                message: "first method parameter must be 'self'".to_string(),
+                span: receiver_span,
+            });
         }
         if self.peek_is_symbol(Symbol::Colon) {
             let span = self.expect_symbol(Symbol::Colon)?;
-            self.error(
-                "method receiver 'self' must not have a type annotation",
+            self.report_parse_error(&ParseError::Recovered {
+                message: "method receiver 'self' must not have a type annotation".to_string(),
                 span,
-            );
+            });
             let _ = self.parse_type_name();
         }
         if !self.peek_is_symbol(Symbol::Comma) {
-            return Some((receiver_span, self_mutable, Vec::new()));
+            return Ok((receiver_span, self_mutable, Vec::new()));
         }
 
         self.advance();
         let mut parameters = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParenthesis) {
-            return Some((receiver_span, self_mutable, parameters));
+            return Ok((receiver_span, self_mutable, parameters));
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(parameter) = self.parse_parameter() {
-                parameters.push(parameter);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
-                if self.peek_is_symbol(Symbol::RightParenthesis) {
-                    break;
+            match self.parse_parameter() {
+                Ok(parameter) => parameters.push(parameter),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                    if self.peek_is_symbol(Symbol::RightParenthesis) {
+                        break;
+                    }
                 }
             }
 
@@ -253,14 +263,14 @@ impl Parser {
             }
             break;
         }
-        Some((receiver_span, self_mutable, parameters))
+        Ok((receiver_span, self_mutable, parameters))
     }
 
     pub(super) fn parse_function(
         &mut self,
         visibility: Visibility,
         doc: Option<DocComment>,
-    ) -> Option<FunctionDeclaration> {
+    ) -> ParseResult<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         let type_parameters = self.parse_type_parameter_list()?;
@@ -271,7 +281,7 @@ impl Parser {
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
-        Some(FunctionDeclaration {
+        Ok(FunctionDeclaration {
             name,
             name_span,
             type_parameters,
@@ -292,12 +302,14 @@ impl Parser {
     pub(super) fn parse_constant_declaration(
         &mut self,
         visibility: Visibility,
-    ) -> Option<ConstantDeclaration> {
+    ) -> ParseResult<ConstantDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         if self.peek_is_symbol(Symbol::Assign) {
             let span = self.peek_span();
-            self.error("constants require an explicit type annotation", span);
-            return None;
+            return Err(ParseError::InvalidConstruct {
+                message: "constants require an explicit type annotation".to_string(),
+                span,
+            });
         }
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -309,7 +321,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Some(ConstantDeclaration {
+        Ok(ConstantDeclaration {
             name,
             type_name,
             expression,
@@ -327,12 +339,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(parameter) = self.parse_parameter() {
-                parameters.push(parameter);
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
-                if self.peek_is_symbol(Symbol::RightParenthesis) {
-                    break;
+            match self.parse_parameter() {
+                Ok(parameter) => parameters.push(parameter),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                    if self.peek_is_symbol(Symbol::RightParenthesis) {
+                        break;
+                    }
                 }
             }
 
@@ -350,7 +364,7 @@ impl Parser {
         parameters
     }
 
-    pub(super) fn parse_parameter(&mut self) -> Option<ParameterDeclaration> {
+    pub(super) fn parse_parameter(&mut self) -> ParseResult<ParameterDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -360,7 +374,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Some(ParameterDeclaration {
+        Ok(ParameterDeclaration {
             name,
             type_name,
             span,

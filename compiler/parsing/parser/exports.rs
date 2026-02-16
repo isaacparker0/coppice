@@ -2,15 +2,15 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{ExportsDeclaration, ExportsMember};
 
-use super::Parser;
+use super::{ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_exports_declaration(&mut self) -> Option<ExportsDeclaration> {
+    pub(super) fn parse_exports_declaration(&mut self) -> ParseResult<ExportsDeclaration> {
         let start = self.expect_keyword(Keyword::Exports)?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let members = self.parse_exports_members();
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Some(ExportsDeclaration {
+        Ok(ExportsDeclaration {
             members,
             span: Span {
                 start: start.start,
@@ -30,12 +30,14 @@ impl Parser {
 
         loop {
             self.skip_statement_terminators();
-            if let Some((name, span)) = self.expect_identifier() {
-                members.push(ExportsMember { name, span });
-            } else {
-                self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                if self.peek_is_symbol(Symbol::RightBrace) {
-                    break;
+            match self.expect_identifier() {
+                Ok((name, span)) => members.push(ExportsMember { name, span }),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
                 }
             }
 

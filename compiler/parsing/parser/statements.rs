@@ -2,23 +2,25 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{Block, Statement};
 
-use super::{ExpressionSpan, Parser};
+use super::{ExpressionSpan, ParseError, ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_block(&mut self) -> Option<Block> {
+    pub(super) fn parse_block(&mut self) -> ParseResult<Block> {
         let start = self.expect_symbol(Symbol::LeftBrace)?;
         let mut statements = Vec::new();
         self.skip_statement_terminators();
         while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
-            if let Some(statement) = self.parse_statement() {
-                statements.push(statement);
-            } else {
-                self.synchronize_statement();
+            match self.parse_statement() {
+                Ok(statement) => statements.push(statement),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_statement();
+                }
             }
             self.skip_statement_terminators();
         }
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Some(Block {
+        Ok(Block {
             statements,
             span: Span {
                 start: start.start,
@@ -29,17 +31,23 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_statement(&mut self) -> Option<Statement> {
+    pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
         if self.peek_is_doc_comment() {
             if let Some(doc) = self.parse_leading_doc_comment_block() {
-                self.error("doc comment must document a declaration", doc.span);
+                return Err(ParseError::InvalidConstruct {
+                    message: "doc comment must document a declaration".to_string(),
+                    span: doc.span,
+                });
             }
-            return None;
+            return Err(ParseError::InvalidConstruct {
+                message: "doc comment must document a declaration".to_string(),
+                span: self.peek_span(),
+            });
         }
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
             let value = self.parse_expression()?;
-            return Some(Statement::Return { value, span });
+            return Ok(Statement::Return { value, span });
         }
         if self.peek_is_keyword(Keyword::Abort) {
             let start = self.expect_keyword(Keyword::Abort)?;
@@ -52,15 +60,15 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Some(Statement::Abort { message, span });
+            return Ok(Statement::Abort { message, span });
         }
         if self.peek_is_keyword(Keyword::Break) {
             let span = self.expect_keyword(Keyword::Break)?;
-            return Some(Statement::Break { span });
+            return Ok(Statement::Break { span });
         }
         if self.peek_is_keyword(Keyword::Continue) {
             let span = self.expect_keyword(Keyword::Continue)?;
-            return Some(Statement::Continue { span });
+            return Ok(Statement::Continue { span });
         }
         if self.peek_is_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
@@ -81,7 +89,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Some(Statement::If {
+            return Ok(Statement::If {
                 condition,
                 then_block,
                 else_block,
@@ -102,7 +110,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Some(Statement::For {
+            return Ok(Statement::For {
                 condition,
                 body,
                 span,
@@ -126,7 +134,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Some(Statement::Let {
+            return Ok(Statement::Let {
                 name,
                 mutable: true,
                 type_name,
@@ -145,7 +153,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Some(Statement::Assign {
+            return Ok(Statement::Assign {
                 name,
                 name_span,
                 value,
@@ -172,7 +180,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Some(Statement::Let {
+            return Ok(Statement::Let {
                 name,
                 mutable: false,
                 type_name,
@@ -183,6 +191,6 @@ impl Parser {
 
         let value = self.parse_expression()?;
         let span = value.span();
-        Some(Statement::Expression { value, span })
+        Ok(Statement::Expression { value, span })
     }
 }
