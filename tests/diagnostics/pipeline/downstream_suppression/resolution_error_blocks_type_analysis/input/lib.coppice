@@ -1,0 +1,5 @@
+import workspace/auth { Missing }
+
+function run() -> int64 {
+    return "oops"
+}

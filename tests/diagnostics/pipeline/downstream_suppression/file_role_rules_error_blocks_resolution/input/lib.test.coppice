@@ -1,0 +1,5 @@
+import workspace/auth { Missing }
+
+public function run() -> nil {
+    return nil
+}
