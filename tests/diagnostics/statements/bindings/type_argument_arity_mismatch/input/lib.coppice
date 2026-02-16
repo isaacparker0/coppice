@@ -1,0 +1,8 @@
+type Box[T] :: struct {
+    value: T,
+}
+
+function run() -> int64 {
+    box: Box := Box[int64] { value: 1 }
+    return box.value
+}

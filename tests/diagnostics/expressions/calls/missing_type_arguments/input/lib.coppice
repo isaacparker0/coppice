@@ -1,0 +1,8 @@
+function make[T]() -> T {
+    abort("unreachable")
+}
+
+function run() -> nil {
+    make()
+    return nil
+}

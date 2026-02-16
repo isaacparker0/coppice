@@ -48,6 +48,7 @@ impl TypeChecker<'_> {
                 imported_binding.local_name.clone(),
                 TypeInfo {
                     nominal_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
+                    type_parameters: imported_binding.type_declaration.type_parameters.clone(),
                     kind,
                 },
             );
@@ -107,6 +108,7 @@ impl TypeChecker<'_> {
             self.imported_functions.insert(
                 imported_binding.local_name,
                 FunctionInfo {
+                    type_parameters: imported_binding.signature.type_parameters,
                     parameter_types: imported_binding.signature.parameter_types,
                     return_type: imported_binding.signature.return_type,
                 },
@@ -132,6 +134,9 @@ impl TypeChecker<'_> {
             else {
                 continue;
             };
+            if !imported_binding.type_declaration.type_parameters.is_empty() {
+                continue;
+            }
 
             for method in methods {
                 let method_key = MethodKey {
@@ -179,6 +184,11 @@ impl TypeChecker<'_> {
                         package_id: self.package_id,
                         symbol_name: type_declaration.name.clone(),
                     },
+                    type_parameters: type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| parameter.name.clone())
+                        .collect(),
                     kind,
                 },
             );
@@ -187,6 +197,12 @@ impl TypeChecker<'_> {
         for type_declaration in types {
             match &type_declaration.kind {
                 TypeDeclarationKind::Struct { fields, .. } => {
+                    let names_and_spans = type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                        .collect::<Vec<_>>();
+                    self.push_type_parameters(&names_and_spans);
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for field in fields {
@@ -203,6 +219,7 @@ impl TypeChecker<'_> {
                         let field_type = self.resolve_type_name(&field.type_name);
                         resolved_fields.push((field.name.clone(), field_type));
                     }
+                    self.pop_type_parameters();
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
@@ -210,6 +227,15 @@ impl TypeChecker<'_> {
                     }
                 }
                 TypeDeclarationKind::Enum { variants } => {
+                    if !type_declaration.type_parameters.is_empty() {
+                        self.error(
+                            format!(
+                                "generic enum type '{}' is not yet supported",
+                                type_declaration.name
+                            ),
+                            type_declaration.span.clone(),
+                        );
+                    }
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
@@ -243,6 +269,15 @@ impl TypeChecker<'_> {
                     }
                 }
                 TypeDeclarationKind::Union { variants } => {
+                    if !type_declaration.type_parameters.is_empty() {
+                        self.error(
+                            format!(
+                                "generic union type '{}' is not yet supported",
+                                type_declaration.name
+                            ),
+                            type_declaration.span.clone(),
+                        );
+                    }
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
@@ -282,6 +317,12 @@ impl TypeChecker<'_> {
                 continue;
             }
 
+            let names_and_spans = function
+                .type_parameters
+                .iter()
+                .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                .collect::<Vec<_>>();
+            self.push_type_parameters(&names_and_spans);
             let return_type = self.resolve_type_name(&function.return_type);
 
             let mut parameter_types = Vec::new();
@@ -289,10 +330,16 @@ impl TypeChecker<'_> {
                 let value_type = self.resolve_type_name(&parameter.type_name);
                 parameter_types.push(value_type);
             }
+            self.pop_type_parameters();
 
             self.functions.insert(
                 function.name.clone(),
                 FunctionInfo {
+                    type_parameters: function
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| parameter.name.clone())
+                        .collect(),
                     parameter_types,
                     return_type,
                 },
@@ -305,6 +352,16 @@ impl TypeChecker<'_> {
             let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
+            if !type_declaration.type_parameters.is_empty() && !methods.is_empty() {
+                self.error(
+                    format!(
+                        "methods on generic type '{}' are not yet supported",
+                        type_declaration.name
+                    ),
+                    methods[0].span.clone(),
+                );
+                continue;
+            }
 
             for method in methods {
                 self.check_function_name(&method.name, &method.name_span);

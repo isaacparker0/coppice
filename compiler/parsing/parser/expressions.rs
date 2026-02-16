@@ -213,6 +213,29 @@ impl Parser {
                 };
                 expression = Expression::Call {
                     callee: Box::new(expression),
+                    type_arguments: Vec::new(),
+                    arguments,
+                    span,
+                };
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::LeftBracket) {
+                let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
+                let Some(left_parenthesis) = self.expect_symbol(Symbol::LeftParenthesis) else {
+                    self.error("type arguments must be followed by a call", right_bracket);
+                    return None;
+                };
+                let arguments = self.parse_arguments();
+                let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
+                let span = Span {
+                    start: expression.span().start,
+                    end: right_parenthesis.end,
+                    line: left_parenthesis.line,
+                    column: left_parenthesis.column,
+                };
+                expression = Expression::Call {
+                    callee: Box::new(expression),
+                    type_arguments,
                     arguments,
                     span,
                 };
@@ -322,18 +345,27 @@ impl Parser {
                 span: token.span,
             }),
             TokenKind::Identifier(name) => {
-                if self.peek_is_symbol(Symbol::LeftBrace)
-                    && name
-                        .chars()
-                        .next()
-                        .is_some_and(|ch| ch.is_ascii_uppercase())
+                let starts_with_uppercase = name
+                    .chars()
+                    .next()
+                    .is_some_and(|ch| ch.is_ascii_uppercase());
+                if starts_with_uppercase
+                    && (self.peek_is_symbol(Symbol::LeftBrace)
+                        || self.peek_is_symbol(Symbol::LeftBracket))
                 {
+                    let mut atom = TypeNameAtom {
+                        name,
+                        type_arguments: Vec::new(),
+                        span: token.span.clone(),
+                    };
+                    if self.peek_is_symbol(Symbol::LeftBracket) {
+                        let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
+                        atom.type_arguments = type_arguments;
+                        atom.span.end = right_bracket.end;
+                    }
                     let type_name = TypeName {
-                        names: vec![TypeNameAtom {
-                            name,
-                            span: token.span.clone(),
-                        }],
-                        span: token.span,
+                        names: vec![atom.clone()],
+                        span: atom.span,
                     };
                     return self.parse_struct_literal(type_name);
                 }
@@ -477,6 +509,7 @@ impl Parser {
         let type_name = TypeName {
             names: vec![TypeNameAtom {
                 name: qualified_name,
+                type_arguments: Vec::new(),
                 span: qualified_span.clone(),
             }],
             span: qualified_span.clone(),

@@ -15,6 +15,7 @@ impl Parser {
     ) -> Option<TypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter_list()?;
         self.expect_symbol(Symbol::DoubleColon)?;
         let start = name_span.clone();
         if self.peek_is_keyword(Keyword::Struct) {
@@ -30,6 +31,7 @@ impl Parser {
             };
             return Some(TypeDeclaration {
                 name,
+                type_parameters,
                 kind: TypeDeclarationKind::Struct { fields, methods },
                 doc,
                 visibility,
@@ -48,6 +50,7 @@ impl Parser {
             };
             return Some(TypeDeclaration {
                 name,
+                type_parameters,
                 kind: TypeDeclarationKind::Enum { variants },
                 doc,
                 visibility,
@@ -66,6 +69,7 @@ impl Parser {
         };
         Some(TypeDeclaration {
             name,
+            type_parameters,
             kind: TypeDeclarationKind::Union { variants },
             doc,
             visibility,
@@ -259,6 +263,7 @@ impl Parser {
     ) -> Option<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter_list()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
         let parameters = self.parse_parameters();
         self.expect_symbol(Symbol::RightParenthesis)?;
@@ -269,6 +274,7 @@ impl Parser {
         Some(FunctionDeclaration {
             name,
             name_span,
+            type_parameters,
             parameters,
             return_type,
             body,

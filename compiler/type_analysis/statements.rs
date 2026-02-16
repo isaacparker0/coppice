@@ -10,6 +10,12 @@ use super::{ExpressionSpan, FallthroughNarrowing, StatementOutcome, StatementSpa
 
 impl TypeChecker<'_> {
     pub(super) fn check_function(&mut self, function: &FunctionDeclaration) {
+        let names_and_spans = function
+            .type_parameters
+            .iter()
+            .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+            .collect::<Vec<_>>();
+        self.push_type_parameters(&names_and_spans);
         self.scopes.push(HashMap::new());
 
         let (parameter_types, return_type) = if let Some(info) = self.functions.get(&function.name)
@@ -35,6 +41,7 @@ impl TypeChecker<'_> {
 
         self.check_unused_in_current_scope();
         self.scopes.pop();
+        self.pop_type_parameters();
 
         if !body_returns {
             self.error(
@@ -49,6 +56,9 @@ impl TypeChecker<'_> {
             let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
+            if !type_declaration.type_parameters.is_empty() {
+                continue;
+            }
             for method in methods {
                 self.check_method(type_declaration, method);
             }

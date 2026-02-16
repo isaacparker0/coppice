@@ -11,3 +11,7 @@ type Direction :: enum {
     East,
     West,
 }
+
+type Box[T] :: struct {
+    value: T,
+}

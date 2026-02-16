@@ -36,6 +36,11 @@ pub enum Type {
     String,
     Nil,
     Named(NominalTypeRef),
+    Applied {
+        base: NominalTypeRef,
+        arguments: Vec<Type>,
+    },
+    TypeParameter(String),
     Union(Vec<Type>),
     Unknown,
 }
@@ -49,6 +54,8 @@ impl Type {
             Type::String => "string",
             Type::Nil => "nil",
             Type::Named(named) => named.display_name.as_str(),
+            Type::Applied { .. } => "<applied>",
+            Type::TypeParameter(name) => name,
             Type::Union(_) => "<union>",
             Type::Unknown => "<unknown>",
         }
@@ -57,6 +64,14 @@ impl Type {
     #[must_use]
     pub fn display(&self) -> String {
         match self {
+            Type::Applied { base, arguments } => {
+                let joined = arguments
+                    .iter()
+                    .map(Type::display)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{}[{joined}]", base.display_name)
+            }
             Type::Union(types) => types
                 .iter()
                 .map(Type::display)
@@ -80,6 +95,7 @@ pub fn type_from_builtin_name(name: &str) -> Option<Type> {
 
 #[derive(Clone)]
 pub struct TypedFunctionSignature {
+    pub type_parameters: Vec<String>,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
 }
@@ -98,6 +114,7 @@ pub enum ImportedTypeShape {
 #[derive(Clone)]
 pub struct ImportedTypeDeclaration {
     pub nominal_type_id: NominalTypeId,
+    pub type_parameters: Vec<String>,
     pub kind: ImportedTypeShape,
 }
 

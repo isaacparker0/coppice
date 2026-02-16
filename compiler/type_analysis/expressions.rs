@@ -9,6 +9,17 @@ use compiler__semantic_types::Type;
 
 use super::{ExpressionSpan, MethodKey, TypeChecker, TypeKind};
 
+struct InstantiatedFunctionSignature {
+    parameter_types: Vec<Type>,
+    return_type: Type,
+}
+
+struct ResolvedCallTarget {
+    display_name: String,
+    parameter_types: Vec<Type>,
+    return_type: Type,
+}
+
 impl TypeChecker<'_> {
     pub(super) fn check_expression(&mut self, expression: &Expression) -> Type {
         match expression {
@@ -60,27 +71,41 @@ impl TypeChecker<'_> {
             }
             Expression::Call {
                 callee,
+                type_arguments,
                 arguments,
                 span,
             } => {
-                let (callee_name, parameter_types, return_type) = if let Expression::Identifier {
-                    name,
-                    span,
-                } = callee.as_ref()
+                let resolved_target = if let Expression::Identifier { name, span } = callee.as_ref()
                 {
-                    if let Some(info) = self.functions.get(name) {
-                        (
-                            name.as_str(),
-                            info.parameter_types.clone(),
-                            info.return_type.clone(),
-                        )
-                    } else if let Some((parameter_types, return_type)) = self
-                        .imported_functions
-                        .get(name)
-                        .map(|info| (info.parameter_types.clone(), info.return_type.clone()))
-                    {
+                    if let Some(info) = self.functions.get(name).cloned() {
+                        let instantiated = self.instantiate_function_call_signature(
+                            name,
+                            &info.type_parameters,
+                            &info.parameter_types,
+                            &info.return_type,
+                            type_arguments,
+                            span,
+                        );
+                        ResolvedCallTarget {
+                            display_name: name.clone(),
+                            parameter_types: instantiated.parameter_types,
+                            return_type: instantiated.return_type,
+                        }
+                    } else if let Some(info) = self.imported_functions.get(name).cloned() {
                         self.mark_import_used(name);
-                        (name.as_str(), parameter_types, return_type)
+                        let instantiated = self.instantiate_function_call_signature(
+                            name,
+                            &info.type_parameters,
+                            &info.parameter_types,
+                            &info.return_type,
+                            type_arguments,
+                            span,
+                        );
+                        ResolvedCallTarget {
+                            display_name: name.clone(),
+                            parameter_types: instantiated.parameter_types,
+                            return_type: instantiated.return_type,
+                        }
                     } else {
                         if self.imported_bindings.contains_key(name) {
                             self.mark_import_used(name);
@@ -98,6 +123,9 @@ impl TypeChecker<'_> {
                     ..
                 } = callee.as_ref()
                 {
+                    if !type_arguments.is_empty() {
+                        self.error("methods do not take type arguments", span.clone());
+                    }
                     let receiver_type = self.check_expression(target);
                     let receiver_type = if let Type::Named(named) = &receiver_type {
                         named.clone()
@@ -161,7 +189,11 @@ impl TypeChecker<'_> {
                                 return Type::Unknown;
                             }
                         }
-                        (field.as_str(), method_parameter_types, method_return_type)
+                        ResolvedCallTarget {
+                            display_name: field.clone(),
+                            parameter_types: method_parameter_types,
+                            return_type: method_return_type,
+                        }
                     } else {
                         self.error(
                             format!("unknown method '{receiver_type_name}.{field}'"),
@@ -180,20 +212,21 @@ impl TypeChecker<'_> {
                     return Type::Unknown;
                 };
 
-                if arguments.len() != parameter_types.len() {
+                if arguments.len() != resolved_target.parameter_types.len() {
                     self.error(
                         format!(
                             "expected {} arguments, got {}",
-                            parameter_types.len(),
+                            resolved_target.parameter_types.len(),
                             arguments.len()
                         ),
                         span.clone(),
                     );
                 }
 
+                let callee_name = resolved_target.display_name.clone();
                 for (index, argument) in arguments.iter().enumerate() {
                     let argument_type = self.check_expression(argument);
-                    if let Some(expected_type) = parameter_types.get(index)
+                    if let Some(expected_type) = resolved_target.parameter_types.get(index)
                         && *expected_type != Type::Unknown
                         && argument_type != Type::Unknown
                         && !Self::is_assignable(&argument_type, expected_type)
@@ -211,7 +244,7 @@ impl TypeChecker<'_> {
                     }
                 }
 
-                return_type
+                resolved_target.return_type
             }
             Expression::Binary {
                 operator,
@@ -489,25 +522,20 @@ impl TypeChecker<'_> {
         }
 
         let struct_type = self.resolve_type_name(type_name);
-        let type_name_str = &type_name.names[0].name;
-        let Some(info) = self.types.get(type_name_str) else {
+        let Some((type_name_str, field_defs)) = self.resolve_struct_fields(&struct_type) else {
+            if struct_type != Type::Unknown {
+                self.error(
+                    format!(
+                        "struct literal requires struct type, found '{}'",
+                        struct_type.display()
+                    ),
+                    type_name.span.clone(),
+                );
+            }
             for field in fields {
                 self.check_expression(&field.value);
             }
             return struct_type;
-        };
-        let field_defs = match &info.kind {
-            TypeKind::Struct { fields } => fields.clone(),
-            TypeKind::Union { .. } => {
-                self.error(
-                    format!("struct literal requires struct type, found '{type_name_str}'"),
-                    type_name.span.clone(),
-                );
-                for field in fields {
-                    self.check_expression(&field.value);
-                }
-                return struct_type;
-            }
         };
 
         let mut seen = std::collections::HashSet::new();
@@ -569,7 +597,7 @@ impl TypeChecker<'_> {
         field: &str,
         span: &Span,
     ) -> Type {
-        let Type::Named(type_name) = target_type else {
+        let Some((type_name, fields)) = self.resolve_struct_fields(target_type) else {
             if *target_type != Type::Unknown {
                 self.error(
                     format!(
@@ -583,31 +611,122 @@ impl TypeChecker<'_> {
             return Type::Unknown;
         };
 
-        let Some(info) = self
-            .types
-            .values()
-            .find(|info| info.nominal_type_id == type_name.id)
-        else {
-            return Type::Unknown;
-        };
-        if let TypeKind::Struct { fields } = &info.kind {
-            if let Some((_, field_type)) = fields.iter().find(|(name, _)| name == field) {
-                return field_type.clone();
-            }
-        } else {
-            self.error(
-                format!(
-                    "cannot access field '{field}' on non-struct type {}",
-                    type_name.display_name
-                ),
-                span.clone(),
-            );
-            return Type::Unknown;
+        if let Some((_, field_type)) = fields.iter().find(|(name, _)| name == field) {
+            return field_type.clone();
         }
         self.error(
-            format!("unknown field '{field}' on {}", type_name.display_name),
+            format!("unknown field '{field}' on {type_name}"),
             span.clone(),
         );
         Type::Unknown
+    }
+
+    fn instantiate_function_call_signature(
+        &mut self,
+        function_name: &str,
+        type_parameters: &[String],
+        parameter_types: &[Type],
+        return_type: &Type,
+        type_arguments: &[TypeName],
+        span: &Span,
+    ) -> InstantiatedFunctionSignature {
+        if type_parameters.is_empty() {
+            if !type_arguments.is_empty() {
+                self.error(
+                    format!("function '{function_name}' does not take type arguments"),
+                    span.clone(),
+                );
+            }
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        }
+        if type_arguments.is_empty() {
+            self.error(
+                format!(
+                    "generic function '{function_name}' requires {} explicit type arguments",
+                    type_parameters.len()
+                ),
+                span.clone(),
+            );
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        }
+        if type_arguments.len() != type_parameters.len() {
+            self.error(
+                format!(
+                    "function '{function_name}' expects {} type arguments, got {}",
+                    type_parameters.len(),
+                    type_arguments.len()
+                ),
+                span.clone(),
+            );
+            return InstantiatedFunctionSignature {
+                parameter_types: parameter_types.to_vec(),
+                return_type: return_type.clone(),
+            };
+        }
+
+        let substitutions: HashMap<String, Type> = type_parameters
+            .iter()
+            .zip(type_arguments.iter())
+            .map(|(name, argument)| (name.clone(), self.resolve_type_name(argument)))
+            .collect();
+        let instantiated_parameters = parameter_types
+            .iter()
+            .map(|parameter_type| Self::instantiate_type(parameter_type, &substitutions))
+            .collect();
+        let instantiated_return = Self::instantiate_type(return_type, &substitutions);
+        InstantiatedFunctionSignature {
+            parameter_types: instantiated_parameters,
+            return_type: instantiated_return,
+        }
+    }
+
+    fn resolve_struct_fields(
+        &mut self,
+        struct_type: &Type,
+    ) -> Option<(String, Vec<(String, Type)>)> {
+        match struct_type {
+            Type::Named(type_name) => {
+                let info = self
+                    .types
+                    .values()
+                    .find(|info| info.nominal_type_id == type_name.id)?;
+                let TypeKind::Struct { fields } = &info.kind else {
+                    return None;
+                };
+                Some((type_name.display_name.clone(), fields.clone()))
+            }
+            Type::Applied { base, arguments } => {
+                let info = self
+                    .types
+                    .values()
+                    .find(|info| info.nominal_type_id == base.id)?;
+                let TypeKind::Struct { fields } = &info.kind else {
+                    return None;
+                };
+                let substitutions: HashMap<String, Type> = info
+                    .type_parameters
+                    .iter()
+                    .cloned()
+                    .zip(arguments.iter().cloned())
+                    .collect();
+                let instantiated_fields = fields
+                    .iter()
+                    .map(|(name, field_type)| {
+                        (
+                            name.clone(),
+                            Self::instantiate_type(field_type, &substitutions),
+                        )
+                    })
+                    .collect();
+                Some((struct_type.display(), instantiated_fields))
+            }
+            _ => None,
+        }
     }
 }

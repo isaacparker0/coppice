@@ -29,6 +29,7 @@ pub struct DocComment {
 #[derive(Clone, Debug)]
 pub struct TypeDeclaration {
     pub name: String,
+    pub type_parameters: Vec<TypeParameter>,
     pub kind: TypeDeclarationKind,
     pub doc: Option<DocComment>,
     pub visibility: Visibility,
@@ -92,6 +93,7 @@ pub struct ConstantDeclaration {
 pub struct FunctionDeclaration {
     pub name: String,
     pub name_span: Span,
+    pub type_parameters: Vec<TypeParameter>,
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
@@ -193,6 +195,7 @@ pub enum Expression {
     },
     Call {
         callee: Box<Expression>,
+        type_arguments: Vec<TypeName>,
         arguments: Vec<Expression>,
         span: Span,
     },
@@ -249,6 +252,13 @@ pub struct TypeName {
 
 #[derive(Clone, Debug)]
 pub struct TypeNameAtom {
+    pub name: String,
+    pub type_arguments: Vec<TypeName>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeParameter {
     pub name: String,
     pub span: Span,
 }

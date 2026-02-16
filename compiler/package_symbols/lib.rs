@@ -198,6 +198,7 @@ fn resolve_public_symbol_types(
             type_name,
             lookup_key.package_id,
             &nominal_type_id_by_lookup_key,
+            &[],
         );
         typed_symbol_by_id.insert(*symbol_id, TypedPublicSymbol::Constant(value_type));
     }
@@ -304,6 +305,11 @@ fn imported_type_declaration(
                             &field.type_name,
                             target_package_id,
                             nominal_type_id_by_lookup_key,
+                            &type_declaration
+                                .type_parameters
+                                .iter()
+                                .map(|parameter| parameter.name.as_str())
+                                .collect::<Vec<_>>(),
                         ),
                     )
                 })
@@ -321,6 +327,11 @@ fn imported_type_declaration(
                                 &parameter.type_name,
                                 target_package_id,
                                 nominal_type_id_by_lookup_key,
+                                &type_declaration
+                                    .type_parameters
+                                    .iter()
+                                    .map(|parameter| parameter.name.as_str())
+                                    .collect::<Vec<_>>(),
                             )
                         })
                         .collect(),
@@ -328,6 +339,11 @@ fn imported_type_declaration(
                         &method.return_type,
                         target_package_id,
                         nominal_type_id_by_lookup_key,
+                        &type_declaration
+                            .type_parameters
+                            .iter()
+                            .map(|parameter| parameter.name.as_str())
+                            .collect::<Vec<_>>(),
                     ),
                 })
                 .collect();
@@ -366,6 +382,11 @@ fn imported_type_declaration(
                         variant,
                         target_package_id,
                         nominal_type_id_by_lookup_key,
+                        &type_declaration
+                            .type_parameters
+                            .iter()
+                            .map(|parameter| parameter.name.as_str())
+                            .collect::<Vec<_>>(),
                     )
                 })
                 .collect(),
@@ -374,6 +395,11 @@ fn imported_type_declaration(
 
     ImportedTypeDeclaration {
         nominal_type_id: declared_nominal_type_id,
+        type_parameters: type_declaration
+            .type_parameters
+            .iter()
+            .map(|parameter| parameter.name.clone())
+            .collect(),
         kind,
     }
 }
@@ -391,16 +417,31 @@ fn imported_function_signature(
                 &parameter.type_name,
                 target_package_id,
                 nominal_type_id_by_lookup_key,
+                &function_declaration
+                    .type_parameters
+                    .iter()
+                    .map(|parameter| parameter.name.as_str())
+                    .collect::<Vec<_>>(),
             )
         })
         .collect();
 
     TypedFunctionSignature {
+        type_parameters: function_declaration
+            .type_parameters
+            .iter()
+            .map(|parameter| parameter.name.clone())
+            .collect(),
         parameter_types,
         return_type: resolve_type_name_to_semantic_type(
             &function_declaration.return_type,
             target_package_id,
             nominal_type_id_by_lookup_key,
+            &function_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect::<Vec<_>>(),
         ),
     }
 }
@@ -409,10 +450,21 @@ fn resolve_type_name_to_semantic_type(
     type_name: &TypeName,
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
+    type_parameters: &[&str],
 ) -> Type {
     let mut resolved = Vec::new();
     for atom in &type_name.names {
+        if type_parameters.contains(&atom.name.as_str()) {
+            if !atom.type_arguments.is_empty() {
+                return Type::Unknown;
+            }
+            resolved.push(Type::TypeParameter(atom.name.clone()));
+            continue;
+        }
         if let Some(value_type) = type_from_builtin_name(&atom.name) {
+            if !atom.type_arguments.is_empty() {
+                return Type::Unknown;
+            }
             resolved.push(value_type);
             continue;
         }
@@ -423,10 +475,32 @@ fn resolve_type_name_to_semantic_type(
         let Some(nominal_type_id) = nominal_type_id_by_lookup_key.get(&lookup_key) else {
             return Type::Unknown;
         };
-        resolved.push(Type::Named(NominalTypeRef {
-            id: nominal_type_id.clone(),
-            display_name: atom.name.clone(),
-        }));
+        if atom.type_arguments.is_empty() {
+            resolved.push(Type::Named(NominalTypeRef {
+                id: nominal_type_id.clone(),
+                display_name: atom.name.clone(),
+            }));
+            continue;
+        }
+        let argument_types = atom
+            .type_arguments
+            .iter()
+            .map(|argument| {
+                resolve_type_name_to_semantic_type(
+                    argument,
+                    target_package_id,
+                    nominal_type_id_by_lookup_key,
+                    type_parameters,
+                )
+            })
+            .collect::<Vec<_>>();
+        resolved.push(Type::Applied {
+            base: NominalTypeRef {
+                id: nominal_type_id.clone(),
+                display_name: atom.name.clone(),
+            },
+            arguments: argument_types,
+        });
     }
     if resolved.is_empty() {
         return Type::Unknown;

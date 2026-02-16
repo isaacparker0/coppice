@@ -76,6 +76,7 @@ pub enum Symbol {
     Greater,
     GreaterEqual,
     LeftBrace,
+    LeftBracket,
     LeftParenthesis,
     Less,
     LessEqual,
@@ -83,6 +84,7 @@ pub enum Symbol {
     Pipe,
     Plus,
     RightBrace,
+    RightBracket,
     RightParenthesis,
     Slash,
     Star,
@@ -185,6 +187,8 @@ impl<'a> Lexer<'a> {
             b')' => self.single(Symbol::RightParenthesis, 1, start, line, column),
             b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
             b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
+            b'[' => self.single(Symbol::LeftBracket, 1, start, line, column),
+            b']' => self.single(Symbol::RightBracket, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
             b'.' => self.single(Symbol::Dot, 1, start, line, column),
             b'|' => self.single(Symbol::Pipe, 1, start, line, column),
@@ -553,10 +557,10 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
 
 fn update_parenthesis_depth(kind: &TokenKind, parenthesis_depth: &mut usize) {
     match kind {
-        TokenKind::Symbol(Symbol::LeftParenthesis) => {
+        TokenKind::Symbol(Symbol::LeftParenthesis | Symbol::LeftBracket) => {
             *parenthesis_depth = parenthesis_depth.saturating_add(1);
         }
-        TokenKind::Symbol(Symbol::RightParenthesis) => {
+        TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBracket) => {
             *parenthesis_depth = parenthesis_depth.saturating_sub(1);
         }
         _ => {}

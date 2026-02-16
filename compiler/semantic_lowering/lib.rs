@@ -47,6 +47,11 @@ fn lower_visibility(visibility: syntax::Visibility) -> semantic::Visibility {
 fn lower_type_declaration(type_declaration: &syntax::TypeDeclaration) -> semantic::TypeDeclaration {
     semantic::TypeDeclaration {
         name: type_declaration.name.clone(),
+        type_parameters: type_declaration
+            .type_parameters
+            .iter()
+            .map(lower_type_parameter)
+            .collect(),
         kind: lower_type_declaration_kind(&type_declaration.kind),
         doc: lower_doc_comment(type_declaration.doc.as_ref()),
         visibility: lower_visibility(type_declaration.visibility),
@@ -128,6 +133,11 @@ fn lower_function_declaration(
     semantic::FunctionDeclaration {
         name: function.name.clone(),
         name_span: function.name_span.clone(),
+        type_parameters: function
+            .type_parameters
+            .iter()
+            .map(lower_type_parameter)
+            .collect(),
         parameters: function
             .parameters
             .iter()
@@ -270,10 +280,12 @@ fn lower_expression(expression: &syntax::Expression) -> semantic::Expression {
         },
         syntax::Expression::Call {
             callee,
+            type_arguments,
             arguments,
             span,
         } => semantic::Expression::Call {
             callee: Box::new(lower_expression(callee)),
+            type_arguments: type_arguments.iter().map(lower_type_name).collect(),
             arguments: arguments.iter().map(lower_expression).collect(),
             span: span.clone(),
         },
@@ -382,9 +394,17 @@ fn lower_type_name(type_name: &syntax::TypeName) -> semantic::TypeName {
             .iter()
             .map(|atom| semantic::TypeNameAtom {
                 name: atom.name.clone(),
+                type_arguments: atom.type_arguments.iter().map(lower_type_name).collect(),
                 span: atom.span.clone(),
             })
             .collect(),
         span: type_name.span.clone(),
+    }
+}
+
+fn lower_type_parameter(type_parameter: &syntax::TypeParameter) -> semantic::TypeParameter {
+    semantic::TypeParameter {
+        name: type_parameter.name.clone(),
+        span: type_parameter.span.clone(),
     }
 }

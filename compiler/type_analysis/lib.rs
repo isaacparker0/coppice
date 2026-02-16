@@ -116,6 +116,7 @@ struct ImportedBindingInfo {
 
 struct TypeInfo {
     nominal_type_id: NominalTypeId,
+    type_parameters: Vec<String>,
     kind: TypeKind,
 }
 
@@ -125,7 +126,9 @@ enum TypeKind {
     Union { variants: Vec<Type> },
 }
 
+#[derive(Clone)]
 struct FunctionInfo {
+    type_parameters: Vec<String>,
     parameter_types: Vec<Type>,
     return_type: Type,
 }
@@ -151,6 +154,7 @@ struct TypeChecker<'a> {
     imported_bindings: HashMap<String, ImportedBindingInfo>,
     methods: HashMap<MethodKey, MethodInfo>,
     scopes: Vec<HashMap<String, VariableInfo>>,
+    type_parameter_scopes: Vec<HashMap<String, Span>>,
     diagnostics: &'a mut Vec<Diagnostic>,
     current_return_type: Type,
     loop_depth: usize,
@@ -206,6 +210,7 @@ impl<'a> TypeChecker<'a> {
             imported_bindings: imported_binding_map,
             methods: HashMap::new(),
             scopes: Vec::new(),
+            type_parameter_scopes: Vec::new(),
             diagnostics,
             current_return_type: Type::Unknown,
             loop_depth: 0,
@@ -228,6 +233,7 @@ impl<'a> TypeChecker<'a> {
                 typed_symbol_by_name.insert(
                     function_declaration.name.clone(),
                     TypedSymbol::Function(TypedFunctionSignature {
+                        type_parameters: info.type_parameters.clone(),
                         parameter_types: info.parameter_types.clone(),
                         return_type: info.return_type.clone(),
                     }),
@@ -318,18 +324,89 @@ impl<'a> TypeChecker<'a> {
         self.diagnostics.push(Diagnostic::new(message, span));
     }
 
+    fn push_type_parameters(&mut self, names_and_spans: &[(String, Span)]) {
+        let mut scope = HashMap::new();
+        for (name, span) in names_and_spans {
+            self.check_type_name(name, span);
+            if scope.contains_key(name) {
+                self.error(format!("duplicate type parameter '{name}'"), span.clone());
+                continue;
+            }
+            scope.insert(name.clone(), span.clone());
+        }
+        self.type_parameter_scopes.push(scope);
+    }
+
+    fn pop_type_parameters(&mut self) {
+        self.type_parameter_scopes.pop();
+    }
+
+    fn resolve_type_parameter(&self, name: &str) -> Option<Type> {
+        for scope in self.type_parameter_scopes.iter().rev() {
+            if scope.contains_key(name) {
+                return Some(Type::TypeParameter(name.to_string()));
+            }
+        }
+        None
+    }
+
+    fn instantiate_type(value_type: &Type, substitutions: &HashMap<String, Type>) -> Type {
+        match value_type {
+            Type::TypeParameter(name) => substitutions
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| value_type.clone()),
+            Type::Union(inner) => {
+                let instantiated = inner
+                    .iter()
+                    .map(|inner_type| Self::instantiate_type(inner_type, substitutions))
+                    .collect();
+                Self::normalize_union(instantiated)
+            }
+            Type::Applied { base, arguments } => Type::Applied {
+                base: base.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(|argument| Self::instantiate_type(argument, substitutions))
+                    .collect(),
+            },
+            _ => value_type.clone(),
+        }
+    }
+
     fn resolve_type_name(&mut self, type_name: &TypeName) -> Type {
         let mut resolved = Vec::new();
         let mut has_unknown = false;
         for atom in &type_name.names {
             let name = atom.name.as_str();
+            if let Some(type_parameter) = self.resolve_type_parameter(name) {
+                if !atom.type_arguments.is_empty() {
+                    self.error(
+                        format!("type parameter '{name}' does not take type arguments"),
+                        atom.span.clone(),
+                    );
+                    has_unknown = true;
+                    continue;
+                }
+                resolved.push(type_parameter);
+                continue;
+            }
             if let Some(builtin) = type_from_builtin_name(name) {
+                if !atom.type_arguments.is_empty() {
+                    self.error(
+                        format!("built-in type '{name}' does not take type arguments"),
+                        atom.span.clone(),
+                    );
+                    has_unknown = true;
+                    continue;
+                }
                 resolved.push(builtin);
                 continue;
             }
             if let Some(info) = self.types.get(name) {
                 let kind = info.kind.clone();
                 let nominal_type_id = info.nominal_type_id.clone();
+                let type_parameter_count = info.type_parameters.len();
                 if matches!(
                     self.imported_bindings.get(name),
                     Some(ImportedBindingInfo {
@@ -339,12 +416,53 @@ impl<'a> TypeChecker<'a> {
                 ) {
                     self.mark_import_used(name);
                 }
+                let resolved_type_arguments = atom
+                    .type_arguments
+                    .iter()
+                    .map(|argument| self.resolve_type_name(argument))
+                    .collect::<Vec<_>>();
+                if atom.type_arguments.len() != type_parameter_count {
+                    if type_parameter_count == 0 {
+                        self.error(
+                            format!("type '{name}' does not take type arguments"),
+                            atom.span.clone(),
+                        );
+                    } else {
+                        self.error(
+                            format!(
+                                "type '{name}' expects {type_parameter_count} type arguments, got {}",
+                                atom.type_arguments.len()
+                            ),
+                            atom.span.clone(),
+                        );
+                    }
+                    has_unknown = true;
+                    continue;
+                }
+                let nominal = NominalTypeRef {
+                    id: nominal_type_id,
+                    display_name: name.to_string(),
+                };
                 match kind {
-                    TypeKind::Struct { .. } => resolved.push(Type::Named(NominalTypeRef {
-                        id: nominal_type_id,
-                        display_name: name.to_string(),
-                    })),
+                    TypeKind::Struct { .. } => {
+                        if type_parameter_count == 0 {
+                            resolved.push(Type::Named(nominal));
+                        } else {
+                            resolved.push(Type::Applied {
+                                base: nominal,
+                                arguments: resolved_type_arguments,
+                            });
+                        }
+                    }
                     TypeKind::Union { variants } => {
+                        if type_parameter_count != 0 {
+                            self.error(
+                                format!("generic union type '{name}' is not yet supported"),
+                                atom.span.clone(),
+                            );
+                            has_unknown = true;
+                            continue;
+                        }
                         resolved.push(Self::normalize_union(variants));
                     }
                 }
@@ -353,6 +471,14 @@ impl<'a> TypeChecker<'a> {
             if let Some((enum_name, variant_name)) = name.split_once('.')
                 && let Some(variant_type) = self.resolve_enum_variant_type(enum_name, variant_name)
             {
+                if !atom.type_arguments.is_empty() {
+                    self.error(
+                        format!("enum variant '{name}' does not take type arguments"),
+                        atom.span.clone(),
+                    );
+                    has_unknown = true;
+                    continue;
+                }
                 resolved.push(variant_type);
                 continue;
             }
