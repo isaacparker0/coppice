@@ -50,6 +50,7 @@ struct ParsedUnit {
     path: PathBuf,
     source: String,
     parsed: compiler__syntax::ParsedFile,
+    semantic_analysis_eligibility: syntax_rules::SemanticAnalysisEligibility,
 }
 
 pub fn check_target(path: &str) -> Result<CheckedTarget, CheckFileError> {
@@ -159,6 +160,8 @@ pub fn check_target_with_workspace_root(
                     path: relative_path,
                     source,
                     parsed,
+                    semantic_analysis_eligibility:
+                        syntax_rules::SemanticAnalysisEligibility::Eligible,
                 }),
                 Err(diagnostics) => {
                     if package_in_scope {
@@ -176,8 +179,11 @@ pub fn check_target_with_workspace_root(
         }
     }
 
-    let mut syntax_invalid_paths = BTreeSet::new();
-    for parsed_unit in &parsed_units {
+    for parsed_unit in &mut parsed_units {
+        let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
+        parsed_unit.semantic_analysis_eligibility =
+            syntax_rules_result.semantic_analysis_eligibility;
+
         if !scope_is_workspace
             && !scoped_package_paths
                 .as_ref()
@@ -186,13 +192,6 @@ pub fn check_target_with_workspace_root(
             continue;
         }
         let mut file_diagnostics = Vec::new();
-        let syntax_rules_result = syntax_rules::check_file(&parsed_unit.parsed);
-        if matches!(
-            syntax_rules_result.semantic_analysis_eligibility,
-            syntax_rules::SemanticAnalysisEligibility::Ineligible { .. }
-        ) {
-            syntax_invalid_paths.insert(parsed_unit.path.clone());
-        }
         file_diagnostics.extend(syntax_rules_result.diagnostics);
         file_role_rules::check_file(&parsed_unit.parsed, &mut file_diagnostics);
         for diagnostic in file_diagnostics {
@@ -208,7 +207,12 @@ pub fn check_target_with_workspace_root(
     let mut resolution_diagnostics = Vec::new();
     let package_files: Vec<PackageFile<'_>> = parsed_units
         .iter()
-        .filter(|unit| !syntax_invalid_paths.contains(&unit.path))
+        .filter(|unit| {
+            matches!(
+                unit.semantic_analysis_eligibility,
+                syntax_rules::SemanticAnalysisEligibility::Eligible
+            )
+        })
         .map(|unit| PackageFile {
             package_path: &unit.package_path,
             path: &unit.path,
@@ -256,7 +260,12 @@ pub fn check_target_with_workspace_root(
     let semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
         parsed_units
             .iter()
-            .filter(|unit| !syntax_invalid_paths.contains(&unit.path))
+            .filter(|unit| {
+                matches!(
+                    unit.semantic_analysis_eligibility,
+                    syntax_rules::SemanticAnalysisEligibility::Eligible
+                )
+            })
             .map(|unit| (unit.path.clone(), lower_parsed_file(&unit.parsed)))
             .collect();
     let package_units: Vec<PackageUnit<'_>> = parsed_units
