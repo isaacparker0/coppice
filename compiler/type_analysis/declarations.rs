@@ -227,7 +227,7 @@ impl TypeChecker<'_> {
                     if !type_declaration.type_parameters.is_empty() {
                         self.error(
                             format!(
-                                "generic enum type '{}' is not yet supported",
+                                "enum type '{}' cannot declare type parameters",
                                 type_declaration.name
                             ),
                             type_declaration.span.clone(),
