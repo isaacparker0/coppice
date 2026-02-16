@@ -464,16 +464,26 @@ impl Parser {
             });
         }
 
+        let mut qualified_name = name;
+        let mut qualified_span = name_span.clone();
+        while self.peek_is_symbol(Symbol::Dot) {
+            self.advance();
+            let (segment, segment_span) = self.expect_identifier()?;
+            qualified_name.push('.');
+            qualified_name.push_str(&segment);
+            qualified_span.end = segment_span.end;
+        }
+
         let type_name = TypeName {
             names: vec![TypeNameAtom {
-                name,
-                span: name_span.clone(),
+                name: qualified_name,
+                span: qualified_span.clone(),
             }],
-            span: name_span.clone(),
+            span: qualified_span.clone(),
         };
         Some(MatchPattern::Type {
             type_name,
-            span: name_span,
+            span: qualified_span,
         })
     }
 

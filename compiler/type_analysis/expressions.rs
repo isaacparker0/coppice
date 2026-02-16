@@ -28,6 +28,33 @@ impl TypeChecker<'_> {
                 field_span,
                 ..
             } => {
+                if let Expression::Identifier { name, .. } = target.as_ref() {
+                    let is_enum_like_union = self.types.get(name).is_some_and(|info| {
+                        if let TypeKind::Union { variants } = &info.kind {
+                            let enum_like_prefix = format!("{name}.");
+                            !variants.is_empty()
+                                && variants.iter().all(|variant| {
+                                    matches!(
+                                        variant,
+                                        Type::Named(named)
+                                            if named.display_name.starts_with(&enum_like_prefix)
+                                    )
+                                })
+                        } else {
+                            false
+                        }
+                    });
+                    if is_enum_like_union {
+                        if let Some(variant_type) = self.resolve_enum_variant_type(name, field) {
+                            return variant_type;
+                        }
+                        self.error(
+                            format!("unknown enum variant '{name}.{field}'"),
+                            field_span.clone(),
+                        );
+                        return Type::Unknown;
+                    }
+                }
                 let target_type = self.check_expression(target);
                 self.resolve_field_access_type(&target_type, field, field_span)
             }

@@ -28,7 +28,18 @@ impl Parser {
     pub(super) fn expect_type_name_part(&mut self) -> Option<(String, Span)> {
         let token = self.advance();
         match token.kind {
-            TokenKind::Identifier(name) => Some((name, token.span)),
+            TokenKind::Identifier(name) => {
+                let mut full_name = name;
+                let mut span = token.span;
+                while self.peek_is_symbol(Symbol::Dot) {
+                    self.advance();
+                    let (segment, segment_span) = self.expect_identifier()?;
+                    full_name.push('.');
+                    full_name.push_str(&segment);
+                    span.end = segment_span.end;
+                }
+                Some((full_name, span))
+            }
             TokenKind::Keyword(Keyword::Nil) => {
                 Some((Keyword::Nil.as_str().to_string(), token.span))
             }

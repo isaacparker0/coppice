@@ -353,6 +353,12 @@ impl<'a> TypeChecker<'a> {
                 }
                 continue;
             }
+            if let Some((enum_name, variant_name)) = name.split_once('.')
+                && let Some(variant_type) = self.resolve_enum_variant_type(enum_name, variant_name)
+            {
+                resolved.push(variant_type);
+                continue;
+            }
             self.error(format!("unknown type '{name}'"), atom.span.clone());
             has_unknown = true;
         }
@@ -365,6 +371,31 @@ impl<'a> TypeChecker<'a> {
             return resolved.remove(0);
         }
         Self::normalize_union(resolved)
+    }
+
+    pub(crate) fn resolve_enum_variant_type(
+        &mut self,
+        enum_name: &str,
+        variant_name: &str,
+    ) -> Option<Type> {
+        let info = self.types.get(enum_name)?;
+        let TypeKind::Union { variants } = &info.kind else {
+            return None;
+        };
+        let variants = variants.clone();
+        let variant_display = format!("{enum_name}.{variant_name}");
+        if matches!(
+            self.imported_bindings.get(enum_name),
+            Some(ImportedBindingInfo {
+                symbol: ImportedSymbol::Type(_),
+                ..
+            })
+        ) {
+            self.mark_import_used(enum_name);
+        }
+        variants
+            .into_iter()
+            .find(|variant| variant.display() == variant_display)
     }
 
     fn check_unused_imports(&mut self) {
