@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use compiler__binding as binding;
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::FileScopedDiagnostic;
 use compiler__exports as exports;
 use compiler__package_graph as package_graph;
-use compiler__phase_results::{PhaseOutput, PhaseStatus};
+use compiler__phase_results::{FileScopedPhaseOutput, PhaseStatus};
 use compiler__symbols::{self as symbols, PackageFile};
 use compiler__syntax::ParsedFile;
 use compiler__visibility::{self as visibility, ResolvedImport};
@@ -16,19 +16,12 @@ pub struct ResolutionFile<'a> {
     pub parsed: &'a ParsedFile,
 }
 
-pub struct ResolutionDiagnostic {
-    pub path: PathBuf,
-    pub diagnostic: Diagnostic,
-}
-
 pub struct ResolutionArtifacts {
     pub resolved_imports: Vec<ResolvedImport>,
-    pub status_by_file: BTreeMap<PathBuf, PhaseStatus>,
-    pub diagnostics_by_file: Vec<ResolutionDiagnostic>,
 }
 
 #[must_use]
-pub fn resolve_files(files: &[ResolutionFile<'_>]) -> PhaseOutput<ResolutionArtifacts> {
+pub fn resolve_files(files: &[ResolutionFile<'_>]) -> FileScopedPhaseOutput<ResolutionArtifacts> {
     let package_files: Vec<PackageFile<'_>> = files
         .iter()
         .map(|file| PackageFile {
@@ -75,29 +68,17 @@ pub fn resolve_files(files: &[ResolutionFile<'_>]) -> PhaseOutput<ResolutionArti
         }
     }
 
-    let diagnostics_by_file = package_diagnostics
+    let diagnostics = package_diagnostics
         .into_iter()
-        .map(|diagnostic| ResolutionDiagnostic {
+        .map(|diagnostic| FileScopedDiagnostic {
             path: diagnostic.path,
-            diagnostic: diagnostic.diagnostic,
+            message: diagnostic.diagnostic.message,
+            span: diagnostic.diagnostic.span,
         })
         .collect();
-    let status = if status_by_file
-        .values()
-        .any(|status| matches!(status, PhaseStatus::PreventsDownstreamExecution))
-    {
-        PhaseStatus::PreventsDownstreamExecution
-    } else {
-        PhaseStatus::Ok
-    };
-
-    PhaseOutput {
-        value: ResolutionArtifacts {
-            resolved_imports,
-            status_by_file,
-            diagnostics_by_file,
-        },
-        diagnostics: Vec::new(),
-        status,
+    FileScopedPhaseOutput {
+        value: ResolutionArtifacts { resolved_imports },
+        diagnostics,
+        status_by_file,
     }
 }

@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use compiler__diagnostics::Diagnostic;
+use compiler__diagnostics::{Diagnostic, FileScopedDiagnostic};
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
     PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
@@ -247,13 +247,16 @@ pub fn check_target_with_workspace_root(
         .collect();
     let resolution_result = resolution::resolve_files(&resolution_files);
     let resolved_imports = resolution_result.value.resolved_imports;
-    for (path, status) in &resolution_result.value.status_by_file {
+    for (path, status) in &resolution_result.status_by_file {
         if let Some(parsed_unit) = parsed_units.iter_mut().find(|unit| &unit.path == path) {
             parsed_unit.phase_state.resolution = *status;
         }
     }
-    for resolution::ResolutionDiagnostic { path, diagnostic } in
-        resolution_result.value.diagnostics_by_file
+    for FileScopedDiagnostic {
+        path,
+        message,
+        span,
+    } in resolution_result.diagnostics
     {
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
             if !scope_is_workspace
@@ -267,7 +270,7 @@ pub fn check_target_with_workspace_root(
                 &diagnostic_display_base,
                 &path,
                 &parsed_unit.source,
-                diagnostic,
+                Diagnostic::new(message, span),
             ));
         }
     }
