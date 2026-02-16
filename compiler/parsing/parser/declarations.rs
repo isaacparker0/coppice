@@ -1,7 +1,7 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{
-    ConstantDeclaration, DocComment, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
+    ConstantDeclaration, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
     ParameterDeclaration, StructMemberItem, TypeDeclaration, TypeDeclarationKind, Visibility,
 };
 
@@ -11,7 +11,6 @@ impl Parser {
     pub(super) fn parse_type_declaration(
         &mut self,
         visibility: Visibility,
-        doc: Option<DocComment>,
     ) -> ParseResult<TypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -33,7 +32,6 @@ impl Parser {
                 name,
                 type_parameters,
                 kind: TypeDeclarationKind::Struct { items },
-                doc,
                 visibility,
                 span,
             });
@@ -52,7 +50,6 @@ impl Parser {
                 name,
                 type_parameters,
                 kind: TypeDeclarationKind::Enum { variants },
-                doc,
                 visibility,
                 span,
             });
@@ -71,7 +68,6 @@ impl Parser {
             name,
             type_parameters,
             kind: TypeDeclarationKind::Union { variants },
-            doc,
             visibility,
             span,
         })
@@ -85,21 +81,15 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            let mut doc_comment = self.parse_leading_doc_comment_block();
-            if let Some(found_doc_comment) = doc_comment.as_ref() {
-                items.push(StructMemberItem::DocComment(found_doc_comment.clone()));
+            if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
+                items.push(StructMemberItem::DocComment(doc_comment));
             }
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
             }
-            if let Some(found_doc_comment) = doc_comment.as_ref()
-                && self.peek_span().line != found_doc_comment.end_line + 1
-            {
-                doc_comment = None;
-            }
             let visibility = self.parse_visibility();
             if self.peek_is_keyword(Keyword::Function) {
-                match self.parse_method_declaration(visibility, doc_comment.clone()) {
+                match self.parse_method_declaration(visibility) {
                     Ok(method) => {
                         items.push(StructMemberItem::Method(Box::new(method.clone())));
                     }
@@ -112,7 +102,7 @@ impl Parser {
                     }
                 }
             } else {
-                match self.parse_field_declaration(visibility, doc_comment.clone()) {
+                match self.parse_field_declaration(visibility) {
                     Ok(field) => {
                         items.push(StructMemberItem::Field(Box::new(field.clone())));
                     }
@@ -146,7 +136,6 @@ impl Parser {
     pub(super) fn parse_field_declaration(
         &mut self,
         visibility: Visibility,
-        doc: Option<DocComment>,
     ) -> ParseResult<FieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
@@ -160,7 +149,6 @@ impl Parser {
         Ok(FieldDeclaration {
             name,
             type_name,
-            doc,
             visibility,
             span,
         })
@@ -169,7 +157,6 @@ impl Parser {
     pub(super) fn parse_method_declaration(
         &mut self,
         visibility: Visibility,
-        doc: Option<DocComment>,
     ) -> ParseResult<MethodDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -188,7 +175,6 @@ impl Parser {
             parameters,
             return_type,
             body,
-            doc,
             visibility,
             span: Span {
                 start: start.start,
@@ -263,7 +249,6 @@ impl Parser {
     pub(super) fn parse_function(
         &mut self,
         visibility: Visibility,
-        doc: Option<DocComment>,
     ) -> ParseResult<FunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -282,7 +267,6 @@ impl Parser {
             parameters,
             return_type,
             body,
-            doc,
             visibility,
             span: Span {
                 start: start.start,
@@ -319,7 +303,6 @@ impl Parser {
             name,
             type_name,
             expression,
-            doc: None,
             visibility,
             span,
         })

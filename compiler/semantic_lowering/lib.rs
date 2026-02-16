@@ -4,22 +4,35 @@ use compiler__syntax as syntax;
 #[must_use]
 pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageUnit {
     let mut declarations = Vec::new();
+    let mut pending_doc_comment: Option<semantic::DocComment> = None;
 
-    for declaration in parsed_file.top_level_declarations() {
-        match declaration {
-            syntax::Declaration::Type(type_declaration) => {
-                let lowered = lower_type_declaration(type_declaration);
-                declarations.push(semantic::Declaration::Type(lowered.clone()));
+    for item in &parsed_file.items {
+        match item {
+            syntax::FileItem::DocComment(doc_comment) => {
+                pending_doc_comment = Some(lower_doc_comment(doc_comment));
             }
-            syntax::Declaration::Constant(constant_declaration) => {
-                let lowered = lower_constant_declaration(constant_declaration);
-                declarations.push(semantic::Declaration::Constant(lowered.clone()));
-            }
-            syntax::Declaration::Function(function_declaration) => {
-                let lowered = lower_function_declaration(function_declaration);
-                declarations.push(semantic::Declaration::Function(lowered.clone()));
-            }
-            syntax::Declaration::Import(_) | syntax::Declaration::Exports(_) => {}
+            syntax::FileItem::Declaration(declaration) => match declaration.as_ref() {
+                syntax::Declaration::Type(type_declaration) => {
+                    let lowered =
+                        lower_type_declaration(type_declaration, pending_doc_comment.take());
+                    declarations.push(semantic::Declaration::Type(lowered.clone()));
+                }
+                syntax::Declaration::Constant(constant_declaration) => {
+                    let lowered = lower_constant_declaration(
+                        constant_declaration,
+                        pending_doc_comment.take(),
+                    );
+                    declarations.push(semantic::Declaration::Constant(lowered.clone()));
+                }
+                syntax::Declaration::Function(function_declaration) => {
+                    let lowered = lower_function_declaration(
+                        function_declaration,
+                        pending_doc_comment.take(),
+                    );
+                    declarations.push(semantic::Declaration::Function(lowered.clone()));
+                }
+                syntax::Declaration::Import(_) | syntax::Declaration::Exports(_) => {}
+            },
         }
     }
 
@@ -29,12 +42,12 @@ pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> semantic::PackageU
     }
 }
 
-fn lower_doc_comment(doc: Option<&syntax::DocComment>) -> Option<semantic::DocComment> {
-    doc.map(|doc| semantic::DocComment {
-        lines: doc.lines.clone(),
-        span: doc.span.clone(),
-        end_line: doc.end_line,
-    })
+fn lower_doc_comment(doc_comment: &syntax::DocComment) -> semantic::DocComment {
+    semantic::DocComment {
+        lines: doc_comment.lines.clone(),
+        span: doc_comment.span.clone(),
+        end_line: doc_comment.end_line,
+    }
 }
 
 fn lower_visibility(visibility: syntax::Visibility) -> semantic::Visibility {
@@ -44,7 +57,10 @@ fn lower_visibility(visibility: syntax::Visibility) -> semantic::Visibility {
     }
 }
 
-fn lower_type_declaration(type_declaration: &syntax::TypeDeclaration) -> semantic::TypeDeclaration {
+fn lower_type_declaration(
+    type_declaration: &syntax::TypeDeclaration,
+    doc: Option<semantic::DocComment>,
+) -> semantic::TypeDeclaration {
     semantic::TypeDeclaration {
         name: type_declaration.name.clone(),
         type_parameters: type_declaration
@@ -53,7 +69,7 @@ fn lower_type_declaration(type_declaration: &syntax::TypeDeclaration) -> semanti
             .map(lower_type_parameter)
             .collect(),
         kind: lower_type_declaration_kind(&type_declaration.kind),
-        doc: lower_doc_comment(type_declaration.doc.as_ref()),
+        doc,
         visibility: lower_visibility(type_declaration.visibility),
         span: type_declaration.span.clone(),
     }
@@ -66,14 +82,17 @@ fn lower_type_declaration_kind(
         syntax::TypeDeclarationKind::Struct { items } => {
             let mut fields = Vec::new();
             let mut methods = Vec::new();
+            let mut pending_doc_comment: Option<semantic::DocComment> = None;
             for item in items {
                 match item {
-                    syntax::StructMemberItem::DocComment(_) => {}
+                    syntax::StructMemberItem::DocComment(doc_comment) => {
+                        pending_doc_comment = Some(lower_doc_comment(doc_comment));
+                    }
                     syntax::StructMemberItem::Field(field) => {
-                        fields.push(lower_field_declaration(field));
+                        fields.push(lower_field_declaration(field, pending_doc_comment.take()));
                     }
                     syntax::StructMemberItem::Method(method) => {
-                        methods.push(lower_method_declaration(method));
+                        methods.push(lower_method_declaration(method, pending_doc_comment.take()));
                     }
                 }
             }
@@ -95,17 +114,23 @@ fn lower_enum_variant(variant: &syntax::EnumVariant) -> semantic::EnumVariant {
     }
 }
 
-fn lower_field_declaration(field: &syntax::FieldDeclaration) -> semantic::FieldDeclaration {
+fn lower_field_declaration(
+    field: &syntax::FieldDeclaration,
+    doc: Option<semantic::DocComment>,
+) -> semantic::FieldDeclaration {
     semantic::FieldDeclaration {
         name: field.name.clone(),
         type_name: lower_type_name(&field.type_name),
-        doc: lower_doc_comment(field.doc.as_ref()),
+        doc,
         visibility: lower_visibility(field.visibility),
         span: field.span.clone(),
     }
 }
 
-fn lower_method_declaration(method: &syntax::MethodDeclaration) -> semantic::MethodDeclaration {
+fn lower_method_declaration(
+    method: &syntax::MethodDeclaration,
+    doc: Option<semantic::DocComment>,
+) -> semantic::MethodDeclaration {
     semantic::MethodDeclaration {
         name: method.name.clone(),
         name_span: method.name_span.clone(),
@@ -118,7 +143,7 @@ fn lower_method_declaration(method: &syntax::MethodDeclaration) -> semantic::Met
             .collect(),
         return_type: lower_type_name(&method.return_type),
         body: lower_block(&method.body),
-        doc: lower_doc_comment(method.doc.as_ref()),
+        doc,
         visibility: lower_visibility(method.visibility),
         span: method.span.clone(),
     }
@@ -126,12 +151,13 @@ fn lower_method_declaration(method: &syntax::MethodDeclaration) -> semantic::Met
 
 fn lower_constant_declaration(
     constant: &syntax::ConstantDeclaration,
+    doc: Option<semantic::DocComment>,
 ) -> semantic::ConstantDeclaration {
     semantic::ConstantDeclaration {
         name: constant.name.clone(),
         type_name: lower_type_name(&constant.type_name),
         expression: lower_expression(&constant.expression),
-        doc: lower_doc_comment(constant.doc.as_ref()),
+        doc,
         visibility: lower_visibility(constant.visibility),
         span: constant.span.clone(),
     }
@@ -139,6 +165,7 @@ fn lower_constant_declaration(
 
 fn lower_function_declaration(
     function: &syntax::FunctionDeclaration,
+    doc: Option<semantic::DocComment>,
 ) -> semantic::FunctionDeclaration {
     semantic::FunctionDeclaration {
         name: function.name.clone(),
@@ -155,7 +182,7 @@ fn lower_function_declaration(
             .collect(),
         return_type: lower_type_name(&function.return_type),
         body: lower_block(&function.body),
-        doc: lower_doc_comment(function.doc.as_ref()),
+        doc,
         visibility: lower_visibility(function.visibility),
         span: function.span.clone(),
     }

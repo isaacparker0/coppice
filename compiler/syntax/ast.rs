@@ -75,7 +75,6 @@ pub struct TypeDeclaration {
     pub name: String,
     pub type_parameters: Vec<TypeParameter>,
     pub kind: TypeDeclarationKind,
-    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -104,7 +103,6 @@ pub struct EnumVariant {
 pub struct FieldDeclaration {
     pub name: String,
     pub type_name: TypeName,
-    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -118,7 +116,6 @@ pub struct MethodDeclaration {
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
-    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -128,7 +125,6 @@ pub struct ConstantDeclaration {
     pub name: String,
     pub type_name: TypeName,
     pub expression: Expression,
-    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }
@@ -141,7 +137,6 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<ParameterDeclaration>,
     pub return_type: TypeName,
     pub body: Block,
-    pub doc: Option<DocComment>,
     pub visibility: Visibility,
     pub span: Span,
 }

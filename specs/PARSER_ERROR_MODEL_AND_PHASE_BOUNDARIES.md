@@ -582,6 +582,9 @@ with reality.
    `syntax_rules`.
 6. Syntax now preserves ordered doc-comment/declaration/member items needed for
    structural validity ownership.
+7. Syntax declaration/member nodes no longer duplicate attached `doc` fields;
+   semantic doc attachment is derived in `semantic_lowering` from ordered syntax
+   items.
 
 ### Transitional (intentional, not final form)
 

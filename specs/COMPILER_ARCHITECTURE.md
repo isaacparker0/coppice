@@ -51,6 +51,13 @@ Owns parser-facing syntax AST.
 
 This is the representation of source structure, not semantic meaning.
 
+Doc-comment source of truth:
+
+- top-level docs are represented as ordered `FileItem::DocComment` items
+- struct-member docs are represented as ordered `StructMemberItem::DocComment`
+  items
+- declaration nodes in `syntax` do not duplicate doc attachments
+
 ## `compiler/syntax_rules`
 
 Owns syntax-adjacent language validity rules that require parsed structure but
@@ -100,6 +107,8 @@ Owns conversion from syntax AST to semantic program.
 
 - Preserves spans for diagnostics.
 - Central place for semantic normalization/desugaring decisions.
+- Attaches semantic declaration/member docs from ordered syntax doc-comment
+  items.
 
 ## `compiler/semantic_types`
 

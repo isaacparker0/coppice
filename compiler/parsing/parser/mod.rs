@@ -2,9 +2,7 @@ use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 use compiler__diagnostics::Diagnostic;
 use compiler__source::FileRole;
 use compiler__source::Span;
-use compiler__syntax::{
-    ConstantDeclaration, Declaration, DocComment, Expression, FileItem, ParsedFile, Visibility,
-};
+use compiler__syntax::{Declaration, DocComment, Expression, FileItem, ParsedFile, Visibility};
 
 mod declarations;
 mod exports;
@@ -99,17 +97,11 @@ impl Parser {
         let mut items = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
-            let mut doc_comment = self.parse_leading_doc_comment_block();
-            if let Some(found_doc_comment) = doc_comment.as_ref() {
-                items.push(FileItem::DocComment(found_doc_comment.clone()));
+            if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
+                items.push(FileItem::DocComment(doc_comment));
             }
             if self.at_eof() {
                 break;
-            }
-            if let Some(found_doc_comment) = doc_comment.as_ref()
-                && self.peek_span().line != found_doc_comment.end_line + 1
-            {
-                doc_comment = None;
             }
 
             let parse_result: Option<ParseResult<Declaration>> = if self
@@ -118,23 +110,15 @@ impl Parser {
                 let visibility = self.parse_visibility();
                 if self.peek_is_keyword(Keyword::Type) {
                     Some(
-                        self.parse_type_declaration(visibility, doc_comment)
+                        self.parse_type_declaration(visibility)
                             .map(Declaration::Type),
                     )
                 } else if self.peek_is_keyword(Keyword::Function) {
-                    Some(
-                        self.parse_function(visibility, doc_comment)
-                            .map(Declaration::Function),
-                    )
+                    Some(self.parse_function(visibility).map(Declaration::Function))
                 } else if self.peek_is_identifier() {
                     Some(
                         self.parse_constant_declaration(visibility)
-                            .map(|constant_declaration| {
-                                Declaration::Constant(ConstantDeclaration {
-                                    doc: doc_comment,
-                                    ..constant_declaration
-                                })
-                            }),
+                            .map(Declaration::Constant),
                     )
                 } else {
                     let span = self.peek_span();
@@ -147,7 +131,7 @@ impl Parser {
                 }
             } else if self.peek_is_keyword(Keyword::Type) {
                 Some(
-                    self.parse_type_declaration(Visibility::Private, doc_comment)
+                    self.parse_type_declaration(Visibility::Private)
                         .map(Declaration::Type),
                 )
             } else if self.peek_is_keyword(Keyword::Import) {
@@ -156,7 +140,7 @@ impl Parser {
                 Some(self.parse_exports_declaration().map(Declaration::Exports))
             } else if self.peek_is_keyword(Keyword::Function) {
                 Some(
-                    self.parse_function(Visibility::Private, doc_comment)
+                    self.parse_function(Visibility::Private)
                         .map(Declaration::Function),
                 )
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
@@ -169,14 +153,10 @@ impl Parser {
                 self.synchronize();
                 None
             } else if self.peek_is_identifier() {
-                Some(self.parse_constant_declaration(Visibility::Private).map(
-                    |constant_declaration| {
-                        Declaration::Constant(ConstantDeclaration {
-                            doc: doc_comment,
-                            ..constant_declaration
-                        })
-                    },
-                ))
+                Some(
+                    self.parse_constant_declaration(Visibility::Private)
+                        .map(Declaration::Constant),
+                )
             } else {
                 let span = self.peek_span();
                 self.report_parse_error(&ParseError::Recovered {
