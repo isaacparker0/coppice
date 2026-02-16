@@ -91,17 +91,20 @@ impl Parser {
             let mut doc = self.parse_leading_doc_comment_block();
             if self.peek_is_symbol(Symbol::RightBrace) {
                 if let Some(doc) = doc {
-                    self.error("doc comment must document a declaration", doc.span);
+                    self.report_parse_error(&ParseError::Recovered {
+                        message: "doc comment must document a declaration".to_string(),
+                        span: doc.span,
+                    });
                 }
                 break;
             }
             if let Some(found_doc) = doc.as_ref()
                 && self.peek_span().line != found_doc.end_line + 1
             {
-                self.error(
-                    "doc comment must document a declaration",
-                    found_doc.span.clone(),
-                );
+                self.report_parse_error(&ParseError::Recovered {
+                    message: "doc comment must document a declaration".to_string(),
+                    span: found_doc.span.clone(),
+                });
                 doc = None;
             }
             let visibility = self.parse_visibility();
@@ -122,7 +125,10 @@ impl Parser {
                     Err(error) => {
                         self.report_parse_error(&error);
                         if let Some(doc) = doc {
-                            self.error("doc comment must document a declaration", doc.span);
+                            self.report_parse_error(&ParseError::Recovered {
+                                message: "doc comment must document a declaration".to_string(),
+                                span: doc.span,
+                            });
                         }
                         self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
                         if self.peek_is_symbol(Symbol::RightBrace) {

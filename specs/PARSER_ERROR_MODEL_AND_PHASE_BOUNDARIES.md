@@ -1,9 +1,10 @@
-# Parser `Option` to `Result` Migration
+# Parser Error Model and Phase Boundaries
 
 ## Purpose
 
-Define a migration from `Option`-based parser internals to `Result`-based
-parsing, and align that change with a unified compiler-phase boundary contract.
+Define the parser error-model direction (`Option` to `Result`) and the intended
+ownership boundaries between parsing, structural validity checks, and later
+semantic/type phases.
 
 This document now also evaluates these choices against future LSP/tooling needs,
 where partial results, resilient recovery, and explicit failure semantics matter
@@ -11,7 +12,7 @@ as much as command-line batch compilation.
 
 ## Context
 
-The parser currently uses `Option<T>` in many functions:
+The parser historically used `Option<T>` in many functions:
 
 - `Some(T)` means parse succeeded.
 - `None` means parse failed (often after emitting a diagnostic and/or attempting
@@ -24,11 +25,19 @@ grammar elements.
 
 ## Current State
 
-### Parser behavior
+### Historical baseline (why migration started)
 
-- Parse functions frequently return `Option<T>`.
+- Parse functions frequently returned `Option<T>`.
 - Diagnostics are emitted as side effects (`self.error(...)`).
 - Recovery is done by synchronization helpers (`synchronize_*`) in callers.
+
+### Current implementation snapshot
+
+- `ParseResult<T>` is now used across major parser modules.
+- Centralized boundary reporting (`report_parse_error(...)`) is in place for
+  many recovery catch points.
+- Some transitional direct diagnostic paths remain (documented in Implementation
+  Status below).
 
 ### Compiler pipeline behavior
 
@@ -117,6 +126,20 @@ Why this is not automatically a strict improvement:
 - Value comes from stronger contracts (fatal vs diagnostic policy, partial
   outputs), not from wrapper types alone.
 
+### C. Explicit structural validity phase between parsing and semantic analysis
+
+Adopt a dedicated phase for syntax-adjacent language rules once a file is
+parseable:
+
+- parser owns syntax construction and syntax-error recovery
+- structural pass owns parseable-but-invalid declaration/file structure rules
+- semantic/type phases own rules requiring name/type/use information
+
+Representative ownership:
+
+- imports-must-be-top-of-file: structural validity phase
+- unused imports: semantic/type analysis phase
+
 ## ParseError Shape (initial)
 
 Minimal and control-flow oriented:
@@ -175,6 +198,17 @@ Target final-form guidance:
 8. Parser internals should separate:
    - control-flow failure (`ParseError`)
    - user diagnostic rendering (recovery/boundary ownership)
+9. Parseable-but-invalid structural language rules should not accumulate in
+   parser internals; they should live in a dedicated structural validity phase.
+
+## Ownership Rubric
+
+Use this rubric for rule placement:
+
+1. Parser: cannot build reliable syntax structure from tokens.
+2. Structural validity pass: structure is parseable, but violates
+   language-declared structural/order constraints.
+3. Semantic/type analysis: requires name/type/use information.
 
 ## Example
 
@@ -252,6 +286,14 @@ Refinement:
 4. Preserve parser resilience so errorful files still yield useful syntax output
    plus diagnostics for tooling.
 
+### Phase 4: structural-validity extraction and stabilization
+
+1. Introduce or expand a dedicated structural validity phase crate.
+2. Move syntax-adjacent policy checks (for example declaration-order rules) out
+   of parser internals into that phase.
+3. Keep parser focused on structure construction + recovery only.
+4. Preserve diagnostic ownership determinism and snapshot stability.
+
 ## Compatibility and Risk
 
 ### What should remain stable
@@ -286,7 +328,9 @@ Refinement:
 
 1. Parser internals no longer use `Option` as a parse-failure channel.
 2. Optional syntax is represented without nested option return types.
-3. Phase entrypoints use a consistent boundary envelope (`CompilerPhaseResult`).
+3. Phase entrypoints either use a consistent boundary envelope
+   (`CompilerPhaseResult`) or explicitly document why a different boundary shape
+   is clearer for that phase.
 4. `tests/diagnostics` pass with expected single-error fixture behavior rules
    intact.
 5. Generics/constraints parsing remains correct and readable.
@@ -298,6 +342,8 @@ Refinement:
    diagnostic rendering responsibilities.
 9. Errorful files still produce useful parse outputs and diagnostics for tooling
    flows.
+10. Parseable-but-invalid structural constraints are owned by structural
+    validity phase, not parser internals.
 
 ## Target End State
 
@@ -337,6 +383,12 @@ tools:
    - Unified boundary envelopes are useful if they provide predictable partial
      outputs and clear fatal/error semantics.
    - They are not a goal by themselves; tooling value is the goal.
+
+4. Shared frontend behavior:
+   - Structural validity diagnostics should come from a dedicated phase that can
+     be reused consistently by CLI and LSP.
+   - Parser should remain resilient and avoid policy-specific branching that is
+     unrelated to syntax construction.
 
 ## Lexer/Parser Final Ownership Model
 
@@ -466,3 +518,5 @@ with reality.
    `ParseError` -> diagnostics once) to remove transitional duplication bridges.
 3. Remove transitional constructs (for example `AlreadyReported`) once the
    single parse-phase aggregation model is in place.
+4. Move parseable-but-policy invalid structural checks (for example imports
+   ordering) into dedicated structural validity phase ownership.

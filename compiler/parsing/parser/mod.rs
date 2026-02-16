@@ -58,17 +58,20 @@ impl Parser {
             let mut doc = self.parse_leading_doc_comment_block();
             if self.at_eof() {
                 if let Some(doc) = doc {
-                    self.error("doc comment must document a declaration", doc.span);
+                    self.report_parse_error(&ParseError::Recovered {
+                        message: "doc comment must document a declaration".to_string(),
+                        span: doc.span,
+                    });
                 }
                 break;
             }
             if let Some(found_doc) = doc.as_ref()
                 && self.peek_span().line != found_doc.end_line + 1
             {
-                self.error(
-                    "doc comment must document a declaration",
-                    found_doc.span.clone(),
-                );
+                self.report_parse_error(&ParseError::Recovered {
+                    message: "doc comment must document a declaration".to_string(),
+                    span: found_doc.span.clone(),
+                });
                 doc = None;
             }
 
@@ -99,10 +102,16 @@ impl Parser {
                     )
                 } else {
                     if let Some(doc) = doc {
-                        self.error("doc comment must document a declaration", doc.span);
+                        self.report_parse_error(&ParseError::Recovered {
+                            message: "doc comment must document a declaration".to_string(),
+                            span: doc.span,
+                        });
                     }
                     let span = self.peek_span();
-                    self.error("expected declaration after 'public'", span);
+                    self.report_parse_error(&ParseError::Recovered {
+                        message: "expected declaration after 'public'".to_string(),
+                        span,
+                    });
                     self.synchronize();
                     None
                 }
@@ -134,10 +143,16 @@ impl Parser {
             } else if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
                 saw_non_import_declaration = true;
                 if let Some(doc) = doc {
-                    self.error("doc comment must document a declaration", doc.span);
+                    self.report_parse_error(&ParseError::Recovered {
+                        message: "doc comment must document a declaration".to_string(),
+                        span: doc.span,
+                    });
                 }
                 let span = self.peek_span();
-                self.error("expected keyword 'type' before type declaration", span);
+                self.report_parse_error(&ParseError::Recovered {
+                    message: "expected keyword 'type' before type declaration".to_string(),
+                    span,
+                });
                 self.advance();
                 self.synchronize();
                 None
@@ -154,10 +169,16 @@ impl Parser {
             } else {
                 saw_non_import_declaration = true;
                 if let Some(doc) = doc {
-                    self.error("doc comment must document a declaration", doc.span);
+                    self.report_parse_error(&ParseError::Recovered {
+                        message: "doc comment must document a declaration".to_string(),
+                        span: doc.span,
+                    });
                 }
                 let span = self.peek_span();
-                self.error("expected declaration", span);
+                self.report_parse_error(&ParseError::Recovered {
+                    message: "expected declaration".to_string(),
+                    span,
+                });
                 self.synchronize();
                 None
             };

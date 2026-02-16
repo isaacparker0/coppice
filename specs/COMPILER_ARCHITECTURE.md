@@ -28,11 +28,12 @@ This architecture exists to support Coppice language goals:
 ## Canonical Pipeline
 
 1. Lexing and parsing
-2. File-role policy checks
-3. Package/import/export/visibility resolution
-4. Semantic lowering (`syntax` -> `semantic_program`)
-5. Type analysis
-6. Driver orchestration and diagnostic rendering
+2. Syntax structural validity checks
+3. File-role policy checks
+4. Package/import/export/visibility resolution
+5. Semantic lowering (`syntax` -> `semantic_program`)
+6. Type analysis
+7. Driver orchestration and diagnostic rendering
 
 ---
 
@@ -49,6 +50,16 @@ Produces `compiler/syntax::ParsedFile`.
 Owns parser-facing syntax AST.
 
 This is the representation of source structure, not semantic meaning.
+
+## `compiler/syntax_rules`
+
+Owns syntax-adjacent language validity rules that require parsed structure but
+not semantic/type information.
+
+Examples:
+
+- declaration-order constraints (for example imports-at-top-of-file)
+- file-level structural constraints independent of file role
 
 ## `compiler/file_role_rules`
 
@@ -157,11 +168,12 @@ contract for downstream analysis.
 High-level direction:
 
 1. `parsing -> syntax`
-2. semantic resolution passes depend on parser/syntax outputs as needed
-3. `syntax -> semantic_lowering -> semantic_program`
-4. `package_symbols -> semantic_program + semantic_types`
-5. `type_analysis -> semantic_program + semantic_types`
-6. `driver` depends on all phase crates for orchestration
+2. `syntax_rules -> syntax`
+3. semantic resolution passes depend on parser/syntax outputs as needed
+4. `syntax -> semantic_lowering -> semantic_program`
+5. `package_symbols -> semantic_program + semantic_types`
+6. `type_analysis -> semantic_program + semantic_types`
+7. `driver` depends on all phase crates for orchestration
 
 Key prohibitions:
 
@@ -180,10 +192,22 @@ Diagnostics must be emitted by the phase that owns the violated rule.
 Rules:
 
 1. Parsing errors come from parsing.
-2. File-role policy errors come from file-role rules.
-3. Import/export/visibility errors come from semantic resolution passes.
-4. Type errors come from type analysis.
-5. Driver renders and sorts diagnostics; it does not invent semantic rules.
+2. Syntax structural validity errors come from syntax rules.
+3. File-role policy errors come from file-role rules.
+4. Import/export/visibility errors come from semantic resolution passes.
+5. Type errors come from type analysis.
+6. Driver renders and sorts diagnostics; it does not invent semantic rules.
+
+## Ownership Rubric
+
+Use this rubric whenever phase ownership is ambiguous:
+
+1. Parsing owns failures where reliable syntax structure cannot be built from
+   tokens.
+2. Syntax rules own failures where structure is parseable but violates
+   language-declared structural constraints.
+3. Semantic/type phases own failures that require name, visibility, type, or
+   usage information.
 
 ---
 
