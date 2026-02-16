@@ -5,6 +5,7 @@ pub struct PhaseResult {
     pub status: PhaseStatus,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PhaseStatus {
     Ok,
     PreventsDownstreamExecution,

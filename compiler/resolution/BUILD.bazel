@@ -1,0 +1,36 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "resolution",
+    srcs = ["lib.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/binding",
+        "//compiler/diagnostics",
+        "//compiler/exports",
+        "//compiler/package_graph",
+        "//compiler/phase_results",
+        "//compiler/symbols",
+        "//compiler/syntax",
+        "//compiler/visibility",
+    ],
+)
+
+dependency_enforcement_test(
+    name = "resolution_forbidden_dependencies",
+    forbidden = [
+        "//compiler/driver",
+        "//compiler/file_role_rules",
+        "//compiler/package_symbols",
+        "//compiler/packages",
+        "//compiler/parsing",
+        "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
+        "//compiler/semantic_types",
+        "//compiler/syntax_rules",
+        "//compiler/type_analysis",
+        "//compiler/workspace",
+    ],
+    target = ":resolution",
+)
