@@ -205,7 +205,14 @@ fn lower_parameter_declaration(
 
 fn lower_block(block: &syntax::Block) -> semantic::Block {
     semantic::Block {
-        statements: block.statements.iter().map(lower_statement).collect(),
+        statements: block
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                syntax::BlockItem::DocComment(_) => None,
+                syntax::BlockItem::Statement(statement) => Some(lower_statement(statement)),
+            })
+            .collect(),
         span: block.span.clone(),
     }
 }

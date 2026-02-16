@@ -82,7 +82,7 @@ Owns package-level semantic resolution orchestration:
 - package cycle diagnostics
 - binding conflict checks
 
-Returns `PhaseOutput<ResolutionArtifacts>` where artifacts include:
+Returns `FileScopedPhaseOutput<ResolutionArtifacts>` where artifacts include:
 
 - resolved imports
 - per-file resolution status

@@ -81,8 +81,11 @@ Semantics:
 1. Parsing: `PhaseOutput<ParsedFile>`
 2. Syntax rules: `PhaseOutput<()>`
 3. File-role rules: `PhaseOutput<()>`
-4. Resolution: `PhaseOutput<ResolutionArtifacts>`
+4. Resolution: `FileScopedPhaseOutput<ResolutionArtifacts>`
 5. Type analysis: `PhaseOutput<()>`
+
+Resolution uses the file-scoped phase envelope because diagnostics and gating
+status are tracked per file (`status_by_file`).
 
 ## Structural vs Semantic Rule Placement
 

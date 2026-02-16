@@ -1,7 +1,10 @@
 use compiler__diagnostics::Diagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
-use compiler__syntax::{Declaration, FileItem, ParsedFile, StructMemberItem, TypeDeclarationKind};
+use compiler__syntax::{
+    Block, BlockItem, Declaration, FileItem, ParsedFile, Statement, StructMemberItem,
+    TypeDeclarationKind,
+};
 
 #[derive(Clone, Copy)]
 enum SyntaxRuleViolationKind {
@@ -75,13 +78,24 @@ fn check_import_order(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolatio
 fn check_doc_comment_placement(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
     check_file_item_doc_comments(&file.items, violations);
     for declaration in file.top_level_declarations() {
-        let Declaration::Type(type_declaration) = declaration else {
-            continue;
-        };
-        let TypeDeclarationKind::Struct { items } = &type_declaration.kind else {
-            continue;
-        };
-        check_struct_member_doc_comments(items, violations);
+        match declaration {
+            Declaration::Type(type_declaration) => {
+                let TypeDeclarationKind::Struct { items } = &type_declaration.kind else {
+                    continue;
+                };
+                check_struct_member_doc_comments(items, violations);
+                for item in items {
+                    let StructMemberItem::Method(method_declaration) = item else {
+                        continue;
+                    };
+                    check_block_doc_comments(&method_declaration.body, violations);
+                }
+            }
+            Declaration::Function(function_declaration) => {
+                check_block_doc_comments(&function_declaration.body, violations);
+            }
+            Declaration::Import(_) | Declaration::Exports(_) | Declaration::Constant(_) => {}
+        }
     }
 }
 
@@ -144,6 +158,39 @@ fn check_struct_member_doc_comments(
                 kind: SyntaxRuleViolationKind::DocCommentMustDocumentDeclaration,
                 span: doc_comment.span.clone(),
             });
+        }
+    }
+}
+
+fn check_block_doc_comments(block: &Block, violations: &mut Vec<SyntaxRuleViolation>) {
+    for item in &block.items {
+        match item {
+            BlockItem::DocComment(doc_comment) => violations.push(SyntaxRuleViolation {
+                kind: SyntaxRuleViolationKind::DocCommentMustDocumentDeclaration,
+                span: doc_comment.span.clone(),
+            }),
+            BlockItem::Statement(statement) => match statement {
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    check_block_doc_comments(then_block, violations);
+                    if let Some(block) = else_block {
+                        check_block_doc_comments(block, violations);
+                    }
+                }
+                Statement::For { body, .. } => {
+                    check_block_doc_comments(body, violations);
+                }
+                Statement::Let { .. }
+                | Statement::Assign { .. }
+                | Statement::Return { .. }
+                | Statement::Abort { .. }
+                | Statement::Break { .. }
+                | Statement::Continue { .. }
+                | Statement::Expression { .. } => {}
+            },
         }
     }
 }

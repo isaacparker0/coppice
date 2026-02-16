@@ -27,7 +27,6 @@ pub(super) enum MissingTokenKind {
 
 #[derive(Clone, Debug)]
 pub(super) enum InvalidConstructKind {
-    DocCommentMustDocumentDeclaration,
     FirstMethodParameterMustBeSelf,
     ConstantsRequireExplicitTypeAnnotation,
     TypeArgumentsMustBeFollowedByCall,
@@ -45,6 +44,12 @@ pub(super) enum RecoveredKind {
     UnexpectedEqualsInExpression,
 }
 
+// Parser error variants represent syntactic construction failures. Parseable
+// structural policy diagnostics are owned by later phases.
+//
+// Future parser recovery/tooling work may enrich this model with machine-usable
+// metadata (for example expected-vs-found classifications and recovery hints)
+// while remaining focused on parsing validity.
 #[derive(Clone, Debug)]
 pub(super) enum ParseError {
     UnexpectedToken {
@@ -302,9 +307,6 @@ impl Parser {
             }
             ParseError::InvalidConstruct { kind, span } => {
                 let message = match kind {
-                    InvalidConstructKind::DocCommentMustDocumentDeclaration => {
-                        "doc comment must document a declaration".to_string()
-                    }
                     InvalidConstructKind::FirstMethodParameterMustBeSelf => {
                         "first method parameter must be 'self'".to_string()
                     }

@@ -22,7 +22,11 @@ pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     check_public_declaration_roles(file, &mut diagnostics);
     check_main_function_roles(file, &mut diagnostics);
 
-    let status = PhaseStatus::Ok;
+    let status = if diagnostics.is_empty() {
+        PhaseStatus::Ok
+    } else {
+        PhaseStatus::PreventsDownstreamExecution
+    };
 
     PhaseOutput {
         value: (),

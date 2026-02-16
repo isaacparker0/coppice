@@ -1,17 +1,22 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
-use compiler__syntax::{Block, Statement};
+use compiler__syntax::{Block, BlockItem, Statement};
 
-use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser};
+use super::{ExpressionSpan, ParseResult, Parser};
 
 impl Parser {
     pub(super) fn parse_block(&mut self) -> ParseResult<Block> {
         let start = self.expect_symbol(Symbol::LeftBrace)?;
-        let mut statements = Vec::new();
+        let mut items = Vec::new();
         self.skip_statement_terminators();
         while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
+            if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
+                items.push(BlockItem::DocComment(doc_comment));
+                self.skip_statement_terminators();
+                continue;
+            }
             match self.parse_statement() {
-                Ok(statement) => statements.push(statement),
+                Ok(statement) => items.push(BlockItem::Statement(statement)),
                 Err(error) => {
                     self.report_parse_error(&error);
                     self.synchronize_statement();
@@ -21,7 +26,7 @@ impl Parser {
         }
         let end = self.expect_symbol(Symbol::RightBrace)?;
         Ok(Block {
-            statements,
+            items,
             span: Span {
                 start: start.start,
                 end: end.end,
@@ -32,18 +37,6 @@ impl Parser {
     }
 
     pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
-        if self.peek_is_doc_comment() {
-            if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
-                return Err(ParseError::InvalidConstruct {
-                    kind: InvalidConstructKind::DocCommentMustDocumentDeclaration,
-                    span: doc_comment.span,
-                });
-            }
-            return Err(ParseError::InvalidConstruct {
-                kind: InvalidConstructKind::DocCommentMustDocumentDeclaration,
-                span: self.peek_span(),
-            });
-        }
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
             let value = self.parse_expression()?;

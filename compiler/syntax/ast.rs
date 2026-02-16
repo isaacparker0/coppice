@@ -150,8 +150,14 @@ pub struct ParameterDeclaration {
 
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub statements: Vec<Statement>,
+    pub items: Vec<BlockItem>,
     pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum BlockItem {
+    DocComment(DocComment),
+    Statement(Statement),
 }
 
 #[derive(Clone, Debug)]
