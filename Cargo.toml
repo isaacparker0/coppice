@@ -21,8 +21,18 @@ syn = { version = "^2.0.116", features = ["full", "parsing", "visit"] }
 # Our crate names use double underscore as path separator.
 non_snake_case = "allow"
 
+# keep-sorted start
+non_ascii_idents = "deny"
+redundant_imports = "warn"
 unreachable_pub = "warn"
+unsafe_attr_outside_unsafe = "deny"
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unused_extern_crates = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
 unused_qualifications = "warn"
+# keep-sorted end
 
 [lints.clippy]
 correctness = { level = "deny", priority = -1 }
