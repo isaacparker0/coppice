@@ -4,7 +4,7 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "semantic_types",
     srcs = ["lib.rs"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/packages",
         "//compiler/source",

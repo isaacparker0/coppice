@@ -4,7 +4,7 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "resolution",
     srcs = ["lib.rs"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/binding",
         "//compiler/diagnostics",

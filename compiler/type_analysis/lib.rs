@@ -13,6 +13,10 @@ use compiler__semantic_types::{
     TypedSymbol, type_from_builtin_name,
 };
 use compiler__source::Span;
+use compiler__type_annotated_program::{
+    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunction,
+    TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
+};
 
 mod assignability;
 mod declarations;
@@ -27,9 +31,9 @@ pub fn check_package_unit(
     package_id: PackageId,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
-) -> PhaseOutput<()> {
+) -> PhaseOutput<TypeAnnotatedFile> {
     let mut diagnostics = Vec::new();
-    analyze_package_unit(
+    let summary = analyze_package_unit(
         package_id,
         package_unit,
         imported_bindings,
@@ -42,9 +46,106 @@ pub fn check_package_unit(
     };
 
     PhaseOutput {
-        value: (),
+        value: TypeAnnotatedFile {
+            function_signature_by_name: function_signature_by_name_from_summary(&summary),
+            main_function: build_main_function_annotation(package_unit),
+        },
         diagnostics,
         status,
+    }
+}
+
+fn function_signature_by_name_from_summary(
+    summary: &FileTypecheckSummary,
+) -> HashMap<String, TypeAnnotatedFunctionSignature> {
+    let mut function_signature_by_name = HashMap::new();
+    for (name, typed_symbol) in &summary.typed_symbol_by_name {
+        let TypedSymbol::Function(function_signature) = typed_symbol else {
+            continue;
+        };
+        function_signature_by_name.insert(
+            name.clone(),
+            TypeAnnotatedFunctionSignature {
+                type_parameter_count: function_signature.type_parameters.len(),
+                parameter_count: function_signature.parameter_types.len(),
+                returns_nil: function_signature.return_type == Type::Nil,
+            },
+        );
+    }
+    function_signature_by_name
+}
+
+fn build_main_function_annotation(package_unit: &SemanticFile) -> Option<TypeAnnotatedFunction> {
+    let main_function =
+        package_unit
+            .declarations
+            .iter()
+            .find_map(|declaration| match declaration {
+                Declaration::Function(function) if function.name == "main" => Some(function),
+                _ => None,
+            })?;
+    Some(TypeAnnotatedFunction {
+        name: main_function.name.clone(),
+        span: main_function.span.clone(),
+        statements: main_function
+            .body
+            .statements
+            .iter()
+            .map(type_annotated_statement_from_semantic_statement)
+            .collect(),
+    })
+}
+
+fn type_annotated_statement_from_semantic_statement(
+    statement: &Statement,
+) -> TypeAnnotatedStatement {
+    match statement {
+        Statement::Expression { value, span } => TypeAnnotatedStatement::Expression {
+            value: type_annotated_expression_from_semantic_expression(value),
+            span: span.clone(),
+        },
+        Statement::Return { value, span } => TypeAnnotatedStatement::Return {
+            value: type_annotated_expression_from_semantic_expression(value),
+            span: span.clone(),
+        },
+        _ => TypeAnnotatedStatement::Unsupported {
+            span: statement.span(),
+        },
+    }
+}
+
+fn type_annotated_expression_from_semantic_expression(
+    expression: &Expression,
+) -> TypeAnnotatedExpression {
+    match expression {
+        Expression::NilLiteral { span } => {
+            TypeAnnotatedExpression::NilLiteral { span: span.clone() }
+        }
+        Expression::StringLiteral { value, span } => TypeAnnotatedExpression::StringLiteral {
+            value: value.clone(),
+            span: span.clone(),
+        },
+        Expression::Identifier { name, span } => TypeAnnotatedExpression::Identifier {
+            name: name.clone(),
+            span: span.clone(),
+        },
+        Expression::Call {
+            callee,
+            type_arguments,
+            arguments,
+            span,
+        } => TypeAnnotatedExpression::Call {
+            callee: Box::new(type_annotated_expression_from_semantic_expression(callee)),
+            arguments: arguments
+                .iter()
+                .map(type_annotated_expression_from_semantic_expression)
+                .collect(),
+            has_type_arguments: !type_arguments.is_empty(),
+            span: span.clone(),
+        },
+        _ => TypeAnnotatedExpression::Unsupported {
+            span: expression.span(),
+        },
     }
 }
 

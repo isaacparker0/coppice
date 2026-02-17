@@ -2,30 +2,39 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "semantic_program",
+    name = "type_annotated_program",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
     deps = ["//compiler/source"],
 )
 
 dependency_enforcement_test(
-    name = "semantic_program_forbidden_dependencies",
+    name = "type_annotated_program_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
         "//compiler/diagnostics",
         "//compiler/driver",
+        "//compiler/executable_lowering",
+        "//compiler/executable_program",
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
         "//compiler/package_symbols",
         "//compiler/packages",
         "//compiler/parsing",
-        "//compiler/syntax",
+        "//compiler/phase_results",
+        "//compiler/reports",
+        "//compiler/resolution",
+        "//compiler/rust_backend",
+        "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
         "//compiler/semantic_types",
         "//compiler/symbols",
+        "//compiler/syntax",
+        "//compiler/syntax_rules",
         "//compiler/type_analysis",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":semantic_program",
+    target = ":type_annotated_program",
 )

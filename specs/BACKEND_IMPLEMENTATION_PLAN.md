@@ -253,6 +253,7 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 
 - `compiler/executable_program`
 - `compiler/executable_lowering`
+- `compiler/type_annotated_program`
 - `compiler/rust_backend`
 
 2. CLI supports runnable flow:
@@ -276,35 +277,21 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 
 1. Matches planned backend package boundaries and keeps `check` frontend-first.
 2. Matches `specs/TOOLCHAIN_EXECUTION_MODEL.md` hermetic toolchain policy.
-3. Provides a real executable path for language iteration without bypassing
+3. Driver orchestration is single-pass per command and reused by `check` and
+   `build`/`run`, avoiding split correctness contracts.
+4. Executable lowering consumes `type_annotated_program` (typed artifact
+   boundary), not semantic-only artifacts.
+5. Backend artifact identity is explicit (no fixed output names), providing a
+   scalable path for multiple binaries and Bazel rule/action integration.
+6. Provides a real executable path for language iteration without bypassing
    long-term architecture.
 
 ### Critical gaps to address next
 
-1. Driver contract parity gap:
-
-- Current `build`/`run` correctness depends on CLI pre-check behavior.
-- Requirement: driver/build orchestration must enforce the same frontend gating
-  guarantees independently so non-CLI callers (for example future
-  `rules_coppice`) get identical behavior.
-
-2. Typed-lowering contract gap:
-
-- Plan defines executable lowering as semantic + typechecked artifacts ->
-  executable program.
-- Current implementation lowers from semantic form only.
-- Requirement: move executable lowering input contract to include typed
-  artifacts (or an explicit typed summary) as the authoritative path.
-
-3. Artifact contract gap:
-
-- Current backend writes fixed artifact names (`main.rs`, `main`) in the output
-  directory.
-- Requirement: define stable artifact naming/identity semantics that scale to
-  multiple binaries and Bazel rule/action mode outputs.
-
-These gaps are considered the next-priority work to keep the minimal slice
-cleanly extensible to the full target architecture.
+1. `runtime_interface` crate is still planned and not yet introduced.
+2. Cross-backend parity testing is still planned (single backend currently).
+3. Executable lowering and type-annotated artifact coverage is intentionally
+   narrow and should expand with language feature support.
 
 ---
 

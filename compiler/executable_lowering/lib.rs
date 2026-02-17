@@ -1,61 +1,39 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{ExecutableExpression, ExecutableProgram, ExecutableStatement};
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
-use compiler__semantic_program::{Declaration, Expression, SemanticFile, Statement};
 use compiler__source::Span;
+use compiler__type_annotated_program::{
+    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedStatement,
+};
 
 #[must_use]
-pub fn lower_semantic_file(semantic_file: &SemanticFile) -> PhaseOutput<ExecutableProgram> {
+pub fn lower_type_annotated_file(
+    type_annotated_file: &TypeAnnotatedFile,
+) -> PhaseOutput<ExecutableProgram> {
     let mut diagnostics = Vec::new();
     let mut statements = Vec::new();
 
-    let main_function =
-        semantic_file
-            .declarations
-            .iter()
-            .find_map(|declaration| match declaration {
-                Declaration::Function(function) if function.name == "main" => Some(function),
-                _ => None,
-            });
+    validate_main_signature_from_type_analysis(type_annotated_file, &mut diagnostics);
 
-    if let Some(main_function) = main_function {
-        if !main_function.type_parameters.is_empty() {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode currently supports only non-generic main()",
-                main_function.span.clone(),
-            ));
-        }
-        if !main_function.parameters.is_empty() {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode currently supports only parameterless main()",
-                main_function.span.clone(),
-            ));
-        }
-        if !is_nil_type(&main_function.return_type) {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode currently supports only main() -> nil",
-                main_function.return_type.span.clone(),
-            ));
-        }
-
-        for statement in &main_function.body.statements {
+    if let Some(main_function) = &type_annotated_file.main_function {
+        for statement in &main_function.statements {
             match statement {
-                Statement::Expression { value, span } => {
-                    let executable_expression = lower_expression(value, &mut diagnostics, span);
+                TypeAnnotatedStatement::Expression { value, .. } => {
+                    let executable_expression = lower_expression(value, &mut diagnostics);
                     statements.push(ExecutableStatement::Expression {
                         expression: executable_expression,
                     });
                 }
-                Statement::Return { value, span } => {
-                    let executable_expression = lower_expression(value, &mut diagnostics, span);
+                TypeAnnotatedStatement::Return { value, .. } => {
+                    let executable_expression = lower_expression(value, &mut diagnostics);
                     statements.push(ExecutableStatement::Return {
                         value: executable_expression,
                     });
                 }
-                _ => {
+                TypeAnnotatedStatement::Unsupported { span } => {
                     diagnostics.push(PhaseDiagnostic::new(
                         "build mode currently supports only print(\"...\") and return nil in main",
-                        statement_span(statement),
+                        span.clone(),
                     ));
                 }
             }
@@ -80,26 +58,62 @@ pub fn lower_semantic_file(semantic_file: &SemanticFile) -> PhaseOutput<Executab
     }
 }
 
-fn lower_expression(
-    expression: &Expression,
+fn validate_main_signature_from_type_analysis(
+    type_annotated_file: &TypeAnnotatedFile,
     diagnostics: &mut Vec<PhaseDiagnostic>,
-    span: &Span,
+) {
+    let fallback_span_for_diagnostic = type_annotated_file
+        .main_function
+        .as_ref()
+        .map_or_else(fallback_span, |main_function| main_function.span.clone());
+    let Some(main_signature) = type_annotated_file.function_signature_by_name.get("main") else {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode requires type analysis information for main",
+            fallback_span_for_diagnostic,
+        ));
+        return;
+    };
+    if main_signature.type_parameter_count != 0 {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only non-generic main()",
+            fallback_span_for_diagnostic.clone(),
+        ));
+    }
+    if main_signature.parameter_count != 0 {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only parameterless main()",
+            fallback_span_for_diagnostic.clone(),
+        ));
+    }
+    if !main_signature.returns_nil {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only main() -> nil",
+            fallback_span_for_diagnostic,
+        ));
+    }
+}
+
+fn lower_expression(
+    expression: &TypeAnnotatedExpression,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> ExecutableExpression {
     match expression {
-        Expression::NilLiteral { .. } => ExecutableExpression::NilLiteral,
-        Expression::StringLiteral { value, .. } => ExecutableExpression::StringLiteral {
-            value: value.clone(),
-        },
-        Expression::Identifier { name, .. } => {
+        TypeAnnotatedExpression::NilLiteral { .. } => ExecutableExpression::NilLiteral,
+        TypeAnnotatedExpression::StringLiteral { value, .. } => {
+            ExecutableExpression::StringLiteral {
+                value: value.clone(),
+            }
+        }
+        TypeAnnotatedExpression::Identifier { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
-        Expression::Call {
+        TypeAnnotatedExpression::Call {
             callee,
-            type_arguments,
             arguments,
-            ..
+            has_type_arguments,
+            span,
         } => {
-            if !type_arguments.is_empty() {
+            if *has_type_arguments {
                 diagnostics.push(PhaseDiagnostic::new(
                     "build mode currently supports calls without type arguments",
                     span.clone(),
@@ -107,40 +121,20 @@ fn lower_expression(
             }
             let lowered_arguments = arguments
                 .iter()
-                .map(|argument| lower_expression(argument, diagnostics, span))
+                .map(|argument| lower_expression(argument, diagnostics))
                 .collect();
             ExecutableExpression::Call {
-                callee: Box::new(lower_expression(callee, diagnostics, span)),
+                callee: Box::new(lower_expression(callee, diagnostics)),
                 arguments: lowered_arguments,
             }
         }
-        _ => {
+        TypeAnnotatedExpression::Unsupported { span } => {
             diagnostics.push(PhaseDiagnostic::new(
                 "build mode currently supports only nil, string literals, identifiers, and call expressions",
                 span.clone(),
             ));
             ExecutableExpression::NilLiteral
         }
-    }
-}
-
-fn is_nil_type(type_name: &compiler__semantic_program::TypeName) -> bool {
-    type_name.names.len() == 1
-        && type_name.names[0].name == "nil"
-        && type_name.names[0].type_arguments.is_empty()
-}
-
-fn statement_span(statement: &Statement) -> Span {
-    match statement {
-        Statement::Let { span, .. }
-        | Statement::Assign { span, .. }
-        | Statement::Return { span, .. }
-        | Statement::Abort { span, .. }
-        | Statement::Break { span, .. }
-        | Statement::Continue { span, .. }
-        | Statement::If { span, .. }
-        | Statement::For { span, .. }
-        | Statement::Expression { span, .. } => span.clone(),
     }
 }
 

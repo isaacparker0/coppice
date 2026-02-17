@@ -13,7 +13,7 @@ rust_library(
         "type_narrowing.rs",
         "unused_bindings.rs",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/diagnostics",
         "//compiler/packages",
@@ -21,6 +21,7 @@ rust_library(
         "//compiler/semantic_program",
         "//compiler/semantic_types",
         "//compiler/source",
+        "//compiler/type_annotated_program",
     ],
 )
 

@@ -3,7 +3,7 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "driver",
     srcs = ["lib.rs"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/diagnostics",
         "//compiler/executable_lowering",
@@ -21,6 +21,7 @@ rust_library(
         "//compiler/syntax",
         "//compiler/syntax_rules",
         "//compiler/type_analysis",
+        "//compiler/type_annotated_program",
         "//compiler/visibility",
         "//compiler/workspace",
     ],

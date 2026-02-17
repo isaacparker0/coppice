@@ -12,7 +12,7 @@ rust_library(
         "HERMETIC_CLANG": "$(rlocationpath @toolchains_llvm_bootstrapped//tools:clang)",
         "HERMETIC_RUSTC": "$(rlocationpath @rules_rust//rust/toolchain:current_rustc_files)",
     },
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/executable_program",
         "//compiler/reports",

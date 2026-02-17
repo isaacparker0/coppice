@@ -47,7 +47,6 @@ fn main() {
             run_check(&path, workspace_root, format);
         }
         Command::Build { path, output_dir } => {
-            ensure_no_check_diagnostics(&path, workspace_root);
             match build_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
                 Ok(built) => println!("{}", built.executable_path),
                 Err(error) => {
@@ -57,7 +56,6 @@ fn main() {
             }
         }
         Command::Run { path, output_dir } => {
-            ensure_no_check_diagnostics(&path, workspace_root);
             match run_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
                 Ok(exit_code) => {
                     if exit_code != 0 {
@@ -113,24 +111,6 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
                 }
             }
-            process::exit(1);
-        }
-    }
-}
-
-fn ensure_no_check_diagnostics(path: &str, workspace_root: Option<&str>) {
-    match check_target_with_workspace_root(path, workspace_root) {
-        Ok(checked_target) => {
-            if !checked_target.diagnostics.is_empty() {
-                render_diagnostics_text(
-                    &checked_target.diagnostics,
-                    &checked_target.source_by_path,
-                );
-                process::exit(1);
-            }
-        }
-        Err(error) => {
-            render_compiler_failure_text(path, &error);
             process::exit(1);
         }
     }

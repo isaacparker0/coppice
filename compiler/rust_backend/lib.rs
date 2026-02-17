@@ -11,9 +11,14 @@ pub struct BuiltRustProgram {
     pub binary_path: PathBuf,
 }
 
+pub struct BuildArtifactIdentity {
+    pub executable_stem: String,
+}
+
 pub fn build_program(
     program: &ExecutableProgram,
     build_directory: &Path,
+    artifact_identity: &BuildArtifactIdentity,
 ) -> Result<BuiltRustProgram, CompilerFailure> {
     fs::create_dir_all(build_directory).map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::BuildFailed,
@@ -22,8 +27,8 @@ pub fn build_program(
         details: Vec::new(),
     })?;
 
-    let source_path = build_directory.join("main.rs");
-    let binary_path = build_directory.join("main");
+    let source_path = build_directory.join(format!("{}.rs", artifact_identity.executable_stem));
+    let binary_path = build_directory.join(&artifact_identity.executable_stem);
     let source = emit_rust_source(program)?;
     fs::write(&source_path, source).map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::BuildFailed,

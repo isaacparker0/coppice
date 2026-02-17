@@ -15,7 +15,7 @@ rust_library(
         "parser/statements.rs",
         "parser/types.rs",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/diagnostics",
         "//compiler/phase_results",

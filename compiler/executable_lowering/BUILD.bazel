@@ -4,13 +4,13 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "executable_lowering",
     srcs = ["lib.rs"],
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/diagnostics",
         "//compiler/executable_program",
         "//compiler/phase_results",
-        "//compiler/semantic_program",
         "//compiler/source",
+        "//compiler/type_annotated_program",
     ],
 )
 
@@ -29,6 +29,7 @@ dependency_enforcement_test(
         "//compiler/resolution",
         "//compiler/rust_backend",
         "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
         "//compiler/semantic_types",
         "//compiler/symbols",
         "//compiler/syntax",

@@ -69,6 +69,11 @@ Implication:
 
 - In Bazel mode, Rust targets can compile/link using hermetic Bazel-managed
   toolchain resolution.
+- CLI build/run currently resolve tool binaries via Bazel-provided runfiles data
+  at runtime (independent of whether the CLI was built from source in the
+  monorepo or distributed as a built binary with runfiles).
+- Backend output artifact naming is identity-driven by compiler orchestration,
+  not fixed backend filenames.
 
 Note:
 

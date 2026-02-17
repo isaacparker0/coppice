@@ -153,7 +153,7 @@ Output: `FileScopedPhaseOutput<ResolutionArtifacts>`.
 
 Owns type, flow, and semantic usage checks (for example unused imports).
 
-Output: `PhaseOutput<()>`.
+Output: `PhaseOutput<type_annotated_program::TypeAnnotatedFile>`.
 
 ### `compiler/driver`
 
@@ -201,8 +201,9 @@ High-level direction:
 3. `file_role_rules -> syntax`
 4. `resolution -> {symbols,exports,visibility,package_graph,binding}`
 5. `semantic_lowering -> {syntax,semantic_program}`
-6. `type_analysis -> {semantic_program,semantic_types}`
-7. `driver` depends on phase crates for orchestration
+6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
+7. `executable_lowering -> {type_annotated_program,executable_program}`
+8. `driver` depends on phase crates for orchestration
 
 Key prohibitions:
 
@@ -251,4 +252,4 @@ These are intentional future extensions, not current architecture debt:
 
 1. enrich `ParseError` metadata for stronger recovery/tooling decisions
 2. expand syntax losslessness as tooling needs additional trivia fidelity
-3. introduce backend IR ownership layers when build/run/codegen are added
+3. expand backend IR/runtime layering beyond the current minimal runnable slice
