@@ -59,7 +59,7 @@ fn handle_parse_request(request: ParseRequest) -> ParseResponse {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     match args {

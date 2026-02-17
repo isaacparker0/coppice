@@ -80,7 +80,7 @@ pub fn check_target_with_workspace_root(
         details: Vec::new(),
     })?;
     let workspace_root_display =
-        workspace_root_override.map_or_else(|| ".".to_string(), std::string::ToString::to_string);
+        workspace_root_override.map_or_else(|| ".".to_string(), ToString::to_string);
     let workspace_root = if let Some(root) = workspace_root_override {
         let parsed_root = PathBuf::from(root);
         if parsed_root.is_absolute() {
