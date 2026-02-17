@@ -1,3 +1,6 @@
+# keep-sorted start
 .DS_Store
+.coppice
 bazel-*
 target
+# keep-sorted end

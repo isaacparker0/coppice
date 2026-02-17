@@ -10,6 +10,7 @@ It is a planning/spec companion to:
 - `specs/SAFETY_BACKEND_STRATEGY.md`
 - `specs/COMPILER_ARCHITECTURE.md`
 - `specs/LANGUAGE_DESIGN.md`
+- `specs/TOOLCHAIN_EXECUTION_MODEL.md`
 
 Status: Draft.
 
@@ -22,6 +23,9 @@ Status: Draft.
 2. Preserve a clean path to long-term direct backend targets.
 3. Keep `check` fast and frontend-only.
 4. Enforce explicit ownership boundaries between compiler and runtime concerns.
+
+Toolchain policy for build/run execution is defined in
+`specs/TOOLCHAIN_EXECUTION_MODEL.md`.
 
 ---
 
@@ -235,6 +239,72 @@ Deferred with explicit build diagnostics:
 2. Interfaces/intersections
 3. Advanced generics corners
 4. Full shared mutable synchronization surface
+
+---
+
+## Current Minimal Slice Status (Implemented)
+
+This section records the current repository state for the minimal end-to-end
+slice. It is intentionally narrow and is expected to expand incrementally.
+
+### What is implemented now
+
+1. New backend boundary crates exist:
+
+- `compiler/executable_program`
+- `compiler/executable_lowering`
+- `compiler/rust_backend`
+
+2. CLI supports runnable flow:
+
+- `coppice build <path-to-bin.coppice> [--output-dir ...]`
+- `coppice run <path-to-bin.coppice> [--output-dir ...]`
+- `build`/`run` require an explicit `.bin.coppice` file path.
+
+3. Toolchain execution for Rust emission is hermetic in monorepo CLI mode:
+
+- compiler resolves tool binaries from Bazel-provided runfiles/runtime data.
+- compiler does not shell out to host `rustc`/`clang`.
+
+4. Minimal runnable language subset is enabled for now:
+
+- `main() -> nil`
+- `print("...")`
+- `return nil`
+
+### Where this is aligned
+
+1. Matches planned backend package boundaries and keeps `check` frontend-first.
+2. Matches `specs/TOOLCHAIN_EXECUTION_MODEL.md` hermetic toolchain policy.
+3. Provides a real executable path for language iteration without bypassing
+   long-term architecture.
+
+### Critical gaps to address next
+
+1. Driver contract parity gap:
+
+- Current `build`/`run` correctness depends on CLI pre-check behavior.
+- Requirement: driver/build orchestration must enforce the same frontend gating
+  guarantees independently so non-CLI callers (for example future
+  `rules_coppice`) get identical behavior.
+
+2. Typed-lowering contract gap:
+
+- Plan defines executable lowering as semantic + typechecked artifacts ->
+  executable program.
+- Current implementation lowers from semantic form only.
+- Requirement: move executable lowering input contract to include typed
+  artifacts (or an explicit typed summary) as the authoritative path.
+
+3. Artifact contract gap:
+
+- Current backend writes fixed artifact names (`main.rs`, `main`) in the output
+  directory.
+- Requirement: define stable artifact naming/identity semantics that scale to
+  multiple binaries and Bazel rule/action mode outputs.
+
+These gaps are considered the next-priority work to keep the minimal slice
+cleanly extensible to the full target architecture.
 
 ---
 

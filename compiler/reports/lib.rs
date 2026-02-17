@@ -78,6 +78,8 @@ pub enum CompilerFailureKind {
     TargetOutsideWorkspace,
     PackageNotFound,
     WorkspaceDiscoveryFailed,
+    BuildFailed,
+    RunFailed,
 }
 
 #[derive(Clone, Debug, Serialize)]

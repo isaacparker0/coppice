@@ -224,7 +224,7 @@ impl<'a> TypeChecker<'a> {
             package_id,
             constants: HashMap::new(),
             types: HashMap::new(),
-            functions: HashMap::new(),
+            functions: builtin_functions(),
             imported_functions: HashMap::new(),
             imported_bindings: imported_binding_map,
             methods: HashMap::new(),
@@ -592,6 +592,19 @@ impl<'a> TypeChecker<'a> {
             self.error(format!("unused import '{name}'"), span);
         }
     }
+}
+
+fn builtin_functions() -> HashMap<String, FunctionInfo> {
+    let mut functions = HashMap::new();
+    functions.insert(
+        "print".to_string(),
+        FunctionInfo {
+            type_parameters: Vec::new(),
+            parameter_types: vec![Type::String],
+            return_type: Type::Nil,
+        },
+    );
+    functions
 }
 
 impl ExpressionSpan for Expression {

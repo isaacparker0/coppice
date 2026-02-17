@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
+use compiler__executable_lowering::lower_semantic_file;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
     PackageSymbolFileInput, ResolvedImportBindingSummary, ResolvedImportSummary,
@@ -16,6 +17,7 @@ use compiler__reports::{
     RenderedDiagnostic,
 };
 use compiler__resolution as resolution;
+use compiler__rust_backend::{build_program, run_program};
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__semantic_program::SemanticFile;
 use compiler__source::{FileRole, compare_paths, path_to_key};
@@ -553,4 +555,197 @@ fn display_path(path: &Path) -> String {
         return path_to_key(relative_path);
     }
     path_to_key(&absolute_path)
+}
+
+pub struct BuiltTarget {
+    pub executable_path: String,
+}
+
+pub fn build_target_with_workspace_root(
+    path: &str,
+    workspace_root_override: Option<&str>,
+    output_directory_override: Option<&str>,
+) -> Result<BuiltTarget, CompilerFailure> {
+    let current_directory = std::env::current_dir().map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: error.to_string(),
+        path: Some(".".to_string()),
+        details: Vec::new(),
+    })?;
+    let workspace_root_display =
+        workspace_root_override.map_or_else(|| ".".to_string(), ToString::to_string);
+    let workspace_root = if let Some(root) = workspace_root_override {
+        let parsed_root = PathBuf::from(root);
+        if parsed_root.is_absolute() {
+            parsed_root
+        } else {
+            current_directory.join(parsed_root)
+        }
+    } else {
+        current_directory
+    };
+    let workspace_root_metadata =
+        fs::metadata(&workspace_root).map_err(|error| CompilerFailure {
+            kind: CompilerFailureKind::InvalidWorkspaceRoot,
+            message: format!("invalid workspace root: {error}"),
+            path: Some(workspace_root_display.clone()),
+            details: Vec::new(),
+        })?;
+    if !workspace_root_metadata.is_dir() {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootNotDirectory,
+            message: "workspace root must be a directory".to_string(),
+            path: Some(workspace_root_display.clone()),
+            details: Vec::new(),
+        });
+    }
+    if !workspace_root.join("PACKAGE.coppice").is_file() {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootMissingManifest,
+            message: "not a Coppice workspace root (missing PACKAGE.coppice)".to_string(),
+            path: Some(workspace_root_display),
+            details: Vec::new(),
+        });
+    }
+
+    let target_path = PathBuf::from(path);
+    let absolute_target_path = if target_path.is_absolute() {
+        target_path
+    } else {
+        workspace_root.join(&target_path)
+    };
+    let metadata = fs::metadata(&absolute_target_path).map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: error.to_string(),
+        path: Some(path.to_string()),
+        details: Vec::new(),
+    })?;
+    if !metadata.is_file() && !metadata.is_dir() {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::InvalidCheckTarget,
+            message: "expected a file or directory path".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
+    }
+    if !absolute_target_path.starts_with(&workspace_root) {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::TargetOutsideWorkspace,
+            message: "target is outside the current workspace root".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
+    }
+
+    let workspace = discover_workspace(&workspace_root).map_err(|errors| CompilerFailure {
+        kind: CompilerFailureKind::WorkspaceDiscoveryFailed,
+        message: "workspace discovery failed".to_string(),
+        path: Some(path.to_string()),
+        details: errors
+            .into_iter()
+            .map(|error| CompilerFailureDetail {
+                message: error.message,
+                path: error.path.map(|path| path.display().to_string()),
+            })
+            .collect(),
+    })?;
+
+    let binary_entrypoint =
+        find_single_binary_entrypoint(&workspace, &absolute_target_path, metadata.is_file())?;
+    let source = fs::read_to_string(workspace_root.join(&binary_entrypoint)).map_err(|error| {
+        CompilerFailure {
+            kind: CompilerFailureKind::ReadSource,
+            message: error.to_string(),
+            path: Some(path_to_key(&binary_entrypoint)),
+            details: Vec::new(),
+        }
+    })?;
+    let parse_result = parse_file(&source, FileRole::BinaryEntrypoint);
+    let lowered = lower_parsed_file(&parse_result.value).value;
+    let executable_lowering_result = lower_semantic_file(&lowered);
+    if !matches!(executable_lowering_result.status, PhaseStatus::Ok) {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::BuildFailed,
+            message: "build mode does not support this program yet".to_string(),
+            path: Some(path_to_key(&binary_entrypoint)),
+            details: executable_lowering_result
+                .diagnostics
+                .into_iter()
+                .map(|diagnostic| CompilerFailureDetail {
+                    message: format!(
+                        "{} (line {}, column {})",
+                        diagnostic.message, diagnostic.span.line, diagnostic.span.column
+                    ),
+                    path: Some(path_to_key(&binary_entrypoint)),
+                })
+                .collect(),
+        });
+    }
+
+    let build_directory = if let Some(output_directory) = output_directory_override {
+        let parsed_output_directory = PathBuf::from(output_directory);
+        if parsed_output_directory.is_absolute() {
+            parsed_output_directory
+        } else {
+            workspace_root.join(parsed_output_directory)
+        }
+    } else {
+        workspace_root.join(".coppice").join("build")
+    };
+    let built_program = build_program(&executable_lowering_result.value, &build_directory)?;
+
+    Ok(BuiltTarget {
+        executable_path: display_path(&built_program.binary_path),
+    })
+}
+
+pub fn run_target_with_workspace_root(
+    path: &str,
+    workspace_root_override: Option<&str>,
+    output_directory_override: Option<&str>,
+) -> Result<i32, CompilerFailure> {
+    let built =
+        build_target_with_workspace_root(path, workspace_root_override, output_directory_override)?;
+    run_program(Path::new(&built.executable_path))
+}
+
+fn find_single_binary_entrypoint(
+    workspace: &Workspace,
+    absolute_target_path: &Path,
+    target_is_file: bool,
+) -> Result<PathBuf, CompilerFailure> {
+    if !target_is_file {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::BuildFailed,
+            message: "build/run target must be an explicit .bin.coppice file".to_string(),
+            path: Some(path_to_key(absolute_target_path)),
+            details: Vec::new(),
+        });
+    }
+
+    let role = FileRole::from_path(absolute_target_path).ok_or_else(|| CompilerFailure {
+        kind: CompilerFailureKind::InvalidCheckTarget,
+        message: "target file is not a Coppice source file".to_string(),
+        path: Some(path_to_key(absolute_target_path)),
+        details: Vec::new(),
+    })?;
+    if role != FileRole::BinaryEntrypoint {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::BuildFailed,
+            message: "build/run target must be a .bin.coppice file".to_string(),
+            path: Some(path_to_key(absolute_target_path)),
+            details: Vec::new(),
+        });
+    }
+
+    Ok(path_to_relative_workspace_path(
+        workspace.root_directory(),
+        absolute_target_path,
+    ))
+}
+
+fn path_to_relative_workspace_path(workspace_root: &Path, absolute_path: &Path) -> PathBuf {
+    absolute_path
+        .strip_prefix(workspace_root)
+        .map_or_else(|_| absolute_path.to_path_buf(), Path::to_path_buf)
 }
