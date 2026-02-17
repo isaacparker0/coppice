@@ -60,59 +60,115 @@ pub fn run_program(binary_path: &Path) -> Result<i32, CompilerFailure> {
 fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailure> {
     let mut output = String::from("fn main() {\n");
     for statement in &program.statements {
-        match statement {
-            ExecutableStatement::Binding {
-                name,
-                mutable,
-                initializer,
-            } => {
-                let initializer_source = emit_expression(initializer)?;
-                output.push_str("    ");
-                if *mutable {
-                    output.push_str("let mut ");
-                } else {
-                    output.push_str("let ");
-                }
-                output.push_str(name);
-                output.push_str(" = ");
-                output.push_str(&initializer_source);
-                output.push_str(";\n");
-            }
-            ExecutableStatement::Assign { name, value } => {
-                let value_source = emit_expression(value)?;
-                output.push_str("    ");
-                output.push_str(name);
-                output.push_str(" = ");
-                output.push_str(&value_source);
-                output.push_str(";\n");
-            }
-            ExecutableStatement::Expression { expression } => {
-                let expression_source = emit_expression(expression)?;
-                output.push_str("    ");
-                output.push_str(&expression_source);
-                output.push_str(";\n");
-            }
-            ExecutableStatement::Return { value } => {
-                let value_source = emit_expression(value)?;
-                if value_source != "()" {
-                    return Err(CompilerFailure {
-                        kind: CompilerFailureKind::BuildFailed,
-                        message: "build mode currently supports only return nil".to_string(),
-                        path: None,
-                        details: Vec::new(),
-                    });
-                }
-                output.push_str("    return;\n");
-            }
-        }
+        emit_statement(statement, &mut output, 1)?;
     }
     output.push_str("}\n");
     Ok(output)
 }
 
+fn emit_statement(
+    statement: &ExecutableStatement,
+    output: &mut String,
+    indent_level: usize,
+) -> Result<(), CompilerFailure> {
+    let indent = "    ".repeat(indent_level);
+    match statement {
+        ExecutableStatement::Binding {
+            name,
+            mutable,
+            initializer,
+        } => {
+            let initializer_source = emit_expression(initializer)?;
+            output.push_str(&indent);
+            if *mutable {
+                output.push_str("let mut ");
+            } else {
+                output.push_str("let ");
+            }
+            output.push_str(name);
+            output.push_str(" = ");
+            output.push_str(&initializer_source);
+            output.push_str(";\n");
+        }
+        ExecutableStatement::Assign { name, value } => {
+            let value_source = emit_expression(value)?;
+            output.push_str(&indent);
+            output.push_str(name);
+            output.push_str(" = ");
+            output.push_str(&value_source);
+            output.push_str(";\n");
+        }
+        ExecutableStatement::If {
+            condition,
+            then_statements,
+            else_statements,
+        } => {
+            let condition_source = emit_expression(condition)?;
+            output.push_str(&indent);
+            output.push_str("if ");
+            output.push_str(&condition_source);
+            output.push_str(" {\n");
+            for statement in then_statements {
+                emit_statement(statement, output, indent_level + 1)?;
+            }
+            output.push_str(&indent);
+            output.push('}');
+            if let Some(else_statements) = else_statements {
+                output.push_str(" else {\n");
+                for statement in else_statements {
+                    emit_statement(statement, output, indent_level + 1)?;
+                }
+                output.push_str(&indent);
+                output.push('}');
+            }
+            output.push('\n');
+        }
+        ExecutableStatement::For {
+            condition,
+            body_statements,
+        } => {
+            output.push_str(&indent);
+            if let Some(condition) = condition {
+                let condition_source = emit_expression(condition)?;
+                output.push_str("while ");
+                output.push_str(&condition_source);
+                output.push_str(" {\n");
+            } else {
+                output.push_str("loop {\n");
+            }
+            for statement in body_statements {
+                emit_statement(statement, output, indent_level + 1)?;
+            }
+            output.push_str(&indent);
+            output.push_str("}\n");
+        }
+        ExecutableStatement::Expression { expression } => {
+            let expression_source = emit_expression(expression)?;
+            output.push_str(&indent);
+            output.push_str(&expression_source);
+            output.push_str(";\n");
+        }
+        ExecutableStatement::Return { value } => {
+            let value_source = emit_expression(value)?;
+            if value_source != "()" {
+                return Err(CompilerFailure {
+                    kind: CompilerFailureKind::BuildFailed,
+                    message: "build mode currently supports only return nil".to_string(),
+                    path: None,
+                    details: Vec::new(),
+                });
+            }
+            output.push_str(&indent);
+            output.push_str("return;\n");
+        }
+    }
+    Ok(())
+}
+
 fn emit_expression(expression: &ExecutableExpression) -> Result<String, CompilerFailure> {
     match expression {
         ExecutableExpression::IntegerLiteral { value } => Ok(value.to_string()),
+        ExecutableExpression::BooleanLiteral { value } => Ok(value.to_string()),
         ExecutableExpression::NilLiteral => Ok("()".to_string()),
         ExecutableExpression::StringLiteral { value } => Ok(format!("{value:?}")),
         ExecutableExpression::Identifier { name } => Ok(name.clone()),

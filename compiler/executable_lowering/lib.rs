@@ -11,59 +11,18 @@ pub fn lower_type_annotated_file(
     type_annotated_file: &TypeAnnotatedFile,
 ) -> PhaseOutput<ExecutableProgram> {
     let mut diagnostics = Vec::new();
-    let mut statements = Vec::new();
 
     validate_main_signature_from_type_analysis(type_annotated_file, &mut diagnostics);
 
-    if let Some(main_function) = &type_annotated_file.main_function {
-        for statement in &main_function.statements {
-            match statement {
-                TypeAnnotatedStatement::Binding {
-                    name,
-                    mutable,
-                    initializer,
-                    ..
-                } => {
-                    let executable_initializer = lower_expression(initializer, &mut diagnostics);
-                    statements.push(ExecutableStatement::Binding {
-                        name: name.clone(),
-                        mutable: *mutable,
-                        initializer: executable_initializer,
-                    });
-                }
-                TypeAnnotatedStatement::Assign { name, value, .. } => {
-                    let executable_value = lower_expression(value, &mut diagnostics);
-                    statements.push(ExecutableStatement::Assign {
-                        name: name.clone(),
-                        value: executable_value,
-                    });
-                }
-                TypeAnnotatedStatement::Expression { value, .. } => {
-                    let executable_expression = lower_expression(value, &mut diagnostics);
-                    statements.push(ExecutableStatement::Expression {
-                        expression: executable_expression,
-                    });
-                }
-                TypeAnnotatedStatement::Return { value, .. } => {
-                    let executable_expression = lower_expression(value, &mut diagnostics);
-                    statements.push(ExecutableStatement::Return {
-                        value: executable_expression,
-                    });
-                }
-                TypeAnnotatedStatement::Unsupported { span } => {
-                    diagnostics.push(PhaseDiagnostic::new(
-                        "build mode currently supports local binding/assign, print(\"...\"), and return nil in main",
-                        span.clone(),
-                    ));
-                }
-            }
-        }
+    let statements = if let Some(main_function) = &type_annotated_file.main_function {
+        lower_statements(&main_function.statements, &mut diagnostics)
     } else {
         diagnostics.push(PhaseDiagnostic::new(
             "main function not found in binary entrypoint",
             fallback_span(),
         ));
-    }
+        Vec::new()
+    };
 
     let status = if diagnostics.is_empty() {
         PhaseStatus::Ok
@@ -113,6 +72,85 @@ fn validate_main_signature_from_type_analysis(
     }
 }
 
+fn lower_statements(
+    statements: &[TypeAnnotatedStatement],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Vec<ExecutableStatement> {
+    statements
+        .iter()
+        .filter_map(|statement| lower_statement(statement, diagnostics))
+        .collect()
+}
+
+fn lower_statement(
+    statement: &TypeAnnotatedStatement,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<ExecutableStatement> {
+    match statement {
+        TypeAnnotatedStatement::Binding {
+            name,
+            mutable,
+            initializer,
+            ..
+        } => {
+            let executable_initializer = lower_expression(initializer, diagnostics);
+            Some(ExecutableStatement::Binding {
+                name: name.clone(),
+                mutable: *mutable,
+                initializer: executable_initializer,
+            })
+        }
+        TypeAnnotatedStatement::Assign { name, value, .. } => {
+            let executable_value = lower_expression(value, diagnostics);
+            Some(ExecutableStatement::Assign {
+                name: name.clone(),
+                value: executable_value,
+            })
+        }
+        TypeAnnotatedStatement::If {
+            condition,
+            then_statements,
+            else_statements,
+            ..
+        } => Some(ExecutableStatement::If {
+            condition: lower_expression(condition, diagnostics),
+            then_statements: lower_statements(then_statements, diagnostics),
+            else_statements: else_statements
+                .as_ref()
+                .map(|statements| lower_statements(statements, diagnostics)),
+        }),
+        TypeAnnotatedStatement::For {
+            condition,
+            body_statements,
+            ..
+        } => Some(ExecutableStatement::For {
+            condition: condition
+                .as_ref()
+                .map(|expression| lower_expression(expression, diagnostics)),
+            body_statements: lower_statements(body_statements, diagnostics),
+        }),
+        TypeAnnotatedStatement::Expression { value, .. } => {
+            let executable_expression = lower_expression(value, diagnostics);
+            Some(ExecutableStatement::Expression {
+                expression: executable_expression,
+            })
+        }
+        TypeAnnotatedStatement::Return { value, .. } => {
+            let executable_expression = lower_expression(value, diagnostics);
+            Some(ExecutableStatement::Return {
+                value: executable_expression,
+            })
+        }
+        TypeAnnotatedStatement::Unsupported { span } => {
+            diagnostics.push(PhaseDiagnostic::new(
+                "build mode does not support this statement yet",
+                span.clone(),
+            ));
+            None
+        }
+    }
+}
+
 fn lower_expression(
     expression: &TypeAnnotatedExpression,
     diagnostics: &mut Vec<PhaseDiagnostic>,
@@ -120,6 +158,9 @@ fn lower_expression(
     match expression {
         TypeAnnotatedExpression::IntegerLiteral { value, .. } => {
             ExecutableExpression::IntegerLiteral { value: *value }
+        }
+        TypeAnnotatedExpression::BooleanLiteral { value, .. } => {
+            ExecutableExpression::BooleanLiteral { value: *value }
         }
         TypeAnnotatedExpression::NilLiteral { .. } => ExecutableExpression::NilLiteral,
         TypeAnnotatedExpression::StringLiteral { value, .. } => {
@@ -164,7 +205,7 @@ fn lower_expression(
         }
         TypeAnnotatedExpression::Unsupported { span } => {
             diagnostics.push(PhaseDiagnostic::new(
-                "build mode currently supports only int64/nil/string literals, identifiers, '+' binary expressions, and call expressions",
+                "build mode does not support this expression yet",
                 span.clone(),
             ));
             ExecutableExpression::NilLiteral

@@ -1,2 +1,2 @@
 main.bin.coppice: error: build mode does not support this program yet
-main.bin.coppice: error: build mode currently supports local binding/assign, print("..."), and return nil in main (line 2, column 5)
+main.bin.coppice: error: build mode does not support this statement yet (line 3, column 9)

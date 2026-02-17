@@ -119,6 +119,42 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            span,
+        } => TypeAnnotatedStatement::If {
+            condition: type_annotated_expression_from_semantic_expression(condition),
+            then_statements: then_block
+                .statements
+                .iter()
+                .map(type_annotated_statement_from_semantic_statement)
+                .collect(),
+            else_statements: else_block.as_ref().map(|block| {
+                block
+                    .statements
+                    .iter()
+                    .map(type_annotated_statement_from_semantic_statement)
+                    .collect()
+            }),
+            span: span.clone(),
+        },
+        Statement::For {
+            condition,
+            body,
+            span,
+        } => TypeAnnotatedStatement::For {
+            condition: condition
+                .as_ref()
+                .map(type_annotated_expression_from_semantic_expression),
+            body_statements: body
+                .statements
+                .iter()
+                .map(type_annotated_statement_from_semantic_statement)
+                .collect(),
+            span: span.clone(),
+        },
         Statement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
@@ -138,6 +174,10 @@ fn type_annotated_expression_from_semantic_expression(
 ) -> TypeAnnotatedExpression {
     match expression {
         Expression::IntegerLiteral { value, span } => TypeAnnotatedExpression::IntegerLiteral {
+            value: *value,
+            span: span.clone(),
+        },
+        Expression::BooleanLiteral { value, span } => TypeAnnotatedExpression::BooleanLiteral {
             value: *value,
             span: span.clone(),
         },

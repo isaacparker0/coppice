@@ -35,6 +35,17 @@ pub enum TypeAnnotatedStatement {
         value: TypeAnnotatedExpression,
         span: Span,
     },
+    If {
+        condition: TypeAnnotatedExpression,
+        then_statements: Vec<TypeAnnotatedStatement>,
+        else_statements: Option<Vec<TypeAnnotatedStatement>>,
+        span: Span,
+    },
+    For {
+        condition: Option<TypeAnnotatedExpression>,
+        body_statements: Vec<TypeAnnotatedStatement>,
+        span: Span,
+    },
     Expression {
         value: TypeAnnotatedExpression,
         span: Span,
@@ -52,6 +63,10 @@ pub enum TypeAnnotatedStatement {
 pub enum TypeAnnotatedExpression {
     IntegerLiteral {
         value: i64,
+        span: Span,
+    },
+    BooleanLiteral {
+        value: bool,
         span: Span,
     },
     NilLiteral {

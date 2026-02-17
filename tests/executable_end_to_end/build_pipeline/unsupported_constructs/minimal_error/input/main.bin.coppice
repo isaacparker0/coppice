@@ -1,6 +1,6 @@
 function main() -> nil {
-    if true {
-        return nil
+    for true {
+        break
     }
     return nil
 }

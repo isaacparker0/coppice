@@ -17,6 +17,15 @@ pub enum ExecutableStatement {
         name: String,
         value: ExecutableExpression,
     },
+    If {
+        condition: ExecutableExpression,
+        then_statements: Vec<ExecutableStatement>,
+        else_statements: Option<Vec<ExecutableStatement>>,
+    },
+    For {
+        condition: Option<ExecutableExpression>,
+        body_statements: Vec<ExecutableStatement>,
+    },
     Expression {
         expression: ExecutableExpression,
     },
@@ -30,6 +39,9 @@ pub enum ExecutableStatement {
 pub enum ExecutableExpression {
     IntegerLiteral {
         value: i64,
+    },
+    BooleanLiteral {
+        value: bool,
     },
     NilLiteral,
     StringLiteral {

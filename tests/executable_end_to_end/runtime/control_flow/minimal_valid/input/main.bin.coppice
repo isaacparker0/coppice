@@ -1,0 +1,14 @@
+function main() -> nil {
+    if true {
+        print("if then")
+    } else {
+        print("if else")
+    }
+
+    for false {
+        print("loop body")
+    }
+
+    print("after loop")
+    return nil
+}
