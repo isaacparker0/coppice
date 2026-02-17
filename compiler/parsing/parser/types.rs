@@ -1,22 +1,24 @@
 use crate::lexer::Symbol;
 use compiler__source::Span;
 use compiler__syntax::{
-    SyntaxEnumVariant, SyntaxTypeName, SyntaxTypeNameAtom, SyntaxTypeParameter,
+    SyntaxEnumVariant, SyntaxTypeName, SyntaxTypeNameSegment, SyntaxTypeParameter,
 };
 
 use super::{ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
     pub(super) fn parse_type_name(&mut self) -> ParseResult<SyntaxTypeName> {
-        let first = self.parse_type_name_atom()?;
+        let first = self.parse_type_name_segment()?;
         let mut names = vec![first];
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let next = self.parse_type_name_atom()?;
+            let next = self.parse_type_name_segment()?;
             names.push(next);
         }
         let first_span = names[0].span.clone();
-        let end = names.last().map_or(first_span.end, |atom| atom.span.end);
+        let end = names
+            .last()
+            .map_or(first_span.end, |segment| segment.span.end);
         Ok(SyntaxTypeName {
             names,
             span: Span {
@@ -30,23 +32,23 @@ impl Parser {
 
     pub(super) fn parse_union_type_declaration(&mut self) -> ParseResult<Vec<SyntaxTypeName>> {
         let mut variants = Vec::new();
-        let first_atom = self.parse_type_name_atom()?;
+        let first_segment = self.parse_type_name_segment()?;
         variants.push(SyntaxTypeName {
-            names: vec![first_atom.clone()],
-            span: first_atom.span.clone(),
+            names: vec![first_segment.clone()],
+            span: first_segment.span.clone(),
         });
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let atom = self.parse_type_name_atom()?;
+            let segment = self.parse_type_name_segment()?;
             variants.push(SyntaxTypeName {
-                names: vec![atom.clone()],
-                span: atom.span.clone(),
+                names: vec![segment.clone()],
+                span: segment.span.clone(),
             });
         }
         Ok(variants)
     }
 
-    pub(super) fn parse_type_name_atom(&mut self) -> ParseResult<SyntaxTypeNameAtom> {
+    pub(super) fn parse_type_name_segment(&mut self) -> ParseResult<SyntaxTypeNameSegment> {
         let (name, mut span) = self.expect_type_name_part()?;
         let mut type_arguments = Vec::new();
         if self.peek_is_symbol(Symbol::LeftBracket) {
@@ -54,7 +56,7 @@ impl Parser {
             type_arguments = arguments;
             span.end = right_bracket.end;
         }
-        Ok(SyntaxTypeNameAtom {
+        Ok(SyntaxTypeNameSegment {
             name,
             type_arguments,
             span,

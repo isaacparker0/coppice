@@ -4,6 +4,7 @@ use std::process::Command;
 
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableProgram, ExecutableStatement,
+    ExecutableTypeReference,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
@@ -60,7 +61,26 @@ pub fn run_program(binary_path: &Path) -> Result<i32, CompilerFailure> {
 }
 
 fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailure> {
-    let mut output = String::from("fn main() {\n");
+    let mut output = String::new();
+    for struct_declaration in &program.struct_declarations {
+        output.push_str("struct ");
+        output.push_str(&struct_declaration.name);
+        output.push_str(" {\n");
+        for field in &struct_declaration.fields {
+            output.push_str("    ");
+            output.push_str(&field.name);
+            output.push_str(": ");
+            output.push_str(match field.type_reference {
+                ExecutableTypeReference::Int64 => "i64",
+                ExecutableTypeReference::Boolean => "bool",
+                ExecutableTypeReference::String => "&'static str",
+                ExecutableTypeReference::Named { ref name } => name,
+            });
+            output.push_str(",\n");
+        }
+        output.push_str("}\n\n");
+    }
+    output.push_str("fn main() {\n");
     for statement in &program.statements {
         emit_statement(statement, &mut output, 1)?;
     }
@@ -182,6 +202,21 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
         ExecutableExpression::NilLiteral => Ok("()".to_string()),
         ExecutableExpression::StringLiteral { value } => Ok(format!("{value:?}")),
         ExecutableExpression::Identifier { name } => Ok(name.clone()),
+        ExecutableExpression::StructLiteral { type_name, fields } => {
+            let field_source = fields
+                .iter()
+                .map(|field| {
+                    emit_expression(&field.value)
+                        .map(|value_source| format!("{}: {value_source}", field.name))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ");
+            Ok(format!("{type_name} {{ {field_source} }}"))
+        }
+        ExecutableExpression::FieldAccess { target, field } => {
+            let target_source = emit_expression(target)?;
+            Ok(format!("({target_source}).{field}"))
+        }
         ExecutableExpression::Binary {
             operator,
             left,

@@ -246,12 +246,12 @@ pub enum SemanticUnaryOperator {
 
 #[derive(Clone, Debug)]
 pub struct SemanticTypeName {
-    pub names: Vec<SemanticTypeNameAtom>,
+    pub names: Vec<SemanticTypeNameSegment>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct SemanticTypeNameAtom {
+pub struct SemanticTypeNameSegment {
     pub name: String,
     pub type_arguments: Vec<SemanticTypeName>,
     pub span: Span,

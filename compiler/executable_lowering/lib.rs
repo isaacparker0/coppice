@@ -1,11 +1,14 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
+    ExecutableTypeReference,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedStatement,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
+    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
 };
 
 #[must_use]
@@ -15,6 +18,8 @@ pub fn lower_type_annotated_file(
     let mut diagnostics = Vec::new();
 
     validate_main_signature_from_type_analysis(type_annotated_file, &mut diagnostics);
+    let struct_declarations =
+        lower_struct_declarations(&type_annotated_file.struct_declarations, &mut diagnostics);
 
     let statements =
         if let Some(main_function_declaration) = &type_annotated_file.main_function_declaration {
@@ -34,10 +39,43 @@ pub fn lower_type_annotated_file(
     };
 
     PhaseOutput {
-        value: ExecutableProgram { statements },
+        value: ExecutableProgram {
+            struct_declarations,
+            statements,
+        },
         diagnostics,
         status,
     }
+}
+
+fn lower_struct_declarations(
+    struct_declarations: &[TypeAnnotatedStructDeclaration],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Vec<ExecutableStructDeclaration> {
+    let mut lowered = Vec::new();
+    for struct_declaration in struct_declarations {
+        let mut executable_fields = Vec::new();
+        let mut struct_supported = true;
+        for field in &struct_declaration.fields {
+            let Some(type_reference) =
+                lower_type_name_to_type_referenceerence(&field.type_name, diagnostics)
+            else {
+                struct_supported = false;
+                continue;
+            };
+            executable_fields.push(ExecutableStructFieldDeclaration {
+                name: field.name.clone(),
+                type_reference,
+            });
+        }
+        if struct_supported {
+            lowered.push(ExecutableStructDeclaration {
+                name: struct_declaration.name.clone(),
+                fields: executable_fields,
+            });
+        }
+    }
+    lowered
 }
 
 fn validate_main_signature_from_type_analysis(
@@ -178,6 +216,31 @@ fn lower_expression(
         TypeAnnotatedExpression::Identifier { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
+        TypeAnnotatedExpression::StructLiteral {
+            type_name, fields, ..
+        } => {
+            let Some(executable_type_name) = lower_type_name_to_identifier(type_name, diagnostics)
+            else {
+                return ExecutableExpression::NilLiteral;
+            };
+            let executable_fields = fields
+                .iter()
+                .map(|field| ExecutableStructLiteralField {
+                    name: field.name.clone(),
+                    value: lower_expression(&field.value, diagnostics),
+                })
+                .collect();
+            ExecutableExpression::StructLiteral {
+                type_name: executable_type_name,
+                fields: executable_fields,
+            }
+        }
+        TypeAnnotatedExpression::FieldAccess { target, field, .. } => {
+            ExecutableExpression::FieldAccess {
+                target: Box::new(lower_expression(target, diagnostics)),
+                field: field.clone(),
+            }
+        }
         TypeAnnotatedExpression::Binary {
             operator,
             left,
@@ -229,6 +292,48 @@ fn lower_expression(
             ExecutableExpression::NilLiteral
         }
     }
+}
+
+fn lower_type_name_to_type_referenceerence(
+    type_name: &TypeAnnotatedTypeName,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<ExecutableTypeReference> {
+    let name = lower_type_name_to_identifier(type_name, diagnostics)?;
+    match name.as_str() {
+        "int64" => Some(ExecutableTypeReference::Int64),
+        "boolean" => Some(ExecutableTypeReference::Boolean),
+        "string" => Some(ExecutableTypeReference::String),
+        "nil" => {
+            diagnostics.push(PhaseDiagnostic::new(
+                "build mode does not support nil as a struct field type yet",
+                type_name.span.clone(),
+            ));
+            None
+        }
+        _ => Some(ExecutableTypeReference::Named { name }),
+    }
+}
+
+fn lower_type_name_to_identifier(
+    type_name: &TypeAnnotatedTypeName,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<String> {
+    if type_name.names.len() != 1 {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only single-segment type names",
+            type_name.span.clone(),
+        ));
+        return None;
+    }
+    let segment = &type_name.names[0];
+    if segment.has_type_arguments {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only non-generic type names",
+            segment.span.clone(),
+        ));
+        return None;
+    }
+    Some(segment.name.clone())
 }
 
 fn fallback_span() -> Span {

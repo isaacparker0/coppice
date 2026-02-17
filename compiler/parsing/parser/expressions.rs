@@ -2,7 +2,7 @@ use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxBinaryOperator, SyntaxExpression, SyntaxMatchArm, SyntaxMatchPattern,
-    SyntaxStructLiteralField, SyntaxTypeName, SyntaxTypeNameAtom, SyntaxUnaryOperator,
+    SyntaxStructLiteralField, SyntaxTypeName, SyntaxTypeNameSegment, SyntaxUnaryOperator,
 };
 
 use super::{
@@ -367,19 +367,19 @@ impl Parser {
                     && (self.peek_is_symbol(Symbol::LeftBrace)
                         || self.peek_is_symbol(Symbol::LeftBracket))
                 {
-                    let mut atom = SyntaxTypeNameAtom {
+                    let mut segment = SyntaxTypeNameSegment {
                         name,
                         type_arguments: Vec::new(),
                         span: token.span.clone(),
                     };
                     if self.peek_is_symbol(Symbol::LeftBracket) {
                         let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
-                        atom.type_arguments = type_arguments;
-                        atom.span.end = right_bracket.end;
+                        segment.type_arguments = type_arguments;
+                        segment.span.end = right_bracket.end;
                     }
                     let type_name = SyntaxTypeName {
-                        names: vec![atom.clone()],
-                        span: atom.span,
+                        names: vec![segment.clone()],
+                        span: segment.span,
                     };
                     return self.parse_struct_literal(type_name);
                 }
@@ -529,7 +529,7 @@ impl Parser {
         }
 
         let type_name = SyntaxTypeName {
-            names: vec![SyntaxTypeNameAtom {
+            names: vec![SyntaxTypeNameSegment {
                 name: qualified_name,
                 type_arguments: Vec::new(),
                 span: qualified_span.clone(),

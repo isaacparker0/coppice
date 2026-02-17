@@ -467,10 +467,10 @@ fn lower_type_name(type_name: &syntax::SyntaxTypeName) -> semantic::SemanticType
         names: type_name
             .names
             .iter()
-            .map(|atom| semantic::SemanticTypeNameAtom {
-                name: atom.name.clone(),
-                type_arguments: atom.type_arguments.iter().map(lower_type_name).collect(),
-                span: atom.span.clone(),
+            .map(|segment| semantic::SemanticTypeNameSegment {
+                name: segment.name.clone(),
+                type_arguments: segment.type_arguments.iter().map(lower_type_name).collect(),
+                span: segment.span.clone(),
             })
             .collect(),
         span: type_name.span.clone(),

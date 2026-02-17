@@ -5,7 +5,6 @@ rust_library(
     name = "executable_program",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
-    deps = ["@crates//:serde"],
 )
 
 dependency_enforcement_test(

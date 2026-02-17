@@ -1,12 +1,30 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ExecutableProgram {
+    pub struct_declarations: Vec<ExecutableStructDeclaration>,
     pub statements: Vec<ExecutableStatement>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Clone, Debug)]
+pub struct ExecutableStructDeclaration {
+    pub name: String,
+    pub fields: Vec<ExecutableStructFieldDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutableStructFieldDeclaration {
+    pub name: String,
+    pub type_reference: ExecutableTypeReference,
+}
+
+#[derive(Clone, Debug)]
+pub enum ExecutableTypeReference {
+    Int64,
+    Boolean,
+    String,
+    Named { name: String },
+}
+
+#[derive(Clone, Debug)]
 pub enum ExecutableStatement {
     Binding {
         name: String,
@@ -36,8 +54,7 @@ pub enum ExecutableStatement {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Clone, Debug)]
 pub enum ExecutableExpression {
     IntegerLiteral {
         value: i64,
@@ -52,6 +69,14 @@ pub enum ExecutableExpression {
     Identifier {
         name: String,
     },
+    StructLiteral {
+        type_name: String,
+        fields: Vec<ExecutableStructLiteralField>,
+    },
+    FieldAccess {
+        target: Box<ExecutableExpression>,
+        field: String,
+    },
     Binary {
         operator: ExecutableBinaryOperator,
         left: Box<ExecutableExpression>,
@@ -63,8 +88,7 @@ pub enum ExecutableExpression {
     },
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug)]
 pub enum ExecutableBinaryOperator {
     Add,
     EqualEqual,
@@ -73,4 +97,10 @@ pub enum ExecutableBinaryOperator {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutableStructLiteralField {
+    pub name: String,
+    pub value: ExecutableExpression,
 }

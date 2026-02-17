@@ -17,6 +17,8 @@ use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
+    TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
 };
 
 mod assignability;
@@ -49,6 +51,7 @@ pub fn check_package_unit(
     PhaseOutput {
         value: TypeAnnotatedFile {
             function_signature_by_name: function_signature_by_name_from_summary(&summary),
+            struct_declarations: build_struct_declaration_annotations(package_unit),
             main_function_declaration: build_main_function_annotation(package_unit),
         },
         diagnostics,
@@ -99,6 +102,39 @@ fn build_main_function_annotation(
             .map(type_annotated_statement_from_semantic_statement)
             .collect(),
     })
+}
+
+fn build_struct_declaration_annotations(
+    package_unit: &SemanticFile,
+) -> Vec<TypeAnnotatedStructDeclaration> {
+    package_unit
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            SemanticDeclaration::Type(type_declaration) => Some(type_declaration),
+            _ => None,
+        })
+        .filter_map(|type_declaration| match &type_declaration.kind {
+            compiler__semantic_program::SemanticTypeDeclarationKind::Struct { fields, .. } => {
+                Some(TypeAnnotatedStructDeclaration {
+                    name: type_declaration.name.clone(),
+                    fields: fields
+                        .iter()
+                        .map(|field| TypeAnnotatedStructFieldDeclaration {
+                            name: field.name.clone(),
+                            type_name: type_annotated_type_name_from_semantic_type_name(
+                                &field.type_name,
+                            ),
+                            span: field.span.clone(),
+                        })
+                        .collect(),
+                    span: type_declaration.span.clone(),
+                })
+            }
+            compiler__semantic_program::SemanticTypeDeclarationKind::Enum { .. }
+            | compiler__semantic_program::SemanticTypeDeclarationKind::Union { .. } => None,
+        })
+        .collect()
 }
 
 fn type_annotated_statement_from_semantic_statement(
@@ -207,6 +243,32 @@ fn type_annotated_expression_from_semantic_expression(
             name: name.clone(),
             span: span.clone(),
         },
+        SemanticExpression::StructLiteral {
+            type_name,
+            fields,
+            span,
+        } => TypeAnnotatedExpression::StructLiteral {
+            type_name: type_annotated_type_name_from_semantic_type_name(type_name),
+            fields: fields
+                .iter()
+                .map(|field| TypeAnnotatedStructLiteralField {
+                    name: field.name.clone(),
+                    value: type_annotated_expression_from_semantic_expression(&field.value),
+                    span: field.span.clone(),
+                })
+                .collect(),
+            span: span.clone(),
+        },
+        SemanticExpression::FieldAccess {
+            target,
+            field,
+            span,
+            ..
+        } => TypeAnnotatedExpression::FieldAccess {
+            target: Box::new(type_annotated_expression_from_semantic_expression(target)),
+            field: field.clone(),
+            span: span.clone(),
+        },
         SemanticExpression::Binary {
             operator,
             left,
@@ -274,6 +336,23 @@ fn type_annotated_expression_from_semantic_expression(
         _ => TypeAnnotatedExpression::Unsupported {
             span: expression.span(),
         },
+    }
+}
+
+fn type_annotated_type_name_from_semantic_type_name(
+    type_name: &SemanticTypeName,
+) -> TypeAnnotatedTypeName {
+    TypeAnnotatedTypeName {
+        names: type_name
+            .names
+            .iter()
+            .map(|name_segment| TypeAnnotatedTypeNameSegment {
+                name: name_segment.name.clone(),
+                has_type_arguments: !name_segment.type_arguments.is_empty(),
+                span: name_segment.span.clone(),
+            })
+            .collect(),
+        span: type_name.span.clone(),
     }
 }
 
@@ -656,13 +735,13 @@ impl<'a> TypeChecker<'a> {
     fn resolve_type_name(&mut self, type_name: &SemanticTypeName) -> Type {
         let mut resolved = Vec::new();
         let mut has_unknown = false;
-        for atom in &type_name.names {
-            let name = atom.name.as_str();
+        for segment in &type_name.names {
+            let name = segment.name.as_str();
             if let Some(type_parameter) = self.resolve_type_parameter(name) {
-                if !atom.type_arguments.is_empty() {
+                if !segment.type_arguments.is_empty() {
                     self.error(
                         format!("type parameter '{name}' does not take type arguments"),
-                        atom.span.clone(),
+                        segment.span.clone(),
                     );
                     has_unknown = true;
                     continue;
@@ -671,10 +750,10 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             if let Some(builtin) = type_from_builtin_name(name) {
-                if !atom.type_arguments.is_empty() {
+                if !segment.type_arguments.is_empty() {
                     self.error(
                         format!("built-in type '{name}' does not take type arguments"),
-                        atom.span.clone(),
+                        segment.span.clone(),
                     );
                     has_unknown = true;
                     continue;
@@ -696,24 +775,24 @@ impl<'a> TypeChecker<'a> {
                 ) {
                     self.mark_import_used(name);
                 }
-                let resolved_type_arguments = atom
+                let resolved_type_arguments = segment
                     .type_arguments
                     .iter()
                     .map(|argument| self.resolve_type_name(argument))
                     .collect::<Vec<_>>();
-                if atom.type_arguments.len() != type_parameter_count {
+                if segment.type_arguments.len() != type_parameter_count {
                     if type_parameter_count == 0 {
                         self.error(
                             format!("type '{name}' does not take type arguments"),
-                            atom.span.clone(),
+                            segment.span.clone(),
                         );
                     } else {
                         self.error(
                             format!(
                                 "type '{name}' expects {type_parameter_count} type arguments, got {}",
-                                atom.type_arguments.len()
+                                segment.type_arguments.len()
                             ),
-                            atom.span.clone(),
+                            segment.span.clone(),
                         );
                     }
                     has_unknown = true;
@@ -723,7 +802,7 @@ impl<'a> TypeChecker<'a> {
                     name,
                     &declared_type_parameters,
                     &resolved_type_arguments,
-                    &atom.span,
+                    &segment.span,
                 );
                 let nominal = NominalTypeRef {
                     id: nominal_type_id,
@@ -762,10 +841,10 @@ impl<'a> TypeChecker<'a> {
             if let Some((enum_name, variant_name)) = name.split_once('.')
                 && let Some(variant_type) = self.resolve_enum_variant_type(enum_name, variant_name)
             {
-                if !atom.type_arguments.is_empty() {
+                if !segment.type_arguments.is_empty() {
                     self.error(
                         format!("enum variant '{name}' does not take type arguments"),
-                        atom.span.clone(),
+                        segment.span.clone(),
                     );
                     has_unknown = true;
                     continue;
@@ -773,7 +852,7 @@ impl<'a> TypeChecker<'a> {
                 resolved.push(variant_type);
                 continue;
             }
-            self.error(format!("unknown type '{name}'"), atom.span.clone());
+            self.error(format!("unknown type '{name}'"), segment.span.clone());
             has_unknown = true;
         }
 

@@ -486,16 +486,16 @@ fn resolve_type_name_to_semantic_type(
     type_parameters: &[&str],
 ) -> Type {
     let mut resolved = Vec::new();
-    for atom in &type_name.names {
-        if type_parameters.contains(&atom.name.as_str()) {
-            if !atom.type_arguments.is_empty() {
+    for segment in &type_name.names {
+        if type_parameters.contains(&segment.name.as_str()) {
+            if !segment.type_arguments.is_empty() {
                 return Type::Unknown;
             }
-            resolved.push(Type::TypeParameter(atom.name.clone()));
+            resolved.push(Type::TypeParameter(segment.name.clone()));
             continue;
         }
-        if let Some(value_type) = type_from_builtin_name(&atom.name) {
-            if !atom.type_arguments.is_empty() {
+        if let Some(value_type) = type_from_builtin_name(&segment.name) {
+            if !segment.type_arguments.is_empty() {
                 return Type::Unknown;
             }
             resolved.push(value_type);
@@ -503,19 +503,19 @@ fn resolve_type_name_to_semantic_type(
         }
         let lookup_key = PublicSymbolLookupKey {
             package_id: target_package_id,
-            symbol_name: atom.name.clone(),
+            symbol_name: segment.name.clone(),
         };
         let Some(nominal_type_id) = nominal_type_id_by_lookup_key.get(&lookup_key) else {
             return Type::Unknown;
         };
-        if atom.type_arguments.is_empty() {
+        if segment.type_arguments.is_empty() {
             resolved.push(Type::Named(NominalTypeRef {
                 id: nominal_type_id.clone(),
-                display_name: atom.name.clone(),
+                display_name: segment.name.clone(),
             }));
             continue;
         }
-        let argument_types = atom
+        let argument_types = segment
             .type_arguments
             .iter()
             .map(|argument| {
@@ -530,7 +530,7 @@ fn resolve_type_name_to_semantic_type(
         resolved.push(Type::Applied {
             base: NominalTypeRef {
                 id: nominal_type_id.clone(),
-                display_name: atom.name.clone(),
+                display_name: segment.name.clone(),
             },
             arguments: argument_types,
         });

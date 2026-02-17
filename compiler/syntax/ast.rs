@@ -291,12 +291,12 @@ pub enum SyntaxUnaryOperator {
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTypeName {
-    pub names: Vec<SyntaxTypeNameAtom>,
+    pub names: Vec<SyntaxTypeNameSegment>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct SyntaxTypeNameAtom {
+pub struct SyntaxTypeNameSegment {
     pub name: String,
     pub type_arguments: Vec<SyntaxTypeName>,
     pub span: Span,

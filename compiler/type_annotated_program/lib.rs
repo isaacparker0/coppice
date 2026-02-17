@@ -5,6 +5,7 @@ use compiler__source::Span;
 #[derive(Clone, Default)]
 pub struct TypeAnnotatedFile {
     pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
+    pub struct_declarations: Vec<TypeAnnotatedStructDeclaration>,
     pub main_function_declaration: Option<TypeAnnotatedFunctionDeclaration>,
 }
 
@@ -20,6 +21,20 @@ pub struct TypeAnnotatedFunctionDeclaration {
     pub name: String,
     pub span: Span,
     pub statements: Vec<TypeAnnotatedStatement>,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedStructDeclaration {
+    pub name: String,
+    pub fields: Vec<TypeAnnotatedStructFieldDeclaration>,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedStructFieldDeclaration {
+    pub name: String,
+    pub type_name: TypeAnnotatedTypeName,
+    pub span: Span,
 }
 
 #[derive(Clone)]
@@ -86,6 +101,16 @@ pub enum TypeAnnotatedExpression {
         name: String,
         span: Span,
     },
+    StructLiteral {
+        type_name: TypeAnnotatedTypeName,
+        fields: Vec<TypeAnnotatedStructLiteralField>,
+        span: Span,
+    },
+    FieldAccess {
+        target: Box<TypeAnnotatedExpression>,
+        field: String,
+        span: Span,
+    },
     Binary {
         operator: TypeAnnotatedBinaryOperator,
         left: Box<TypeAnnotatedExpression>,
@@ -112,4 +137,24 @@ pub enum TypeAnnotatedBinaryOperator {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedTypeName {
+    pub names: Vec<TypeAnnotatedTypeNameSegment>,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedTypeNameSegment {
+    pub name: String,
+    pub has_type_arguments: bool,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedStructLiteralField {
+    pub name: String,
+    pub value: TypeAnnotatedExpression,
+    pub span: Span,
 }
