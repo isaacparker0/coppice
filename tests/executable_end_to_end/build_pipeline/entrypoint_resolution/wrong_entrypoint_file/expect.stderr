@@ -1,0 +1,1 @@
+${INPUT_DIR}/lib.coppice: error: build/run target must be a .bin.coppice file

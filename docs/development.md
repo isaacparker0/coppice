@@ -25,9 +25,3 @@ bazel run --run_in_cwd //compiler/cli:main -- \
   --workspace-root path/to/workspace \
   check path/inside/workspace/file.coppice
 ```
-
-### Update diagnostic test snapshots
-
-```bash
-UPDATE_SNAPSHOTS=1 bazel run //tests/diagnostics:diagnostics_test
-```

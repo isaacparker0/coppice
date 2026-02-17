@@ -1,0 +1,5 @@
+function main() -> nil {
+    mut x: int64 := 1
+    x = x + 1
+    return nil
+}

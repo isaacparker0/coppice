@@ -1,0 +1,4 @@
+build
+main.bin.coppice
+--output-dir
+${TMP_OUTPUT_DIR}
