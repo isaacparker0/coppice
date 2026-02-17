@@ -73,7 +73,7 @@ pub(super) enum ParseError {
 
 pub(super) type ParseResult<T> = Result<T, ParseError>;
 
-pub struct Parser {
+pub(crate) struct Parser {
     tokens: Vec<Token>,
     position: usize,
     parse_errors: Vec<ParseError>,
@@ -81,7 +81,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub(crate) fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             position: 0,
@@ -90,14 +90,14 @@ impl Parser {
         }
     }
 
-    pub fn into_diagnostics(self) -> Vec<PhaseDiagnostic> {
+    pub(crate) fn into_diagnostics(self) -> Vec<PhaseDiagnostic> {
         self.parse_errors
             .iter()
             .filter_map(Self::render_parse_error)
             .collect()
     }
 
-    pub fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
+    pub(crate) fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
         let items = self.parse_declarations();
 
         ParsedFile { role, items }

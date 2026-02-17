@@ -1,7 +1,7 @@
 use compiler__source::Span;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Keyword {
+pub(crate) enum Keyword {
     // keep-sorted start
     Abort,
     And,
@@ -29,7 +29,7 @@ pub enum Keyword {
 }
 
 impl Keyword {
-    pub fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             // keep-sorted start
             Keyword::Abort => "abort",
@@ -60,7 +60,7 @@ impl Keyword {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Symbol {
+pub(crate) enum Symbol {
     // keep-sorted start
     Arrow,
     Assign,
@@ -91,7 +91,7 @@ pub enum Symbol {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum TokenKind {
+pub(crate) enum TokenKind {
     Identifier(String),
     IntegerLiteral(i64),
     StringLiteral(String),
@@ -108,7 +108,7 @@ pub enum TokenKind {
 }
 
 #[derive(Clone, Debug)]
-pub struct Token {
+pub(crate) struct Token {
     pub kind: TokenKind,
     pub span: Span,
 }
@@ -118,7 +118,7 @@ pub(crate) struct LexError {
     pub(crate) span: Span,
 }
 
-pub struct Lexer<'a> {
+pub(crate) struct Lexer<'a> {
     source: &'a str,
     bytes: &'a [u8],
     index: usize,
@@ -128,7 +128,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub(crate) fn new(source: &'a str) -> Self {
         Self {
             source,
             bytes: source.as_bytes(),
@@ -139,7 +139,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn lex_all_tokens(&mut self) -> Vec<Token> {
+    pub(crate) fn lex_all_tokens(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         loop {
             let token = self.next_token();
@@ -152,7 +152,7 @@ impl<'a> Lexer<'a> {
         normalize_newlines_to_statement_terminators(tokens)
     }
 
-    pub fn into_errors(self) -> Vec<LexError> {
+    pub(crate) fn into_errors(self) -> Vec<LexError> {
         self.lex_errors
     }
 
