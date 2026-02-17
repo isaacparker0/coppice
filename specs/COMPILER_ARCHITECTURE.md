@@ -2,6 +2,10 @@
 
 Authoritative architecture specification for the Coppice compiler frontend.
 
+Related naming reference:
+
+- `specs/COMPILER_NAMING.md`
+
 ## Purpose
 
 This architecture exists to enforce deterministic semantics and maintainable
