@@ -183,7 +183,7 @@ fn check_block_doc_comments(block: &Block, violations: &mut Vec<SyntaxRuleViolat
                 Statement::For { body, .. } => {
                     check_block_doc_comments(body, violations);
                 }
-                Statement::Let { .. }
+                Statement::Binding { .. }
                 | Statement::Assign { .. }
                 | Statement::Return { .. }
                 | Statement::Abort { .. }

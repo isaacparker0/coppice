@@ -3,7 +3,7 @@ use compiler__executable_program::{ExecutableExpression, ExecutableProgram, Exec
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedStatement,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedStatement,
 };
 
 #[must_use]
@@ -18,6 +18,26 @@ pub fn lower_type_annotated_file(
     if let Some(main_function) = &type_annotated_file.main_function {
         for statement in &main_function.statements {
             match statement {
+                TypeAnnotatedStatement::Binding {
+                    name,
+                    mutable,
+                    initializer,
+                    ..
+                } => {
+                    let executable_initializer = lower_expression(initializer, &mut diagnostics);
+                    statements.push(ExecutableStatement::Binding {
+                        name: name.clone(),
+                        mutable: *mutable,
+                        initializer: executable_initializer,
+                    });
+                }
+                TypeAnnotatedStatement::Assign { name, value, .. } => {
+                    let executable_value = lower_expression(value, &mut diagnostics);
+                    statements.push(ExecutableStatement::Assign {
+                        name: name.clone(),
+                        value: executable_value,
+                    });
+                }
                 TypeAnnotatedStatement::Expression { value, .. } => {
                     let executable_expression = lower_expression(value, &mut diagnostics);
                     statements.push(ExecutableStatement::Expression {
@@ -32,7 +52,7 @@ pub fn lower_type_annotated_file(
                 }
                 TypeAnnotatedStatement::Unsupported { span } => {
                     diagnostics.push(PhaseDiagnostic::new(
-                        "build mode currently supports only print(\"...\") and return nil in main",
+                        "build mode currently supports local binding/assign, print(\"...\"), and return nil in main",
                         span.clone(),
                     ));
                 }
@@ -98,6 +118,9 @@ fn lower_expression(
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> ExecutableExpression {
     match expression {
+        TypeAnnotatedExpression::IntegerLiteral { value, .. } => {
+            ExecutableExpression::IntegerLiteral { value: *value }
+        }
         TypeAnnotatedExpression::NilLiteral { .. } => ExecutableExpression::NilLiteral,
         TypeAnnotatedExpression::StringLiteral { value, .. } => {
             ExecutableExpression::StringLiteral {
@@ -107,6 +130,17 @@ fn lower_expression(
         TypeAnnotatedExpression::Identifier { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
+        TypeAnnotatedExpression::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } => match operator {
+            TypeAnnotatedBinaryOperator::Add => ExecutableExpression::Add {
+                left: Box::new(lower_expression(left, diagnostics)),
+                right: Box::new(lower_expression(right, diagnostics)),
+            },
+        },
         TypeAnnotatedExpression::Call {
             callee,
             arguments,
@@ -130,7 +164,7 @@ fn lower_expression(
         }
         TypeAnnotatedExpression::Unsupported { span } => {
             diagnostics.push(PhaseDiagnostic::new(
-                "build mode currently supports only nil, string literals, identifiers, and call expressions",
+                "build mode currently supports only int64/nil/string literals, identifiers, '+' binary expressions, and call expressions",
                 span.clone(),
             ));
             ExecutableExpression::NilLiteral

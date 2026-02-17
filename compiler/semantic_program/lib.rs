@@ -117,7 +117,7 @@ pub struct Block {
 
 #[derive(Clone, Debug)]
 pub enum Statement {
-    Let {
+    Binding {
         name: String,
         mutable: bool,
         type_name: Option<TypeName>,

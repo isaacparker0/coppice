@@ -219,13 +219,13 @@ fn lower_block(block: &syntax::Block) -> semantic::Block {
 
 fn lower_statement(statement: &syntax::Statement) -> semantic::Statement {
     match statement {
-        syntax::Statement::Let {
+        syntax::Statement::Binding {
             name,
             mutable,
             type_name,
             initializer,
             span,
-        } => semantic::Statement::Let {
+        } => semantic::Statement::Binding {
             name: name.clone(),
             mutable: *mutable,
             type_name: type_name.as_ref().map(lower_type_name),

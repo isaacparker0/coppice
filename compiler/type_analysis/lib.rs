@@ -4,8 +4,8 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
-    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, SemanticFile, Statement,
-    TypeDeclaration, TypeName,
+    BinaryOperator as SemanticBinaryOperator, ConstantDeclaration, Declaration, Expression,
+    FunctionDeclaration, SemanticFile, Statement, TypeDeclaration, TypeName,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -14,7 +14,7 @@ use compiler__semantic_types::{
 };
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunction,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunction,
     TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
 };
 
@@ -100,6 +100,25 @@ fn type_annotated_statement_from_semantic_statement(
     statement: &Statement,
 ) -> TypeAnnotatedStatement {
     match statement {
+        Statement::Binding {
+            name,
+            mutable,
+            initializer,
+            span,
+            ..
+        } => TypeAnnotatedStatement::Binding {
+            name: name.clone(),
+            mutable: *mutable,
+            initializer: type_annotated_expression_from_semantic_expression(initializer),
+            span: span.clone(),
+        },
+        Statement::Assign {
+            name, value, span, ..
+        } => TypeAnnotatedStatement::Assign {
+            name: name.clone(),
+            value: type_annotated_expression_from_semantic_expression(value),
+            span: span.clone(),
+        },
         Statement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
@@ -118,6 +137,10 @@ fn type_annotated_expression_from_semantic_expression(
     expression: &Expression,
 ) -> TypeAnnotatedExpression {
     match expression {
+        Expression::IntegerLiteral { value, span } => TypeAnnotatedExpression::IntegerLiteral {
+            value: *value,
+            span: span.clone(),
+        },
         Expression::NilLiteral { span } => {
             TypeAnnotatedExpression::NilLiteral { span: span.clone() }
         }
@@ -128,6 +151,20 @@ fn type_annotated_expression_from_semantic_expression(
         Expression::Identifier { name, span } => TypeAnnotatedExpression::Identifier {
             name: name.clone(),
             span: span.clone(),
+        },
+        Expression::Binary {
+            operator,
+            left,
+            right,
+            span,
+        } => match operator {
+            SemanticBinaryOperator::Add => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Add,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            _ => TypeAnnotatedExpression::Unsupported { span: span.clone() },
         },
         Expression::Call {
             callee,
@@ -730,7 +767,7 @@ impl ExpressionSpan for Expression {
 impl StatementSpan for Statement {
     fn span(&self) -> Span {
         match self {
-            Statement::Let { span, .. }
+            Statement::Binding { span, .. }
             | Statement::Assign { span, .. }
             | Statement::Return { span, .. }
             | Statement::Abort { span, .. }

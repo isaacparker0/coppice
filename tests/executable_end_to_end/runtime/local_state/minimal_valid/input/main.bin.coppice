@@ -1,6 +1,5 @@
 function main() -> nil {
-    if true {
-        return nil
-    }
+    mut x: int64 := 1
+    x = x + 1
     return nil
 }

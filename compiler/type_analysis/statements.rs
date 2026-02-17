@@ -178,7 +178,7 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_statement(&mut self, statement: &Statement) -> StatementOutcome {
         match statement {
-            Statement::Let {
+            Statement::Binding {
                 name,
                 mutable,
                 type_name,

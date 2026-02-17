@@ -61,6 +61,31 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
     let mut output = String::from("fn main() {\n");
     for statement in &program.statements {
         match statement {
+            ExecutableStatement::Binding {
+                name,
+                mutable,
+                initializer,
+            } => {
+                let initializer_source = emit_expression(initializer)?;
+                output.push_str("    ");
+                if *mutable {
+                    output.push_str("let mut ");
+                } else {
+                    output.push_str("let ");
+                }
+                output.push_str(name);
+                output.push_str(" = ");
+                output.push_str(&initializer_source);
+                output.push_str(";\n");
+            }
+            ExecutableStatement::Assign { name, value } => {
+                let value_source = emit_expression(value)?;
+                output.push_str("    ");
+                output.push_str(name);
+                output.push_str(" = ");
+                output.push_str(&value_source);
+                output.push_str(";\n");
+            }
             ExecutableStatement::Expression { expression } => {
                 let expression_source = emit_expression(expression)?;
                 output.push_str("    ");
@@ -87,27 +112,30 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
 
 fn emit_expression(expression: &ExecutableExpression) -> Result<String, CompilerFailure> {
     match expression {
+        ExecutableExpression::IntegerLiteral { value } => Ok(value.to_string()),
         ExecutableExpression::NilLiteral => Ok("()".to_string()),
         ExecutableExpression::StringLiteral { value } => Ok(format!("{value:?}")),
-        ExecutableExpression::Identifier { name } => {
-            if name == "print" {
-                return Ok("println".to_string());
-            }
-            Err(CompilerFailure {
-                kind: CompilerFailureKind::BuildFailed,
-                message: format!(
-                    "build mode currently supports only 'print' identifier calls, found '{name}'"
-                ),
-                path: None,
-                details: Vec::new(),
-            })
+        ExecutableExpression::Identifier { name } => Ok(name.clone()),
+        ExecutableExpression::Add { left, right } => {
+            let left_source = emit_expression(left)?;
+            let right_source = emit_expression(right)?;
+            Ok(format!("({left_source} + {right_source})"))
         }
         ExecutableExpression::Call { callee, arguments } => {
-            let callee_source = emit_expression(callee)?;
-            if callee_source != "println" {
+            let ExecutableExpression::Identifier { name } = callee.as_ref() else {
                 return Err(CompilerFailure {
                     kind: CompilerFailureKind::BuildFailed,
                     message: "build mode currently supports only print(...) calls".to_string(),
+                    path: None,
+                    details: Vec::new(),
+                });
+            };
+            if name != "print" {
+                return Err(CompilerFailure {
+                    kind: CompilerFailureKind::BuildFailed,
+                    message: format!(
+                        "build mode currently supports only 'print' calls, found '{name}(...)'"
+                    ),
                     path: None,
                     details: Vec::new(),
                 });

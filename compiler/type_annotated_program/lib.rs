@@ -24,6 +24,17 @@ pub struct TypeAnnotatedFunction {
 
 #[derive(Clone)]
 pub enum TypeAnnotatedStatement {
+    Binding {
+        name: String,
+        mutable: bool,
+        initializer: TypeAnnotatedExpression,
+        span: Span,
+    },
+    Assign {
+        name: String,
+        value: TypeAnnotatedExpression,
+        span: Span,
+    },
     Expression {
         value: TypeAnnotatedExpression,
         span: Span,
@@ -39,6 +50,10 @@ pub enum TypeAnnotatedStatement {
 
 #[derive(Clone)]
 pub enum TypeAnnotatedExpression {
+    IntegerLiteral {
+        value: i64,
+        span: Span,
+    },
     NilLiteral {
         span: Span,
     },
@@ -50,6 +65,12 @@ pub enum TypeAnnotatedExpression {
         name: String,
         span: Span,
     },
+    Binary {
+        operator: TypeAnnotatedBinaryOperator,
+        left: Box<TypeAnnotatedExpression>,
+        right: Box<TypeAnnotatedExpression>,
+        span: Span,
+    },
     Call {
         callee: Box<TypeAnnotatedExpression>,
         arguments: Vec<TypeAnnotatedExpression>,
@@ -59,4 +80,9 @@ pub enum TypeAnnotatedExpression {
     Unsupported {
         span: Span,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeAnnotatedBinaryOperator {
+    Add,
 }

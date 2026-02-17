@@ -127,7 +127,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(Statement::Let {
+            return Ok(Statement::Binding {
                 name,
                 mutable: true,
                 type_name,
@@ -173,7 +173,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(Statement::Let {
+            return Ok(Statement::Binding {
                 name,
                 mutable: false,
                 type_name,
