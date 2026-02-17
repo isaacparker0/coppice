@@ -3,13 +3,13 @@ use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
 use compiler__semantic_program::{
-    Declaration, FunctionDeclaration, PackageUnit as SemanticPackageUnit, TypeDeclaration,
-    TypeDeclarationKind, TypeName, Visibility,
+    Declaration, FunctionDeclaration, SemanticFile, TypeDeclaration, TypeDeclarationKind, TypeName,
+    TypeParameter, Visibility,
 };
 use compiler__semantic_types::{
-    ImportedBinding, ImportedMethodSignature, ImportedSymbol, ImportedTypeDeclaration,
-    ImportedTypeShape, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature,
-    type_from_builtin_name,
+    GenericTypeParameter, ImportedBinding, ImportedMethodSignature, ImportedSymbol,
+    ImportedTypeDeclaration, ImportedTypeShape, NominalTypeId, NominalTypeRef, Type,
+    TypedFunctionSignature, type_from_builtin_name,
 };
 use compiler__source::{FileRole, Span, compare_paths};
 
@@ -36,10 +36,10 @@ enum TypedPublicSymbol {
     Constant(Type),
 }
 
-pub struct PackageUnit<'a> {
+pub struct PackageSymbolFileInput<'a> {
     pub package_id: PackageId,
     pub path: &'a Path,
-    pub program: &'a SemanticPackageUnit,
+    pub semantic_file: &'a SemanticFile,
 }
 
 #[derive(Clone)]
@@ -77,11 +77,11 @@ impl TypedPublicSymbolTable {
 
 #[must_use]
 pub fn build_typed_public_symbol_table(
-    package_units: &[PackageUnit<'_>],
+    package_symbol_file_inputs: &[PackageSymbolFileInput<'_>],
     _resolved_imports: &[ResolvedImportSummary],
 ) -> TypedPublicSymbolTable {
     let (symbol_id_by_lookup_key, public_symbol_definition_by_id) =
-        collect_public_symbol_index(package_units);
+        collect_public_symbol_index(package_symbol_file_inputs);
 
     let typed_symbol_by_id =
         resolve_public_symbol_types(&symbol_id_by_lookup_key, &public_symbol_definition_by_id);
@@ -93,7 +93,7 @@ pub fn build_typed_public_symbol_table(
 }
 
 fn collect_public_symbol_index(
-    package_units: &[PackageUnit<'_>],
+    package_symbol_file_inputs: &[PackageSymbolFileInput<'_>],
 ) -> (
     BTreeMap<PublicSymbolLookupKey, PublicSymbolId>,
     BTreeMap<PublicSymbolId, PublicSymbolDefinition>,
@@ -101,19 +101,20 @@ fn collect_public_symbol_index(
     let mut symbol_id_by_lookup_key = BTreeMap::new();
     let mut public_symbol_definition_by_id = BTreeMap::new();
 
-    let mut ordered_units: Vec<&PackageUnit<'_>> = package_units.iter().collect();
-    ordered_units.sort_by(|left, right| {
+    let mut ordered_file_inputs: Vec<&PackageSymbolFileInput<'_>> =
+        package_symbol_file_inputs.iter().collect();
+    ordered_file_inputs.sort_by(|left, right| {
         left.package_id
             .cmp(&right.package_id)
             .then(compare_paths(left.path, right.path))
     });
 
-    for unit in ordered_units {
-        if unit.program.role != FileRole::Library {
+    for file_input in ordered_file_inputs {
+        if file_input.semantic_file.role != FileRole::Library {
             continue;
         }
 
-        for declaration in &unit.program.declarations {
+        for declaration in &file_input.semantic_file.declarations {
             let (name, is_public) = match declaration {
                 Declaration::Type(type_declaration) => (
                     &type_declaration.name,
@@ -145,7 +146,7 @@ fn collect_public_symbol_index(
             };
 
             let lookup_key = PublicSymbolLookupKey {
-                package_id: unit.package_id,
+                package_id: file_input.package_id,
                 symbol_name: name.clone(),
             };
             if symbol_id_by_lookup_key.contains_key(&lookup_key) {
@@ -395,11 +396,16 @@ fn imported_type_declaration(
 
     ImportedTypeDeclaration {
         nominal_type_id: declared_nominal_type_id,
-        type_parameters: type_declaration
-            .type_parameters
-            .iter()
-            .map(|parameter| parameter.name.clone())
-            .collect(),
+        type_parameters: imported_type_parameters(
+            &type_declaration.type_parameters,
+            target_package_id,
+            nominal_type_id_by_lookup_key,
+            &type_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect::<Vec<_>>(),
+        ),
         kind,
     }
 }
@@ -427,11 +433,16 @@ fn imported_function_signature(
         .collect();
 
     TypedFunctionSignature {
-        type_parameters: function_declaration
-            .type_parameters
-            .iter()
-            .map(|parameter| parameter.name.clone())
-            .collect(),
+        type_parameters: imported_type_parameters(
+            &function_declaration.type_parameters,
+            target_package_id,
+            nominal_type_id_by_lookup_key,
+            &function_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| parameter.name.as_str())
+                .collect::<Vec<_>>(),
+        ),
         parameter_types,
         return_type: resolve_type_name_to_semantic_type(
             &function_declaration.return_type,
@@ -444,6 +455,28 @@ fn imported_function_signature(
                 .collect::<Vec<_>>(),
         ),
     }
+}
+
+fn imported_type_parameters(
+    type_parameters: &[TypeParameter],
+    target_package_id: PackageId,
+    nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
+    in_scope_type_parameter_names: &[&str],
+) -> Vec<GenericTypeParameter> {
+    type_parameters
+        .iter()
+        .map(|parameter| GenericTypeParameter {
+            name: parameter.name.clone(),
+            constraint: parameter.constraint.as_ref().map(|constraint| {
+                resolve_type_name_to_semantic_type(
+                    constraint,
+                    target_package_id,
+                    nominal_type_id_by_lookup_key,
+                    in_scope_type_parameter_names,
+                )
+            }),
+        })
+        .collect()
 }
 
 fn resolve_type_name_to_semantic_type(

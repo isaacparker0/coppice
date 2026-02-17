@@ -3,7 +3,7 @@ use compiler__semantic_program as semantic;
 use compiler__syntax as syntax;
 
 #[must_use]
-pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semantic::PackageUnit> {
+pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semantic::SemanticFile> {
     let mut declarations = Vec::new();
     let mut pending_doc_comment: Option<semantic::DocComment> = None;
 
@@ -38,7 +38,7 @@ pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semant
     }
 
     PhaseOutput {
-        value: semantic::PackageUnit {
+        value: semantic::SemanticFile {
             role: parsed_file.role,
             declarations,
         },
@@ -454,6 +454,7 @@ fn lower_type_name(type_name: &syntax::TypeName) -> semantic::TypeName {
 fn lower_type_parameter(type_parameter: &syntax::TypeParameter) -> semantic::TypeParameter {
     semantic::TypeParameter {
         name: type_parameter.name.clone(),
+        constraint: type_parameter.constraint.as_ref().map(lower_type_name),
         span: type_parameter.span.clone(),
     }
 }

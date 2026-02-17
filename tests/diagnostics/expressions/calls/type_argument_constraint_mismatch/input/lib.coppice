@@ -1,0 +1,8 @@
+function requireInt[T: int64](value: T) -> T {
+    return value
+}
+
+function run() -> nil {
+    requireInt[string]("text")
+    return nil
+}

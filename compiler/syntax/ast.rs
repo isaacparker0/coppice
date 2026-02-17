@@ -305,6 +305,7 @@ pub struct TypeNameAtom {
 #[derive(Clone, Debug)]
 pub struct TypeParameter {
     pub name: String,
+    pub constraint: Option<TypeName>,
     pub span: Span,
 }
 

@@ -1,0 +1,6 @@
+import workspace/auth { requireInt }
+
+function run() -> nil {
+    requireInt[string]("text")
+    return nil
+}

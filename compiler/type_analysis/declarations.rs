@@ -3,7 +3,9 @@ use std::collections::HashSet;
 use compiler__semantic_program::{
     ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
 };
-use compiler__semantic_types::{ImportedTypeShape, NominalTypeId, NominalTypeRef};
+use compiler__semantic_types::{
+    GenericTypeParameter, ImportedTypeShape, NominalTypeId, NominalTypeRef,
+};
 
 use super::{
     FunctionInfo, ImportedTypeDeclaration, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind,
@@ -184,7 +186,10 @@ impl TypeChecker<'_> {
                     type_parameters: type_declaration
                         .type_parameters
                         .iter()
-                        .map(|parameter| parameter.name.clone())
+                        .map(|parameter| GenericTypeParameter {
+                            name: parameter.name.clone(),
+                            constraint: None,
+                        })
                         .collect(),
                     kind,
                 },
@@ -192,14 +197,29 @@ impl TypeChecker<'_> {
         }
 
         for type_declaration in types {
+            let names_and_spans = type_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                .collect::<Vec<_>>();
+            self.push_type_parameters(&names_and_spans);
+            let resolved_type_parameters = type_declaration
+                .type_parameters
+                .iter()
+                .map(|parameter| GenericTypeParameter {
+                    name: parameter.name.clone(),
+                    constraint: parameter
+                        .constraint
+                        .as_ref()
+                        .map(|constraint| self.resolve_type_name(constraint)),
+                })
+                .collect::<Vec<_>>();
+            if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                info.type_parameters = resolved_type_parameters;
+            }
+
             match &type_declaration.kind {
                 TypeDeclarationKind::Struct { fields, .. } => {
-                    let names_and_spans = type_declaration
-                        .type_parameters
-                        .iter()
-                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
-                        .collect::<Vec<_>>();
-                    self.push_type_parameters(&names_and_spans);
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for field in fields {
@@ -216,7 +236,6 @@ impl TypeChecker<'_> {
                         let field_type = self.resolve_type_name(&field.type_name);
                         resolved_fields.push((field.name.clone(), field_type));
                     }
-                    self.pop_type_parameters();
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
@@ -266,12 +285,6 @@ impl TypeChecker<'_> {
                     }
                 }
                 TypeDeclarationKind::Union { variants } => {
-                    let names_and_spans = type_declaration
-                        .type_parameters
-                        .iter()
-                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
-                        .collect::<Vec<_>>();
-                    self.push_type_parameters(&names_and_spans);
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
@@ -290,7 +303,6 @@ impl TypeChecker<'_> {
                         }
                         resolved_variants.push(variant_type);
                     }
-                    self.pop_type_parameters();
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Union {
                             variants: resolved_variants,
@@ -298,6 +310,7 @@ impl TypeChecker<'_> {
                     }
                 }
             }
+            self.pop_type_parameters();
         }
     }
 
@@ -325,16 +338,23 @@ impl TypeChecker<'_> {
                 let value_type = self.resolve_type_name(&parameter.type_name);
                 parameter_types.push(value_type);
             }
+            let resolved_type_parameters = function
+                .type_parameters
+                .iter()
+                .map(|parameter| GenericTypeParameter {
+                    name: parameter.name.clone(),
+                    constraint: parameter
+                        .constraint
+                        .as_ref()
+                        .map(|constraint| self.resolve_type_name(constraint)),
+                })
+                .collect::<Vec<_>>();
             self.pop_type_parameters();
 
             self.functions.insert(
                 function.name.clone(),
                 FunctionInfo {
-                    type_parameters: function
-                        .type_parameters
-                        .iter()
-                        .map(|parameter| parameter.name.clone())
-                        .collect(),
+                    type_parameters: resolved_type_parameters,
                     parameter_types,
                     return_type,
                 },

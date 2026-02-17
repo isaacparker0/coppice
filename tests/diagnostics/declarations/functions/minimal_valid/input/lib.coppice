@@ -9,3 +9,7 @@ function maybeText() -> string | nil {
 function identity[T](value: T) -> T {
     return value
 }
+
+function identityConstrained[T: int64](value: T) -> T {
+    return value
+}

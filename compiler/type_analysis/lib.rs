@@ -4,12 +4,13 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
-    ConstantDeclaration, Declaration, Expression, FunctionDeclaration,
-    PackageUnit as SemanticPackageUnit, Statement, TypeDeclaration, TypeName,
+    ConstantDeclaration, Declaration, Expression, FunctionDeclaration, SemanticFile, Statement,
+    TypeDeclaration, TypeName,
 };
 use compiler__semantic_types::{
-    FileTypecheckSummary, ImportedBinding, ImportedSymbol, ImportedTypeDeclaration, NominalTypeId,
-    NominalTypeRef, Type, TypedFunctionSignature, TypedSymbol, type_from_builtin_name,
+    FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
+    ImportedTypeDeclaration, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature,
+    TypedSymbol, type_from_builtin_name,
 };
 use compiler__source::Span;
 
@@ -24,7 +25,7 @@ mod unused_bindings;
 #[must_use]
 pub fn check_package_unit(
     package_id: PackageId,
-    package_unit: &SemanticPackageUnit,
+    package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
 ) -> PhaseOutput<()> {
     let mut diagnostics = Vec::new();
@@ -49,7 +50,7 @@ pub fn check_package_unit(
 
 pub fn analyze_package_unit(
     package_id: PackageId,
-    package_unit: &SemanticPackageUnit,
+    package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> FileTypecheckSummary {
@@ -58,7 +59,7 @@ pub fn analyze_package_unit(
 
 fn check_package_unit_declarations(
     package_id: PackageId,
-    package_unit: &SemanticPackageUnit,
+    package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> FileTypecheckSummary {
@@ -134,7 +135,7 @@ struct ImportedBindingInfo {
 
 struct TypeInfo {
     nominal_type_id: NominalTypeId,
-    type_parameters: Vec<String>,
+    type_parameters: Vec<GenericTypeParameter>,
     kind: TypeKind,
 }
 
@@ -146,7 +147,7 @@ enum TypeKind {
 
 #[derive(Clone)]
 struct FunctionInfo {
-    type_parameters: Vec<String>,
+    type_parameters: Vec<GenericTypeParameter>,
     parameter_types: Vec<Type>,
     return_type: Type,
 }
@@ -392,6 +393,35 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    fn check_type_argument_constraints(
+        &mut self,
+        context_name: &str,
+        type_parameters: &[GenericTypeParameter],
+        resolved_type_arguments: &[Type],
+        span: &Span,
+    ) {
+        for (type_parameter, type_argument) in type_parameters.iter().zip(resolved_type_arguments) {
+            let Some(constraint) = &type_parameter.constraint else {
+                continue;
+            };
+            if *type_argument == Type::Unknown || *constraint == Type::Unknown {
+                continue;
+            }
+            if !Self::is_assignable(type_argument, constraint) {
+                self.error(
+                    format!(
+                        "type argument '{}' does not satisfy constraint '{}' for type parameter '{}' on '{}'",
+                        type_argument.display(),
+                        constraint.display(),
+                        type_parameter.name,
+                        context_name
+                    ),
+                    span.clone(),
+                );
+            }
+        }
+    }
+
     fn resolve_type_name(&mut self, type_name: &TypeName) -> Type {
         let mut resolved = Vec::new();
         let mut has_unknown = false;
@@ -458,6 +488,12 @@ impl<'a> TypeChecker<'a> {
                     has_unknown = true;
                     continue;
                 }
+                self.check_type_argument_constraints(
+                    name,
+                    &declared_type_parameters,
+                    &resolved_type_arguments,
+                    &atom.span,
+                );
                 let nominal = NominalTypeRef {
                     id: nominal_type_id,
                     display_name: name.to_string(),
@@ -479,7 +515,7 @@ impl<'a> TypeChecker<'a> {
                         } else {
                             let substitutions: HashMap<String, Type> = declared_type_parameters
                                 .iter()
-                                .cloned()
+                                .map(|parameter| parameter.name.clone())
                                 .zip(resolved_type_arguments.iter().cloned())
                                 .collect();
                             let instantiated_variants = variants

@@ -95,9 +95,15 @@ pub fn type_from_builtin_name(name: &str) -> Option<Type> {
 
 #[derive(Clone)]
 pub struct TypedFunctionSignature {
-    pub type_parameters: Vec<String>,
+    pub type_parameters: Vec<GenericTypeParameter>,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
+}
+
+#[derive(Clone)]
+pub struct GenericTypeParameter {
+    pub name: String,
+    pub constraint: Option<Type>,
 }
 
 #[derive(Clone)]
@@ -114,7 +120,7 @@ pub enum ImportedTypeShape {
 #[derive(Clone)]
 pub struct ImportedTypeDeclaration {
     pub nominal_type_id: NominalTypeId,
-    pub type_parameters: Vec<String>,
+    pub type_parameters: Vec<GenericTypeParameter>,
     pub kind: ImportedTypeShape,
 }
 

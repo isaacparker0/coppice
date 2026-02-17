@@ -5,7 +5,7 @@ use compiler__semantic_program::{
 };
 use compiler__source::Span;
 
-use compiler__semantic_types::{NominalTypeId, Type};
+use compiler__semantic_types::{GenericTypeParameter, NominalTypeId, Type};
 
 use super::{ExpressionSpan, MethodKey, TypeChecker, TypeKind};
 
@@ -665,7 +665,7 @@ impl TypeChecker<'_> {
     fn instantiate_function_call_signature(
         &mut self,
         function_name: &str,
-        type_parameters: &[String],
+        type_parameters: &[GenericTypeParameter],
         parameter_types: &[Type],
         return_type: &Type,
         type_arguments: &[TypeName],
@@ -711,10 +711,20 @@ impl TypeChecker<'_> {
             };
         }
 
+        let resolved_type_arguments = type_arguments
+            .iter()
+            .map(|argument| self.resolve_type_name(argument))
+            .collect::<Vec<_>>();
+        self.check_type_argument_constraints(
+            function_name,
+            type_parameters,
+            &resolved_type_arguments,
+            span,
+        );
         let substitutions: HashMap<String, Type> = type_parameters
             .iter()
-            .zip(type_arguments.iter())
-            .map(|(name, argument)| (name.clone(), self.resolve_type_name(argument)))
+            .map(|parameter| parameter.name.clone())
+            .zip(resolved_type_arguments)
             .collect();
         let instantiated_parameters = parameter_types
             .iter()
@@ -771,7 +781,7 @@ impl TypeChecker<'_> {
         let substitutions: HashMap<String, Type> = receiver_info
             .type_parameters
             .iter()
-            .cloned()
+            .map(|parameter| parameter.name.clone())
             .zip(receiver_type_arguments.iter().cloned())
             .collect();
         let instantiated_parameters = parameter_types
@@ -811,7 +821,7 @@ impl TypeChecker<'_> {
                 let substitutions: HashMap<String, Type> = info
                     .type_parameters
                     .iter()
-                    .cloned()
+                    .map(|parameter| parameter.name.clone())
                     .zip(arguments.iter().cloned())
                     .collect();
                 let instantiated_fields = fields

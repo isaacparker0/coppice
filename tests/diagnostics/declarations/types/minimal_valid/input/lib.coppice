@@ -16,4 +16,8 @@ type Box[T] :: struct {
     value: T,
 }
 
+type ConstrainedBox[T: int64] :: struct {
+    value: T,
+}
+
 type Maybe[T] :: T | nil

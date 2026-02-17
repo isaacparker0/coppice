@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
-    PackageUnit, ResolvedImportBindingSummary, ResolvedImportSummary,
+    PackageSymbolFileInput, ResolvedImportBindingSummary, ResolvedImportSummary,
     build_typed_public_symbol_table,
 };
 use compiler__packages::PackageId;
@@ -17,6 +17,7 @@ use compiler__reports::{
 };
 use compiler__resolution as resolution;
 use compiler__semantic_lowering::lower_parsed_file;
+use compiler__semantic_program::SemanticFile;
 use compiler__source::{FileRole, compare_paths, path_to_key};
 use compiler__syntax_rules as syntax_rules;
 use compiler__type_analysis as type_analysis;
@@ -300,8 +301,7 @@ pub fn check_target_with_workspace_root(
     }
 
     let package_id_by_path = collect_package_ids_by_path(&workspace);
-    let mut semantic_program_by_file: BTreeMap<PathBuf, compiler__semantic_program::PackageUnit> =
-        BTreeMap::new();
+    let mut semantic_file_by_path: BTreeMap<PathBuf, SemanticFile> = BTreeMap::new();
     for parsed_unit in &mut parsed_units {
         if !parsed_unit.phase_state.can_run_semantic_lowering() {
             continue;
@@ -328,25 +328,25 @@ pub fn check_target_with_workspace_root(
             ));
         }
         if matches!(parsed_unit.phase_state.semantic_lowering, PhaseStatus::Ok) {
-            semantic_program_by_file.insert(parsed_unit.path.clone(), value);
+            semantic_file_by_path.insert(parsed_unit.path.clone(), value);
         }
     }
-    let package_units: Vec<PackageUnit<'_>> = parsed_units
+    let package_symbol_file_inputs: Vec<PackageSymbolFileInput<'_>> = parsed_units
         .iter()
         .filter_map(|unit| {
-            semantic_program_by_file
+            semantic_file_by_path
                 .get(&unit.path)
-                .map(|program| PackageUnit {
+                .map(|semantic_file| PackageSymbolFileInput {
                     package_id: unit.package_id,
                     path: &unit.path,
-                    program,
+                    semantic_file,
                 })
         })
         .collect();
     let typecheck_resolved_imports =
         build_typecheck_resolved_imports(&resolved_imports, &package_id_by_path);
     let typed_public_symbol_table =
-        build_typed_public_symbol_table(&package_units, &typecheck_resolved_imports);
+        build_typed_public_symbol_table(&package_symbol_file_inputs, &typecheck_resolved_imports);
     let imported_bindings_by_file =
         typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
 
@@ -364,12 +364,12 @@ pub fn check_target_with_workspace_root(
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
-        let Some(semantic_unit) = semantic_program_by_file.get(&parsed_unit.path) else {
+        let Some(semantic_file) = semantic_file_by_path.get(&parsed_unit.path) else {
             continue;
         };
         let type_analysis_result = type_analysis::check_package_unit(
             parsed_unit.package_id,
-            semantic_unit,
+            semantic_file,
             imported_bindings,
         );
         for diagnostic in type_analysis_result.diagnostics {

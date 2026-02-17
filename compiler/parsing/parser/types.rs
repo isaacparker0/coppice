@@ -116,7 +116,17 @@ impl Parser {
         loop {
             self.skip_statement_terminators();
             let (name, span) = self.expect_identifier()?;
-            type_parameters.push(TypeParameter { name, span });
+            let constraint = if self.peek_is_symbol(Symbol::Colon) {
+                self.advance();
+                Some(self.parse_type_name()?)
+            } else {
+                None
+            };
+            type_parameters.push(TypeParameter {
+                name,
+                constraint,
+                span,
+            });
             self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {
                 self.advance();

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "type argument 'string' does not satisfy constraint 'int64' for type parameter 'T' on 'requireInt'",
+            "span": {
+                "start": 95,
+                "end": 105,
+                "line": 6,
+                "column": 5
+            }
+        }
+    ]
+}

@@ -1,0 +1,3 @@
+lib.coppice:6:12: error: type argument 'string' does not satisfy constraint 'int64' for type parameter 'T' on 'Box'
+      box := Box[string] { value: "text" }
+             ^

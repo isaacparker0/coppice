@@ -1,0 +1,8 @@
+type Box[T: int64] :: struct {
+    value: T,
+}
+
+function run() -> string {
+    box := Box[string] { value: "text" }
+    return box.value
+}

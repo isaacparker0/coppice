@@ -1,7 +1,7 @@
 use compiler__source::{FileRole, Span};
 
 #[derive(Clone)]
-pub struct PackageUnit {
+pub struct SemanticFile {
     pub role: FileRole,
     pub declarations: Vec<Declaration>,
 }
@@ -260,6 +260,7 @@ pub struct TypeNameAtom {
 #[derive(Clone, Debug)]
 pub struct TypeParameter {
     pub name: String,
+    pub constraint: Option<TypeName>,
     pub span: Span,
 }
 
