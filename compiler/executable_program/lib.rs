@@ -44,6 +44,9 @@ pub enum ExecutableStatement {
         condition: Option<ExecutableExpression>,
         body_statements: Vec<ExecutableStatement>,
     },
+    Abort {
+        message: ExecutableExpression,
+    },
     Break,
     Continue,
     Expression {

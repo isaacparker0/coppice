@@ -200,6 +200,10 @@ fn type_annotated_statement_from_semantic_statement(
         SemanticStatement::Continue { span } => {
             TypeAnnotatedStatement::Continue { span: span.clone() }
         }
+        SemanticStatement::Abort { message, span } => TypeAnnotatedStatement::Abort {
+            message: type_annotated_expression_from_semantic_expression(message),
+            span: span.clone(),
+        },
         SemanticStatement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
@@ -208,9 +212,6 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
-        SemanticStatement::Abort { span, .. } => {
-            TypeAnnotatedStatement::Unsupported { span: span.clone() }
-        }
     }
 }
 

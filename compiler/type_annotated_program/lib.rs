@@ -67,6 +67,10 @@ pub enum TypeAnnotatedStatement {
     Continue {
         span: Span,
     },
+    Abort {
+        message: TypeAnnotatedExpression,
+        span: Span,
+    },
     Expression {
         value: TypeAnnotatedExpression,
         span: Span,

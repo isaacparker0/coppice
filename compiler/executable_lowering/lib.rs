@@ -58,7 +58,7 @@ fn lower_struct_declarations(
         let mut struct_supported = true;
         for field in &struct_declaration.fields {
             let Some(type_reference) =
-                lower_type_name_to_type_referenceerence(&field.type_name, diagnostics)
+                lower_type_name_to_type_reference(&field.type_name, diagnostics)
             else {
                 struct_supported = false;
                 continue;
@@ -174,6 +174,12 @@ fn lower_statement(
         }),
         TypeAnnotatedStatement::Break { .. } => Some(ExecutableStatement::Break),
         TypeAnnotatedStatement::Continue { .. } => Some(ExecutableStatement::Continue),
+        TypeAnnotatedStatement::Abort { message, .. } => {
+            let executable_message = lower_expression(message, diagnostics);
+            Some(ExecutableStatement::Abort {
+                message: executable_message,
+            })
+        }
         TypeAnnotatedStatement::Expression { value, .. } => {
             let executable_expression = lower_expression(value, diagnostics);
             Some(ExecutableStatement::Expression {
@@ -294,7 +300,7 @@ fn lower_expression(
     }
 }
 
-fn lower_type_name_to_type_referenceerence(
+fn lower_type_name_to_type_reference(
     type_name: &TypeAnnotatedTypeName,
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableTypeReference> {

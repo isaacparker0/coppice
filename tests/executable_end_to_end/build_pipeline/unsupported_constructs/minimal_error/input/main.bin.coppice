@@ -1,3 +1,6 @@
 function main() -> nil {
-    abort("not yet")
+    if not false {
+        print("ok")
+    }
+    return nil
 }

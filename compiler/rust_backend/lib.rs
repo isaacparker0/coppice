@@ -172,6 +172,15 @@ fn emit_statement(
             output.push_str(&indent);
             output.push_str("continue;\n");
         }
+        ExecutableStatement::Abort { message } => {
+            let message_source = emit_expression(message)?;
+            output.push_str(&indent);
+            output.push_str("eprintln!(\"{}\", ");
+            output.push_str(&message_source);
+            output.push_str(");\n");
+            output.push_str(&indent);
+            output.push_str("std::process::exit(1);\n");
+        }
         ExecutableStatement::Expression { expression } => {
             let expression_source = emit_expression(expression)?;
             output.push_str(&indent);
