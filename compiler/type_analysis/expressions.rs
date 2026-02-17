@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use compiler__semantic_program::{
-    BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName, UnaryOperator,
+    SemanticBinaryOperator, SemanticExpression, SemanticMatchArm, SemanticMatchPattern,
+    SemanticStructLiteralField, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__source::Span;
 
@@ -26,25 +27,25 @@ struct ResolvedStructFields {
 }
 
 impl TypeChecker<'_> {
-    pub(super) fn check_expression(&mut self, expression: &Expression) -> Type {
+    pub(super) fn check_expression(&mut self, expression: &SemanticExpression) -> Type {
         match expression {
-            Expression::IntegerLiteral { .. } => Type::Integer64,
-            Expression::NilLiteral { .. } => Type::Nil,
-            Expression::BooleanLiteral { .. } => Type::Boolean,
-            Expression::StringLiteral { .. } => Type::String,
-            Expression::Identifier { name, span } => self.resolve_variable(name, span),
-            Expression::StructLiteral {
+            SemanticExpression::IntegerLiteral { .. } => Type::Integer64,
+            SemanticExpression::NilLiteral { .. } => Type::Nil,
+            SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
+            SemanticExpression::StringLiteral { .. } => Type::String,
+            SemanticExpression::Identifier { name, span } => self.resolve_variable(name, span),
+            SemanticExpression::StructLiteral {
                 type_name,
                 fields,
                 span: _,
             } => self.check_struct_literal(type_name, fields),
-            Expression::FieldAccess {
+            SemanticExpression::FieldAccess {
                 target,
                 field,
                 field_span,
                 ..
             } => {
-                if let Expression::Identifier { name, .. } = target.as_ref() {
+                if let SemanticExpression::Identifier { name, .. } = target.as_ref() {
                     let is_enum_like_union = self.types.get(name).is_some_and(|info| {
                         if let TypeKind::Union { variants } = &info.kind {
                             let enum_like_prefix = format!("{name}.");
@@ -74,13 +75,14 @@ impl TypeChecker<'_> {
                 let target_type = self.check_expression(target);
                 self.resolve_field_access_type(&target_type, field, field_span)
             }
-            Expression::Call {
+            SemanticExpression::Call {
                 callee,
                 type_arguments,
                 arguments,
                 span,
             } => {
-                let resolved_target = if let Expression::Identifier { name, span } = callee.as_ref()
+                let resolved_target = if let SemanticExpression::Identifier { name, span } =
+                    callee.as_ref()
                 {
                     if let Some(info) = self.functions.get(name).cloned() {
                         let instantiated = self.instantiate_function_call_signature(
@@ -121,7 +123,7 @@ impl TypeChecker<'_> {
                         }
                         return Type::Unknown;
                     }
-                } else if let Expression::FieldAccess {
+                } else if let SemanticExpression::FieldAccess {
                     target,
                     field,
                     field_span,
@@ -181,7 +183,7 @@ impl TypeChecker<'_> {
                         let method_parameter_types = instantiated_signature.parameter_types;
                         let method_return_type = instantiated_signature.return_type;
                         if method_self_mutable {
-                            if let Expression::Identifier { name, .. } = target.as_ref() {
+                            if let SemanticExpression::Identifier { name, .. } = target.as_ref() {
                                 let receiver_is_mutable = self
                                     .lookup_variable_for_assignment(name)
                                     .is_some_and(|(is_mutable, _)| is_mutable);
@@ -271,7 +273,7 @@ impl TypeChecker<'_> {
 
                 resolved_target.return_type
             }
-            Expression::Binary {
+            SemanticExpression::Binary {
                 operator,
                 left,
                 right,
@@ -280,17 +282,17 @@ impl TypeChecker<'_> {
                 let left_type = self.check_expression(left);
                 let right_type = self.check_expression(right);
                 match operator {
-                    BinaryOperator::Add
-                    | BinaryOperator::Subtract
-                    | BinaryOperator::Multiply
-                    | BinaryOperator::Divide => {
+                    SemanticBinaryOperator::Add
+                    | SemanticBinaryOperator::Subtract
+                    | SemanticBinaryOperator::Multiply
+                    | SemanticBinaryOperator::Divide => {
                         if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("arithmetic operators require int64 operands", left.span());
                             return Type::Unknown;
                         }
                         Type::Integer64
                     }
-                    BinaryOperator::EqualEqual | BinaryOperator::NotEqual => {
+                    SemanticBinaryOperator::EqualEqual | SemanticBinaryOperator::NotEqual => {
                         if !Self::are_comparable_for_equality(&left_type, &right_type)
                             && left_type != Type::Unknown
                             && right_type != Type::Unknown
@@ -300,17 +302,17 @@ impl TypeChecker<'_> {
                         }
                         Type::Boolean
                     }
-                    BinaryOperator::LessThan
-                    | BinaryOperator::LessThanOrEqual
-                    | BinaryOperator::GreaterThan
-                    | BinaryOperator::GreaterThanOrEqual => {
+                    SemanticBinaryOperator::LessThan
+                    | SemanticBinaryOperator::LessThanOrEqual
+                    | SemanticBinaryOperator::GreaterThan
+                    | SemanticBinaryOperator::GreaterThanOrEqual => {
                         if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("comparison operators require int64 operands", left.span());
                             return Type::Unknown;
                         }
                         Type::Boolean
                     }
-                    BinaryOperator::And | BinaryOperator::Or => {
+                    SemanticBinaryOperator::And | SemanticBinaryOperator::Or => {
                         if left_type != Type::Boolean || right_type != Type::Boolean {
                             self.error("boolean operators require boolean operands", left.span());
                             return Type::Unknown;
@@ -319,21 +321,21 @@ impl TypeChecker<'_> {
                     }
                 }
             }
-            Expression::Unary {
+            SemanticExpression::Unary {
                 operator,
                 expression,
                 ..
             } => {
                 let value_type = self.check_expression(expression);
                 match operator {
-                    UnaryOperator::Not => {
+                    SemanticUnaryOperator::Not => {
                         if value_type != Type::Boolean && value_type != Type::Unknown {
                             self.error("not operator requires boolean operand", expression.span());
                             return Type::Unknown;
                         }
                         Type::Boolean
                     }
-                    UnaryOperator::Negate => {
+                    SemanticUnaryOperator::Negate => {
                         if value_type != Type::Integer64 && value_type != Type::Unknown {
                             self.error("unary minus requires int64 operand", expression.span());
                             return Type::Unknown;
@@ -342,10 +344,10 @@ impl TypeChecker<'_> {
                     }
                 }
             }
-            Expression::Match { target, arms, span } => {
+            SemanticExpression::Match { target, arms, span } => {
                 self.check_match_expression(target, arms, span)
             }
-            Expression::Matches {
+            SemanticExpression::Matches {
                 value,
                 type_name,
                 span: _,
@@ -355,8 +357,8 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_matches_expression(
         &mut self,
-        value: &Expression,
-        type_name: &TypeName,
+        value: &SemanticExpression,
+        type_name: &SemanticTypeName,
     ) -> Type {
         let value_type = self.check_expression(value);
         let pattern_type = self.resolve_match_pattern_type_name(type_name, &type_name.span);
@@ -395,8 +397,8 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_match_expression(
         &mut self,
-        target: &Expression,
-        arms: &[MatchArm],
+        target: &SemanticExpression,
+        arms: &[SemanticMatchArm],
         span: &Span,
     ) -> Type {
         let target_type = self.check_expression(target);
@@ -455,7 +457,7 @@ impl TypeChecker<'_> {
             }
 
             self.scopes.push(HashMap::new());
-            if let MatchPattern::Binding {
+            if let SemanticMatchPattern::Binding {
                 name, name_span, ..
             } = &arm.pattern
             {
@@ -502,12 +504,12 @@ impl TypeChecker<'_> {
         result_type.unwrap_or(Type::Unknown)
     }
 
-    pub(super) fn resolve_match_pattern_type(&mut self, pattern: &MatchPattern) -> Type {
+    pub(super) fn resolve_match_pattern_type(&mut self, pattern: &SemanticMatchPattern) -> Type {
         match pattern {
-            MatchPattern::Type { type_name, span } => {
+            SemanticMatchPattern::Type { type_name, span } => {
                 self.resolve_match_pattern_type_name(type_name, span)
             }
-            MatchPattern::Binding {
+            SemanticMatchPattern::Binding {
                 type_name, span, ..
             } => self.resolve_match_pattern_type_name(type_name, span),
         }
@@ -515,7 +517,7 @@ impl TypeChecker<'_> {
 
     pub(super) fn resolve_match_pattern_type_name(
         &mut self,
-        type_name: &TypeName,
+        type_name: &SemanticTypeName,
         span: &Span,
     ) -> Type {
         if type_name.names.len() != 1 {
@@ -532,8 +534,8 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_struct_literal(
         &mut self,
-        type_name: &TypeName,
-        fields: &[StructLiteralField],
+        type_name: &SemanticTypeName,
+        fields: &[SemanticStructLiteralField],
     ) -> Type {
         if type_name.names.len() != 1 {
             self.error(
@@ -668,7 +670,7 @@ impl TypeChecker<'_> {
         type_parameters: &[GenericTypeParameter],
         parameter_types: &[Type],
         return_type: &Type,
-        type_arguments: &[TypeName],
+        type_arguments: &[SemanticTypeName],
         span: &Span,
     ) -> InstantiatedFunctionSignature {
         if type_parameters.is_empty() {

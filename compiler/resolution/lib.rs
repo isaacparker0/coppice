@@ -7,13 +7,13 @@ use compiler__exports as exports;
 use compiler__package_graph as package_graph;
 use compiler__phase_results::{FileScopedPhaseOutput, PhaseStatus};
 use compiler__symbols::{self as symbols, PackageFile};
-use compiler__syntax::ParsedFile;
+use compiler__syntax::SyntaxParsedFile;
 use compiler__visibility::{self as visibility, ResolvedImport};
 
 pub struct ResolutionFile<'a> {
     pub package_path: &'a str,
     pub path: &'a Path,
-    pub parsed: &'a ParsedFile,
+    pub parsed: &'a SyntaxParsedFile,
 }
 
 pub struct ResolutionArtifacts {

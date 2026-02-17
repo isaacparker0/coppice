@@ -16,15 +16,16 @@ pub fn lower_type_annotated_file(
 
     validate_main_signature_from_type_analysis(type_annotated_file, &mut diagnostics);
 
-    let statements = if let Some(main_function) = &type_annotated_file.main_function {
-        lower_statements(&main_function.statements, &mut diagnostics)
-    } else {
-        diagnostics.push(PhaseDiagnostic::new(
-            "main function not found in binary entrypoint",
-            fallback_span(),
-        ));
-        Vec::new()
-    };
+    let statements =
+        if let Some(main_function_declaration) = &type_annotated_file.main_function_declaration {
+            lower_statements(&main_function_declaration.statements, &mut diagnostics)
+        } else {
+            diagnostics.push(PhaseDiagnostic::new(
+                "main function not found in binary entrypoint",
+                fallback_span(),
+            ));
+            Vec::new()
+        };
 
     let status = if diagnostics.is_empty() {
         PhaseStatus::Ok
@@ -44,9 +45,11 @@ fn validate_main_signature_from_type_analysis(
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) {
     let fallback_span_for_diagnostic = type_annotated_file
-        .main_function
+        .main_function_declaration
         .as_ref()
-        .map_or_else(fallback_span, |main_function| main_function.span.clone());
+        .map_or_else(fallback_span, |main_function_declaration| {
+            main_function_declaration.span.clone()
+        });
     let Some(main_signature) = type_annotated_file.function_signature_by_name.get("main") else {
         diagnostics.push(PhaseDiagnostic::new(
             "build mode requires type analysis information for main",

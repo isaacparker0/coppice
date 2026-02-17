@@ -1,16 +1,16 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
-use compiler__syntax::{ExportsDeclaration, ExportsMember};
+use compiler__syntax::{SyntaxExportsDeclaration, SyntaxExportsMember};
 
 use super::{ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_exports_declaration(&mut self) -> ParseResult<ExportsDeclaration> {
+    pub(super) fn parse_exports_declaration(&mut self) -> ParseResult<SyntaxExportsDeclaration> {
         let start = self.expect_keyword(Keyword::Exports)?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let members = self.parse_exports_members();
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Ok(ExportsDeclaration {
+        Ok(SyntaxExportsDeclaration {
             members,
             span: Span {
                 start: start.start,
@@ -21,7 +21,7 @@ impl Parser {
         })
     }
 
-    fn parse_exports_members(&mut self) -> Vec<ExportsMember> {
+    fn parse_exports_members(&mut self) -> Vec<SyntaxExportsMember> {
         let mut members = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
@@ -31,7 +31,7 @@ impl Parser {
         loop {
             self.skip_statement_terminators();
             match self.expect_identifier() {
-                Ok((name, span)) => members.push(ExportsMember { name, span }),
+                Ok((name, span)) => members.push(SyntaxExportsMember { name, span }),
                 Err(error) => {
                     self.report_parse_error(&error);
                     self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);

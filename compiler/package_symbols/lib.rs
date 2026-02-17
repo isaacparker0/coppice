@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
 use compiler__semantic_program::{
-    Declaration, FunctionDeclaration, SemanticFile, TypeDeclaration, TypeDeclarationKind, TypeName,
-    TypeParameter, Visibility,
+    SemanticDeclaration, SemanticFile, SemanticFunctionDeclaration, SemanticTypeDeclaration,
+    SemanticTypeDeclarationKind, SemanticTypeName, SemanticTypeParameter, SemanticVisibility,
 };
 use compiler__semantic_types::{
     GenericTypeParameter, ImportedBinding, ImportedMethodSignature, ImportedSymbol,
@@ -24,15 +24,15 @@ struct PublicSymbolLookupKey {
 
 #[derive(Clone)]
 enum PublicSymbolDefinition {
-    Type(TypeDeclaration),
-    Function(FunctionDeclaration),
-    Constant(TypeName),
+    Type(SemanticTypeDeclaration),
+    Function(SemanticFunctionDeclaration),
+    Constant(SemanticTypeName),
 }
 
 #[derive(Clone)]
 enum TypedPublicSymbol {
-    Type(TypeDeclaration),
-    Function(FunctionDeclaration),
+    Type(SemanticTypeDeclaration),
+    Function(SemanticFunctionDeclaration),
     Constant(Type),
 }
 
@@ -116,17 +116,17 @@ fn collect_public_symbol_index(
 
         for declaration in &file_input.semantic_file.declarations {
             let (name, is_public) = match declaration {
-                Declaration::Type(type_declaration) => (
+                SemanticDeclaration::Type(type_declaration) => (
                     &type_declaration.name,
-                    type_declaration.visibility == Visibility::Public,
+                    type_declaration.visibility == SemanticVisibility::Public,
                 ),
-                Declaration::Function(function_declaration) => (
+                SemanticDeclaration::Function(function_declaration) => (
                     &function_declaration.name,
-                    function_declaration.visibility == Visibility::Public,
+                    function_declaration.visibility == SemanticVisibility::Public,
                 ),
-                Declaration::Constant(constant_declaration) => (
+                SemanticDeclaration::Constant(constant_declaration) => (
                     &constant_declaration.name,
-                    constant_declaration.visibility == Visibility::Public,
+                    constant_declaration.visibility == SemanticVisibility::Public,
                 ),
             };
             if !is_public {
@@ -134,13 +134,13 @@ fn collect_public_symbol_index(
             }
 
             let public_symbol_definition = match declaration {
-                Declaration::Type(type_declaration) => {
+                SemanticDeclaration::Type(type_declaration) => {
                     PublicSymbolDefinition::Type(type_declaration.clone())
                 }
-                Declaration::Function(function_declaration) => {
+                SemanticDeclaration::Function(function_declaration) => {
                     PublicSymbolDefinition::Function(function_declaration.clone())
                 }
-                Declaration::Constant(constant_declaration) => {
+                SemanticDeclaration::Constant(constant_declaration) => {
                     PublicSymbolDefinition::Constant(constant_declaration.type_name.clone())
                 }
             };
@@ -287,7 +287,7 @@ fn nominal_type_id_by_lookup_key(
 }
 
 fn imported_type_declaration(
-    type_declaration: &TypeDeclaration,
+    type_declaration: &SemanticTypeDeclaration,
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> ImportedTypeDeclaration {
@@ -296,7 +296,7 @@ fn imported_type_declaration(
         symbol_name: type_declaration.name.clone(),
     };
     let kind = match &type_declaration.kind {
-        TypeDeclarationKind::Struct { fields, methods } => {
+        SemanticTypeDeclarationKind::Struct { fields, methods } => {
             let typed_fields = fields
                 .iter()
                 .map(|field| {
@@ -353,7 +353,7 @@ fn imported_type_declaration(
                 methods: typed_methods,
             }
         }
-        TypeDeclarationKind::Enum { variants } => ImportedTypeShape::Union {
+        SemanticTypeDeclarationKind::Enum { variants } => ImportedTypeShape::Union {
             variants: variants
                 .iter()
                 .map(|variant| {
@@ -375,7 +375,7 @@ fn imported_type_declaration(
                 })
                 .collect(),
         },
-        TypeDeclarationKind::Union { variants } => ImportedTypeShape::Union {
+        SemanticTypeDeclarationKind::Union { variants } => ImportedTypeShape::Union {
             variants: variants
                 .iter()
                 .map(|variant| {
@@ -411,7 +411,7 @@ fn imported_type_declaration(
 }
 
 fn imported_function_signature(
-    function_declaration: &FunctionDeclaration,
+    function_declaration: &SemanticFunctionDeclaration,
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> TypedFunctionSignature {
@@ -458,7 +458,7 @@ fn imported_function_signature(
 }
 
 fn imported_type_parameters(
-    type_parameters: &[TypeParameter],
+    type_parameters: &[SemanticTypeParameter],
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
     in_scope_type_parameter_names: &[&str],
@@ -480,7 +480,7 @@ fn imported_type_parameters(
 }
 
 fn resolve_type_name_to_semantic_type(
-    type_name: &TypeName,
+    type_name: &SemanticTypeName,
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
     type_parameters: &[&str],

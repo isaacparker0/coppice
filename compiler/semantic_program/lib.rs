@@ -3,139 +3,139 @@ use compiler__source::{FileRole, Span};
 #[derive(Clone)]
 pub struct SemanticFile {
     pub role: FileRole,
-    pub declarations: Vec<Declaration>,
+    pub declarations: Vec<SemanticDeclaration>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Declaration {
-    Type(TypeDeclaration),
-    Constant(ConstantDeclaration),
-    Function(FunctionDeclaration),
+pub enum SemanticDeclaration {
+    Type(SemanticTypeDeclaration),
+    Constant(SemanticConstantDeclaration),
+    Function(SemanticFunctionDeclaration),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Visibility {
+pub enum SemanticVisibility {
     Private,
     Public,
 }
 
 #[derive(Clone, Debug)]
-pub struct DocComment {
+pub struct SemanticDocComment {
     pub lines: Vec<String>,
     pub span: Span,
     pub end_line: usize,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeDeclaration {
+pub struct SemanticTypeDeclaration {
     pub name: String,
-    pub type_parameters: Vec<TypeParameter>,
-    pub kind: TypeDeclarationKind,
-    pub doc: Option<DocComment>,
-    pub visibility: Visibility,
+    pub type_parameters: Vec<SemanticTypeParameter>,
+    pub kind: SemanticTypeDeclarationKind,
+    pub doc: Option<SemanticDocComment>,
+    pub visibility: SemanticVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum TypeDeclarationKind {
+pub enum SemanticTypeDeclarationKind {
     Struct {
-        fields: Vec<FieldDeclaration>,
-        methods: Vec<MethodDeclaration>,
+        fields: Vec<SemanticFieldDeclaration>,
+        methods: Vec<SemanticMethodDeclaration>,
     },
     Enum {
-        variants: Vec<EnumVariant>,
+        variants: Vec<SemanticEnumVariant>,
     },
     Union {
-        variants: Vec<TypeName>,
+        variants: Vec<SemanticTypeName>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct EnumVariant {
+pub struct SemanticEnumVariant {
     pub name: String,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct FieldDeclaration {
+pub struct SemanticFieldDeclaration {
     pub name: String,
-    pub type_name: TypeName,
-    pub doc: Option<DocComment>,
-    pub visibility: Visibility,
+    pub type_name: SemanticTypeName,
+    pub doc: Option<SemanticDocComment>,
+    pub visibility: SemanticVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct MethodDeclaration {
+pub struct SemanticMethodDeclaration {
     pub name: String,
     pub name_span: Span,
     pub self_span: Span,
     pub self_mutable: bool,
-    pub parameters: Vec<ParameterDeclaration>,
-    pub return_type: TypeName,
-    pub body: Block,
-    pub doc: Option<DocComment>,
-    pub visibility: Visibility,
+    pub parameters: Vec<SemanticParameterDeclaration>,
+    pub return_type: SemanticTypeName,
+    pub body: SemanticBlock,
+    pub doc: Option<SemanticDocComment>,
+    pub visibility: SemanticVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ConstantDeclaration {
+pub struct SemanticConstantDeclaration {
     pub name: String,
-    pub type_name: TypeName,
-    pub expression: Expression,
-    pub doc: Option<DocComment>,
-    pub visibility: Visibility,
+    pub type_name: SemanticTypeName,
+    pub expression: SemanticExpression,
+    pub doc: Option<SemanticDocComment>,
+    pub visibility: SemanticVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct FunctionDeclaration {
+pub struct SemanticFunctionDeclaration {
     pub name: String,
     pub name_span: Span,
-    pub type_parameters: Vec<TypeParameter>,
-    pub parameters: Vec<ParameterDeclaration>,
-    pub return_type: TypeName,
-    pub body: Block,
-    pub doc: Option<DocComment>,
-    pub visibility: Visibility,
+    pub type_parameters: Vec<SemanticTypeParameter>,
+    pub parameters: Vec<SemanticParameterDeclaration>,
+    pub return_type: SemanticTypeName,
+    pub body: SemanticBlock,
+    pub doc: Option<SemanticDocComment>,
+    pub visibility: SemanticVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ParameterDeclaration {
+pub struct SemanticParameterDeclaration {
     pub name: String,
-    pub type_name: TypeName,
+    pub type_name: SemanticTypeName,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct Block {
-    pub statements: Vec<Statement>,
+pub struct SemanticBlock {
+    pub statements: Vec<SemanticStatement>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum Statement {
+pub enum SemanticStatement {
     Binding {
         name: String,
         mutable: bool,
-        type_name: Option<TypeName>,
-        initializer: Expression,
+        type_name: Option<SemanticTypeName>,
+        initializer: SemanticExpression,
         span: Span,
     },
     Assign {
         name: String,
         name_span: Span,
-        value: Expression,
+        value: SemanticExpression,
         span: Span,
     },
     Return {
-        value: Expression,
+        value: SemanticExpression,
         span: Span,
     },
     Abort {
-        message: Expression,
+        message: SemanticExpression,
         span: Span,
     },
     Break {
@@ -145,24 +145,24 @@ pub enum Statement {
         span: Span,
     },
     If {
-        condition: Expression,
-        then_block: Block,
-        else_block: Option<Block>,
+        condition: SemanticExpression,
+        then_block: SemanticBlock,
+        else_block: Option<SemanticBlock>,
         span: Span,
     },
     For {
-        condition: Option<Expression>,
-        body: Block,
+        condition: Option<SemanticExpression>,
+        body: SemanticBlock,
         span: Span,
     },
     Expression {
-        value: Expression,
+        value: SemanticExpression,
         span: Span,
     },
 }
 
 #[derive(Clone, Debug)]
-pub enum Expression {
+pub enum SemanticExpression {
     IntegerLiteral {
         value: i64,
         span: Span,
@@ -183,47 +183,47 @@ pub enum Expression {
         span: Span,
     },
     StructLiteral {
-        type_name: TypeName,
-        fields: Vec<StructLiteralField>,
+        type_name: SemanticTypeName,
+        fields: Vec<SemanticStructLiteralField>,
         span: Span,
     },
     FieldAccess {
-        target: Box<Expression>,
+        target: Box<SemanticExpression>,
         field: String,
         field_span: Span,
         span: Span,
     },
     Call {
-        callee: Box<Expression>,
-        type_arguments: Vec<TypeName>,
-        arguments: Vec<Expression>,
+        callee: Box<SemanticExpression>,
+        type_arguments: Vec<SemanticTypeName>,
+        arguments: Vec<SemanticExpression>,
         span: Span,
     },
     Unary {
-        operator: UnaryOperator,
-        expression: Box<Expression>,
+        operator: SemanticUnaryOperator,
+        expression: Box<SemanticExpression>,
         span: Span,
     },
     Binary {
-        operator: BinaryOperator,
-        left: Box<Expression>,
-        right: Box<Expression>,
+        operator: SemanticBinaryOperator,
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>,
         span: Span,
     },
     Match {
-        target: Box<Expression>,
-        arms: Vec<MatchArm>,
+        target: Box<SemanticExpression>,
+        arms: Vec<SemanticMatchArm>,
         span: Span,
     },
     Matches {
-        value: Box<Expression>,
-        type_name: TypeName,
+        value: Box<SemanticExpression>,
+        type_name: SemanticTypeName,
         span: Span,
     },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinaryOperator {
+pub enum SemanticBinaryOperator {
     Add,
     Subtract,
     Multiply,
@@ -239,65 +239,66 @@ pub enum BinaryOperator {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnaryOperator {
+pub enum SemanticUnaryOperator {
     Not,
     Negate,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeName {
-    pub names: Vec<TypeNameAtom>,
+pub struct SemanticTypeName {
+    pub names: Vec<SemanticTypeNameAtom>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeNameAtom {
+pub struct SemanticTypeNameAtom {
     pub name: String,
-    pub type_arguments: Vec<TypeName>,
+    pub type_arguments: Vec<SemanticTypeName>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeParameter {
+pub struct SemanticTypeParameter {
     pub name: String,
-    pub constraint: Option<TypeName>,
+    pub constraint: Option<SemanticTypeName>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct StructLiteralField {
+pub struct SemanticStructLiteralField {
     pub name: String,
     pub name_span: Span,
-    pub value: Expression,
+    pub value: SemanticExpression,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct MatchArm {
-    pub pattern: MatchPattern,
-    pub value: Expression,
+pub struct SemanticMatchArm {
+    pub pattern: SemanticMatchPattern,
+    pub value: SemanticExpression,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum MatchPattern {
+pub enum SemanticMatchPattern {
     Type {
-        type_name: TypeName,
+        type_name: SemanticTypeName,
         span: Span,
     },
     Binding {
         name: String,
         name_span: Span,
-        type_name: TypeName,
+        type_name: SemanticTypeName,
         span: Span,
     },
 }
 
-impl MatchPattern {
+impl SemanticMatchPattern {
     #[must_use]
     pub fn span(&self) -> Span {
         match self {
-            MatchPattern::Type { span, .. } | MatchPattern::Binding { span, .. } => span.clone(),
+            SemanticMatchPattern::Type { span, .. }
+            | SemanticMatchPattern::Binding { span, .. } => span.clone(),
         }
     }
 }

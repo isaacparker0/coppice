@@ -4,8 +4,9 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
-    BinaryOperator as SemanticBinaryOperator, ConstantDeclaration, Declaration, Expression,
-    FunctionDeclaration, SemanticFile, Statement, TypeDeclaration, TypeName,
+    SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
+    SemanticFile, SemanticFunctionDeclaration, SemanticStatement, SemanticTypeDeclaration,
+    SemanticTypeName,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -14,8 +15,8 @@ use compiler__semantic_types::{
 };
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunction,
-    TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
 };
 
 mod assignability;
@@ -48,7 +49,7 @@ pub fn check_package_unit(
     PhaseOutput {
         value: TypeAnnotatedFile {
             function_signature_by_name: function_signature_by_name_from_summary(&summary),
-            main_function: build_main_function_annotation(package_unit),
+            main_function_declaration: build_main_function_annotation(package_unit),
         },
         diagnostics,
         status,
@@ -75,19 +76,23 @@ fn function_signature_by_name_from_summary(
     function_signature_by_name
 }
 
-fn build_main_function_annotation(package_unit: &SemanticFile) -> Option<TypeAnnotatedFunction> {
-    let main_function =
+fn build_main_function_annotation(
+    package_unit: &SemanticFile,
+) -> Option<TypeAnnotatedFunctionDeclaration> {
+    let main_function_declaration =
         package_unit
             .declarations
             .iter()
             .find_map(|declaration| match declaration {
-                Declaration::Function(function) if function.name == "main" => Some(function),
+                SemanticDeclaration::Function(function) if function.name == "main" => {
+                    Some(function)
+                }
                 _ => None,
             })?;
-    Some(TypeAnnotatedFunction {
-        name: main_function.name.clone(),
-        span: main_function.span.clone(),
-        statements: main_function
+    Some(TypeAnnotatedFunctionDeclaration {
+        name: main_function_declaration.name.clone(),
+        span: main_function_declaration.span.clone(),
+        statements: main_function_declaration
             .body
             .statements
             .iter()
@@ -97,10 +102,10 @@ fn build_main_function_annotation(package_unit: &SemanticFile) -> Option<TypeAnn
 }
 
 fn type_annotated_statement_from_semantic_statement(
-    statement: &Statement,
+    statement: &SemanticStatement,
 ) -> TypeAnnotatedStatement {
     match statement {
-        Statement::Binding {
+        SemanticStatement::Binding {
             name,
             mutable,
             initializer,
@@ -112,14 +117,14 @@ fn type_annotated_statement_from_semantic_statement(
             initializer: type_annotated_expression_from_semantic_expression(initializer),
             span: span.clone(),
         },
-        Statement::Assign {
+        SemanticStatement::Assign {
             name, value, span, ..
         } => TypeAnnotatedStatement::Assign {
             name: name.clone(),
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
-        Statement::If {
+        SemanticStatement::If {
             condition,
             then_block,
             else_block,
@@ -140,7 +145,7 @@ fn type_annotated_statement_from_semantic_statement(
             }),
             span: span.clone(),
         },
-        Statement::For {
+        SemanticStatement::For {
             condition,
             body,
             span,
@@ -155,44 +160,54 @@ fn type_annotated_statement_from_semantic_statement(
                 .collect(),
             span: span.clone(),
         },
-        Statement::Break { span } => TypeAnnotatedStatement::Break { span: span.clone() },
-        Statement::Continue { span } => TypeAnnotatedStatement::Continue { span: span.clone() },
-        Statement::Expression { value, span } => TypeAnnotatedStatement::Expression {
+        SemanticStatement::Break { span } => TypeAnnotatedStatement::Break { span: span.clone() },
+        SemanticStatement::Continue { span } => {
+            TypeAnnotatedStatement::Continue { span: span.clone() }
+        }
+        SemanticStatement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
-        Statement::Return { value, span } => TypeAnnotatedStatement::Return {
+        SemanticStatement::Return { value, span } => TypeAnnotatedStatement::Return {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
-        Statement::Abort { span, .. } => TypeAnnotatedStatement::Unsupported { span: span.clone() },
+        SemanticStatement::Abort { span, .. } => {
+            TypeAnnotatedStatement::Unsupported { span: span.clone() }
+        }
     }
 }
 
 fn type_annotated_expression_from_semantic_expression(
-    expression: &Expression,
+    expression: &SemanticExpression,
 ) -> TypeAnnotatedExpression {
     match expression {
-        Expression::IntegerLiteral { value, span } => TypeAnnotatedExpression::IntegerLiteral {
-            value: *value,
-            span: span.clone(),
-        },
-        Expression::BooleanLiteral { value, span } => TypeAnnotatedExpression::BooleanLiteral {
-            value: *value,
-            span: span.clone(),
-        },
-        Expression::NilLiteral { span } => {
+        SemanticExpression::IntegerLiteral { value, span } => {
+            TypeAnnotatedExpression::IntegerLiteral {
+                value: *value,
+                span: span.clone(),
+            }
+        }
+        SemanticExpression::BooleanLiteral { value, span } => {
+            TypeAnnotatedExpression::BooleanLiteral {
+                value: *value,
+                span: span.clone(),
+            }
+        }
+        SemanticExpression::NilLiteral { span } => {
             TypeAnnotatedExpression::NilLiteral { span: span.clone() }
         }
-        Expression::StringLiteral { value, span } => TypeAnnotatedExpression::StringLiteral {
-            value: value.clone(),
-            span: span.clone(),
-        },
-        Expression::Identifier { name, span } => TypeAnnotatedExpression::Identifier {
+        SemanticExpression::StringLiteral { value, span } => {
+            TypeAnnotatedExpression::StringLiteral {
+                value: value.clone(),
+                span: span.clone(),
+            }
+        }
+        SemanticExpression::Identifier { name, span } => TypeAnnotatedExpression::Identifier {
             name: name.clone(),
             span: span.clone(),
         },
-        Expression::Binary {
+        SemanticExpression::Binary {
             operator,
             left,
             right,
@@ -242,7 +257,7 @@ fn type_annotated_expression_from_semantic_expression(
             },
             _ => TypeAnnotatedExpression::Unsupported { span: span.clone() },
         },
-        Expression::Call {
+        SemanticExpression::Call {
             callee,
             type_arguments,
             arguments,
@@ -282,11 +297,13 @@ fn check_package_unit_declarations(
     let mut function_declarations = Vec::new();
     for declaration in &package_unit.declarations {
         match declaration {
-            Declaration::Type(type_declaration) => type_declarations.push(type_declaration.clone()),
-            Declaration::Constant(constant_declaration) => {
+            SemanticDeclaration::Type(type_declaration) => {
+                type_declarations.push(type_declaration.clone());
+            }
+            SemanticDeclaration::Constant(constant_declaration) => {
                 constant_declarations.push(constant_declaration.clone());
             }
-            Declaration::Function(function_declaration) => {
+            SemanticDeclaration::Function(function_declaration) => {
                 function_declarations.push(function_declaration.clone());
             }
         }
@@ -305,9 +322,9 @@ fn check_package_unit_declarations(
 fn check_declarations(
     package_id: PackageId,
     diagnostics: &mut Vec<PhaseDiagnostic>,
-    type_declarations: &[TypeDeclaration],
-    constant_declarations: &[ConstantDeclaration],
-    function_declarations: &[FunctionDeclaration],
+    type_declarations: &[SemanticTypeDeclaration],
+    constant_declarations: &[SemanticConstantDeclaration],
+    function_declarations: &[SemanticFunctionDeclaration],
     imported_bindings: &[ImportedBinding],
 ) -> FileTypecheckSummary {
     let mut type_checker = TypeChecker::new(package_id, imported_bindings, diagnostics);
@@ -452,9 +469,9 @@ impl<'a> TypeChecker<'a> {
 
     fn build_summary(
         &self,
-        type_declarations: &[TypeDeclaration],
-        function_declarations: &[FunctionDeclaration],
-        constant_declarations: &[ConstantDeclaration],
+        type_declarations: &[SemanticTypeDeclaration],
+        function_declarations: &[SemanticFunctionDeclaration],
+        constant_declarations: &[SemanticConstantDeclaration],
     ) -> FileTypecheckSummary {
         let mut typed_symbol_by_name = HashMap::new();
 
@@ -636,7 +653,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn resolve_type_name(&mut self, type_name: &TypeName) -> Type {
+    fn resolve_type_name(&mut self, type_name: &SemanticTypeName) -> Type {
         let mut resolved = Vec::new();
         let mut has_unknown = false;
         for atom in &type_name.names {
@@ -821,37 +838,37 @@ fn builtin_functions() -> HashMap<String, FunctionInfo> {
     functions
 }
 
-impl ExpressionSpan for Expression {
+impl ExpressionSpan for SemanticExpression {
     fn span(&self) -> Span {
         match self {
-            Expression::IntegerLiteral { span, .. }
-            | Expression::NilLiteral { span, .. }
-            | Expression::BooleanLiteral { span, .. }
-            | Expression::StringLiteral { span, .. }
-            | Expression::Identifier { span, .. }
-            | Expression::StructLiteral { span, .. }
-            | Expression::FieldAccess { span, .. }
-            | Expression::Call { span, .. }
-            | Expression::Unary { span, .. }
-            | Expression::Binary { span, .. }
-            | Expression::Match { span, .. }
-            | Expression::Matches { span, .. } => span.clone(),
+            SemanticExpression::IntegerLiteral { span, .. }
+            | SemanticExpression::NilLiteral { span, .. }
+            | SemanticExpression::BooleanLiteral { span, .. }
+            | SemanticExpression::StringLiteral { span, .. }
+            | SemanticExpression::Identifier { span, .. }
+            | SemanticExpression::StructLiteral { span, .. }
+            | SemanticExpression::FieldAccess { span, .. }
+            | SemanticExpression::Call { span, .. }
+            | SemanticExpression::Unary { span, .. }
+            | SemanticExpression::Binary { span, .. }
+            | SemanticExpression::Match { span, .. }
+            | SemanticExpression::Matches { span, .. } => span.clone(),
         }
     }
 }
 
-impl StatementSpan for Statement {
+impl StatementSpan for SemanticStatement {
     fn span(&self) -> Span {
         match self {
-            Statement::Binding { span, .. }
-            | Statement::Assign { span, .. }
-            | Statement::Return { span, .. }
-            | Statement::Abort { span, .. }
-            | Statement::If { span, .. }
-            | Statement::For { span, .. }
-            | Statement::Break { span, .. }
-            | Statement::Continue { span, .. }
-            | Statement::Expression { span, .. } => span.clone(),
+            SemanticStatement::Binding { span, .. }
+            | SemanticStatement::Assign { span, .. }
+            | SemanticStatement::Return { span, .. }
+            | SemanticStatement::Abort { span, .. }
+            | SemanticStatement::If { span, .. }
+            | SemanticStatement::For { span, .. }
+            | SemanticStatement::Break { span, .. }
+            | SemanticStatement::Continue { span, .. }
+            | SemanticStatement::Expression { span, .. } => span.clone(),
         }
     }
 }

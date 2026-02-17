@@ -30,3 +30,6 @@
   surfaces, and isolated side effects.
 - Favor decoupling. Small, focused modules/packages are good; do not optimize
   for fewer files by default.
+- Prefer globally unambiguous names for shared/public types. Avoid introducing
+  overlapping names that require local import aliasing for disambiguation when a
+  clearer unique name is practical.

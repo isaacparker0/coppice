@@ -1,14 +1,14 @@
 use compiler__source::{FileRole, Span};
 
 #[derive(Clone, Debug)]
-pub struct ImportDeclaration {
+pub struct SyntaxImportDeclaration {
     pub package_path: String,
-    pub members: Vec<ImportMember>,
+    pub members: Vec<SyntaxImportMember>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ImportMember {
+pub struct SyntaxImportMember {
     pub name: String,
     pub alias: Option<String>,
     pub alias_span: Option<Span>,
@@ -16,171 +16,171 @@ pub struct ImportMember {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExportsDeclaration {
-    pub members: Vec<ExportsMember>,
+pub struct SyntaxExportsDeclaration {
+    pub members: Vec<SyntaxExportsMember>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ExportsMember {
+pub struct SyntaxExportsMember {
     pub name: String,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ParsedFile {
+pub struct SyntaxParsedFile {
     pub role: FileRole,
-    pub items: Vec<FileItem>,
+    pub items: Vec<SyntaxFileItem>,
 }
 
 #[derive(Clone, Debug)]
-pub enum FileItem {
-    DocComment(DocComment),
-    Declaration(Box<Declaration>),
+pub enum SyntaxFileItem {
+    DocComment(SyntaxDocComment),
+    Declaration(Box<SyntaxDeclaration>),
 }
 
-impl ParsedFile {
-    pub fn top_level_declarations(&self) -> impl Iterator<Item = &Declaration> {
+impl SyntaxParsedFile {
+    pub fn top_level_declarations(&self) -> impl Iterator<Item = &SyntaxDeclaration> {
         self.items.iter().filter_map(|item| match item {
-            FileItem::DocComment(_) => None,
-            FileItem::Declaration(declaration) => Some(declaration.as_ref()),
+            SyntaxFileItem::DocComment(_) => None,
+            SyntaxFileItem::Declaration(declaration) => Some(declaration.as_ref()),
         })
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum Declaration {
-    Import(ImportDeclaration),
-    Exports(ExportsDeclaration),
-    Type(TypeDeclaration),
-    Constant(ConstantDeclaration),
-    Function(FunctionDeclaration),
+pub enum SyntaxDeclaration {
+    Import(SyntaxImportDeclaration),
+    Exports(SyntaxExportsDeclaration),
+    Type(SyntaxTypeDeclaration),
+    Constant(SyntaxConstantDeclaration),
+    Function(SyntaxFunctionDeclaration),
 }
 
 #[derive(Clone, Debug)]
-pub struct DocComment {
+pub struct SyntaxDocComment {
     pub lines: Vec<String>,
     pub span: Span,
     pub end_line: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Visibility {
+pub enum SyntaxVisibility {
     Private,
     Public,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeDeclaration {
+pub struct SyntaxTypeDeclaration {
     pub name: String,
-    pub type_parameters: Vec<TypeParameter>,
-    pub kind: TypeDeclarationKind,
-    pub visibility: Visibility,
+    pub type_parameters: Vec<SyntaxTypeParameter>,
+    pub kind: SyntaxTypeDeclarationKind,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum TypeDeclarationKind {
-    Struct { items: Vec<StructMemberItem> },
-    Enum { variants: Vec<EnumVariant> },
-    Union { variants: Vec<TypeName> },
+pub enum SyntaxTypeDeclarationKind {
+    Struct { items: Vec<SyntaxStructMemberItem> },
+    Enum { variants: Vec<SyntaxEnumVariant> },
+    Union { variants: Vec<SyntaxTypeName> },
 }
 
 #[derive(Clone, Debug)]
-pub enum StructMemberItem {
-    DocComment(DocComment),
-    Field(Box<FieldDeclaration>),
-    Method(Box<MethodDeclaration>),
+pub enum SyntaxStructMemberItem {
+    DocComment(SyntaxDocComment),
+    Field(Box<SyntaxFieldDeclaration>),
+    Method(Box<SyntaxMethodDeclaration>),
 }
 
 #[derive(Clone, Debug)]
-pub struct EnumVariant {
+pub struct SyntaxEnumVariant {
     pub name: String,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct FieldDeclaration {
+pub struct SyntaxFieldDeclaration {
     pub name: String,
-    pub type_name: TypeName,
-    pub visibility: Visibility,
+    pub type_name: SyntaxTypeName,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct MethodDeclaration {
+pub struct SyntaxMethodDeclaration {
     pub name: String,
     pub name_span: Span,
     pub self_span: Span,
     pub self_mutable: bool,
-    pub parameters: Vec<ParameterDeclaration>,
-    pub return_type: TypeName,
-    pub body: Block,
-    pub visibility: Visibility,
+    pub parameters: Vec<SyntaxParameterDeclaration>,
+    pub return_type: SyntaxTypeName,
+    pub body: SyntaxBlock,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ConstantDeclaration {
+pub struct SyntaxConstantDeclaration {
     pub name: String,
-    pub type_name: TypeName,
-    pub expression: Expression,
-    pub visibility: Visibility,
+    pub type_name: SyntaxTypeName,
+    pub expression: SyntaxExpression,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct FunctionDeclaration {
+pub struct SyntaxFunctionDeclaration {
     pub name: String,
     pub name_span: Span,
-    pub type_parameters: Vec<TypeParameter>,
-    pub parameters: Vec<ParameterDeclaration>,
-    pub return_type: TypeName,
-    pub body: Block,
-    pub visibility: Visibility,
+    pub type_parameters: Vec<SyntaxTypeParameter>,
+    pub parameters: Vec<SyntaxParameterDeclaration>,
+    pub return_type: SyntaxTypeName,
+    pub body: SyntaxBlock,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct ParameterDeclaration {
+pub struct SyntaxParameterDeclaration {
     pub name: String,
-    pub type_name: TypeName,
+    pub type_name: SyntaxTypeName,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct Block {
-    pub items: Vec<BlockItem>,
+pub struct SyntaxBlock {
+    pub items: Vec<SyntaxBlockItem>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum BlockItem {
-    DocComment(DocComment),
-    Statement(Statement),
+pub enum SyntaxBlockItem {
+    DocComment(SyntaxDocComment),
+    Statement(SyntaxStatement),
 }
 
 #[derive(Clone, Debug)]
-pub enum Statement {
+pub enum SyntaxStatement {
     Binding {
         name: String,
         mutable: bool,
-        type_name: Option<TypeName>,
-        initializer: Expression,
+        type_name: Option<SyntaxTypeName>,
+        initializer: SyntaxExpression,
         span: Span,
     },
     Assign {
         name: String,
         name_span: Span,
-        value: Expression,
+        value: SyntaxExpression,
         span: Span,
     },
     Return {
-        value: Expression,
+        value: SyntaxExpression,
         span: Span,
     },
     Abort {
-        message: Expression,
+        message: SyntaxExpression,
         span: Span,
     },
     Break {
@@ -190,24 +190,24 @@ pub enum Statement {
         span: Span,
     },
     If {
-        condition: Expression,
-        then_block: Block,
-        else_block: Option<Block>,
+        condition: SyntaxExpression,
+        then_block: SyntaxBlock,
+        else_block: Option<SyntaxBlock>,
         span: Span,
     },
     For {
-        condition: Option<Expression>,
-        body: Block,
+        condition: Option<SyntaxExpression>,
+        body: SyntaxBlock,
         span: Span,
     },
     Expression {
-        value: Expression,
+        value: SyntaxExpression,
         span: Span,
     },
 }
 
 #[derive(Clone, Debug)]
-pub enum Expression {
+pub enum SyntaxExpression {
     IntegerLiteral {
         value: i64,
         span: Span,
@@ -228,47 +228,47 @@ pub enum Expression {
         span: Span,
     },
     StructLiteral {
-        type_name: TypeName,
-        fields: Vec<StructLiteralField>,
+        type_name: SyntaxTypeName,
+        fields: Vec<SyntaxStructLiteralField>,
         span: Span,
     },
     FieldAccess {
-        target: Box<Expression>,
+        target: Box<SyntaxExpression>,
         field: String,
         field_span: Span,
         span: Span,
     },
     Call {
-        callee: Box<Expression>,
-        type_arguments: Vec<TypeName>,
-        arguments: Vec<Expression>,
+        callee: Box<SyntaxExpression>,
+        type_arguments: Vec<SyntaxTypeName>,
+        arguments: Vec<SyntaxExpression>,
         span: Span,
     },
     Unary {
-        operator: UnaryOperator,
-        expression: Box<Expression>,
+        operator: SyntaxUnaryOperator,
+        expression: Box<SyntaxExpression>,
         span: Span,
     },
     Binary {
-        operator: BinaryOperator,
-        left: Box<Expression>,
-        right: Box<Expression>,
+        operator: SyntaxBinaryOperator,
+        left: Box<SyntaxExpression>,
+        right: Box<SyntaxExpression>,
         span: Span,
     },
     Match {
-        target: Box<Expression>,
-        arms: Vec<MatchArm>,
+        target: Box<SyntaxExpression>,
+        arms: Vec<SyntaxMatchArm>,
         span: Span,
     },
     Matches {
-        value: Box<Expression>,
-        type_name: TypeName,
+        value: Box<SyntaxExpression>,
+        type_name: SyntaxTypeName,
         span: Span,
     },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BinaryOperator {
+pub enum SyntaxBinaryOperator {
     Add,
     Subtract,
     Multiply,
@@ -284,65 +284,67 @@ pub enum BinaryOperator {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UnaryOperator {
+pub enum SyntaxUnaryOperator {
     Not,
     Negate,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeName {
-    pub names: Vec<TypeNameAtom>,
+pub struct SyntaxTypeName {
+    pub names: Vec<SyntaxTypeNameAtom>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeNameAtom {
+pub struct SyntaxTypeNameAtom {
     pub name: String,
-    pub type_arguments: Vec<TypeName>,
+    pub type_arguments: Vec<SyntaxTypeName>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct TypeParameter {
+pub struct SyntaxTypeParameter {
     pub name: String,
-    pub constraint: Option<TypeName>,
+    pub constraint: Option<SyntaxTypeName>,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct StructLiteralField {
+pub struct SyntaxStructLiteralField {
     pub name: String,
     pub name_span: Span,
-    pub value: Expression,
+    pub value: SyntaxExpression,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub struct MatchArm {
-    pub pattern: MatchPattern,
-    pub value: Expression,
+pub struct SyntaxMatchArm {
+    pub pattern: SyntaxMatchPattern,
+    pub value: SyntaxExpression,
     pub span: Span,
 }
 
 #[derive(Clone, Debug)]
-pub enum MatchPattern {
+pub enum SyntaxMatchPattern {
     Type {
-        type_name: TypeName,
+        type_name: SyntaxTypeName,
         span: Span,
     },
     Binding {
         name: String,
         name_span: Span,
-        type_name: TypeName,
+        type_name: SyntaxTypeName,
         span: Span,
     },
 }
 
-impl MatchPattern {
+impl SyntaxMatchPattern {
     #[must_use]
     pub fn span(&self) -> Span {
         match self {
-            MatchPattern::Type { span, .. } | MatchPattern::Binding { span, .. } => span.clone(),
+            SyntaxMatchPattern::Type { span, .. } | SyntaxMatchPattern::Binding { span, .. } => {
+                span.clone()
+            }
         }
     }
 }

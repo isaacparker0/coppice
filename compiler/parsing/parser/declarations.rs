@@ -1,8 +1,9 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{
-    ConstantDeclaration, FieldDeclaration, FunctionDeclaration, MethodDeclaration,
-    ParameterDeclaration, StructMemberItem, TypeDeclaration, TypeDeclarationKind, Visibility,
+    SyntaxConstantDeclaration, SyntaxFieldDeclaration, SyntaxFunctionDeclaration,
+    SyntaxMethodDeclaration, SyntaxParameterDeclaration, SyntaxStructMemberItem,
+    SyntaxTypeDeclaration, SyntaxTypeDeclarationKind, SyntaxVisibility,
 };
 
 use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind};
@@ -10,8 +11,8 @@ use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parse
 impl Parser {
     pub(super) fn parse_type_declaration(
         &mut self,
-        visibility: Visibility,
-    ) -> ParseResult<TypeDeclaration> {
+        visibility: SyntaxVisibility,
+    ) -> ParseResult<SyntaxTypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
         let (type_parameters, recoveries) = self.parse_type_parameter_list()?;
@@ -31,10 +32,10 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Ok(TypeDeclaration {
+            return Ok(SyntaxTypeDeclaration {
                 name,
                 type_parameters,
-                kind: TypeDeclarationKind::Struct { items },
+                kind: SyntaxTypeDeclarationKind::Struct { items },
                 visibility,
                 span,
             });
@@ -52,10 +53,10 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Ok(TypeDeclaration {
+            return Ok(SyntaxTypeDeclaration {
                 name,
                 type_parameters,
-                kind: TypeDeclarationKind::Enum { variants },
+                kind: SyntaxTypeDeclarationKind::Enum { variants },
                 visibility,
                 span,
             });
@@ -70,16 +71,16 @@ impl Parser {
             line: start.line,
             column: start.column,
         };
-        Ok(TypeDeclaration {
+        Ok(SyntaxTypeDeclaration {
             name,
             type_parameters,
-            kind: TypeDeclarationKind::Union { variants },
+            kind: SyntaxTypeDeclarationKind::Union { variants },
             visibility,
             span,
         })
     }
 
-    pub(super) fn parse_struct_members(&mut self) -> Vec<StructMemberItem> {
+    pub(super) fn parse_struct_members(&mut self) -> Vec<SyntaxStructMemberItem> {
         let mut items = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
@@ -88,7 +89,7 @@ impl Parser {
         loop {
             self.skip_statement_terminators();
             if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
-                items.push(StructMemberItem::DocComment(doc_comment));
+                items.push(SyntaxStructMemberItem::DocComment(doc_comment));
             }
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
@@ -97,7 +98,7 @@ impl Parser {
             if self.peek_is_keyword(Keyword::Function) {
                 match self.parse_method_declaration(visibility) {
                     Ok(method) => {
-                        items.push(StructMemberItem::Method(Box::new(method.clone())));
+                        items.push(SyntaxStructMemberItem::Method(Box::new(method.clone())));
                     }
                     Err(error) => {
                         self.report_parse_error(&error);
@@ -110,7 +111,7 @@ impl Parser {
             } else {
                 match self.parse_field_declaration(visibility) {
                     Ok(field) => {
-                        items.push(StructMemberItem::Field(Box::new(field.clone())));
+                        items.push(SyntaxStructMemberItem::Field(Box::new(field.clone())));
                     }
                     Err(error) => {
                         self.report_parse_error(&error);
@@ -141,8 +142,8 @@ impl Parser {
 
     pub(super) fn parse_field_declaration(
         &mut self,
-        visibility: Visibility,
-    ) -> ParseResult<FieldDeclaration> {
+        visibility: SyntaxVisibility,
+    ) -> ParseResult<SyntaxFieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -152,7 +153,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Ok(FieldDeclaration {
+        Ok(SyntaxFieldDeclaration {
             name,
             type_name,
             visibility,
@@ -162,8 +163,8 @@ impl Parser {
 
     pub(super) fn parse_method_declaration(
         &mut self,
-        visibility: Visibility,
-    ) -> ParseResult<MethodDeclaration> {
+        visibility: SyntaxVisibility,
+    ) -> ParseResult<SyntaxMethodDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::LeftParenthesis)?;
@@ -176,7 +177,7 @@ impl Parser {
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
-        Ok(MethodDeclaration {
+        Ok(SyntaxMethodDeclaration {
             name,
             name_span,
             self_span,
@@ -196,7 +197,7 @@ impl Parser {
 
     pub(super) fn parse_method_parameters(
         &mut self,
-    ) -> ParseResult<(Span, bool, Vec<ParameterDeclaration>, Vec<ParseError>)> {
+    ) -> ParseResult<(Span, bool, Vec<SyntaxParameterDeclaration>, Vec<ParseError>)> {
         let mut recoveries = Vec::new();
         let self_mutable = if self.peek_is_keyword(Keyword::Mut) {
             self.advance();
@@ -258,8 +259,8 @@ impl Parser {
 
     pub(super) fn parse_function(
         &mut self,
-        visibility: Visibility,
-    ) -> ParseResult<FunctionDeclaration> {
+        visibility: SyntaxVisibility,
+    ) -> ParseResult<SyntaxFunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
         let (type_parameters, recoveries) = self.parse_type_parameter_list()?;
@@ -273,7 +274,7 @@ impl Parser {
         let return_type = self.parse_type_name()?;
         let body = self.parse_block()?;
         let body_end = body.span.end;
-        Ok(FunctionDeclaration {
+        Ok(SyntaxFunctionDeclaration {
             name,
             name_span,
             type_parameters,
@@ -292,8 +293,8 @@ impl Parser {
 
     pub(super) fn parse_constant_declaration(
         &mut self,
-        visibility: Visibility,
-    ) -> ParseResult<ConstantDeclaration> {
+        visibility: SyntaxVisibility,
+    ) -> ParseResult<SyntaxConstantDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         if self.peek_is_symbol(Symbol::Assign) {
             let span = self.peek_span();
@@ -312,7 +313,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Ok(ConstantDeclaration {
+        Ok(SyntaxConstantDeclaration {
             name,
             type_name,
             expression,
@@ -321,7 +322,7 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_parameters(&mut self) -> Vec<ParameterDeclaration> {
+    pub(super) fn parse_parameters(&mut self) -> Vec<SyntaxParameterDeclaration> {
         let mut parameters = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParenthesis) {
@@ -354,7 +355,7 @@ impl Parser {
         parameters
     }
 
-    pub(super) fn parse_parameter(&mut self) -> ParseResult<ParameterDeclaration> {
+    pub(super) fn parse_parameter(&mut self) -> ParseResult<SyntaxParameterDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
@@ -364,7 +365,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Ok(ParameterDeclaration {
+        Ok(SyntaxParameterDeclaration {
             name,
             type_name,
             span,

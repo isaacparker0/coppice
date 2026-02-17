@@ -2,8 +2,8 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__syntax::{
-    Block, BlockItem, Declaration, FileItem, ParsedFile, Statement, StructMemberItem,
-    TypeDeclarationKind,
+    SyntaxBlock, SyntaxBlockItem, SyntaxDeclaration, SyntaxFileItem, SyntaxParsedFile,
+    SyntaxStatement, SyntaxStructMemberItem, SyntaxTypeDeclarationKind,
 };
 
 #[derive(Clone, Copy)]
@@ -18,7 +18,7 @@ struct SyntaxRuleViolation {
 }
 
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
+pub fn check_file(file: &SyntaxParsedFile) -> PhaseOutput<()> {
     let mut violations = Vec::new();
     check_import_order(file, &mut violations);
     check_doc_comment_placement(file, &mut violations);
@@ -53,11 +53,11 @@ fn render_diagnostics(violations: &[SyntaxRuleViolation]) -> Vec<PhaseDiagnostic
         .collect()
 }
 
-fn check_import_order(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
+fn check_import_order(file: &SyntaxParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
     let mut saw_non_import_declaration = false;
     for declaration in file.top_level_declarations() {
         match declaration {
-            Declaration::Import(import_declaration) => {
+            SyntaxDeclaration::Import(import_declaration) => {
                 if saw_non_import_declaration {
                     violations.push(SyntaxRuleViolation {
                         kind: SyntaxRuleViolationKind::ImportAfterDeclaration,
@@ -65,46 +65,51 @@ fn check_import_order(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolatio
                     });
                 }
             }
-            Declaration::Exports(_)
-            | Declaration::Type(_)
-            | Declaration::Constant(_)
-            | Declaration::Function(_) => {
+            SyntaxDeclaration::Exports(_)
+            | SyntaxDeclaration::Type(_)
+            | SyntaxDeclaration::Constant(_)
+            | SyntaxDeclaration::Function(_) => {
                 saw_non_import_declaration = true;
             }
         }
     }
 }
 
-fn check_doc_comment_placement(file: &ParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
+fn check_doc_comment_placement(file: &SyntaxParsedFile, violations: &mut Vec<SyntaxRuleViolation>) {
     check_file_item_doc_comments(&file.items, violations);
     for declaration in file.top_level_declarations() {
         match declaration {
-            Declaration::Type(type_declaration) => {
-                let TypeDeclarationKind::Struct { items } = &type_declaration.kind else {
+            SyntaxDeclaration::Type(type_declaration) => {
+                let SyntaxTypeDeclarationKind::Struct { items } = &type_declaration.kind else {
                     continue;
                 };
                 check_struct_member_doc_comments(items, violations);
                 for item in items {
-                    let StructMemberItem::Method(method_declaration) = item else {
+                    let SyntaxStructMemberItem::Method(method_declaration) = item else {
                         continue;
                     };
                     check_block_doc_comments(&method_declaration.body, violations);
                 }
             }
-            Declaration::Function(function_declaration) => {
+            SyntaxDeclaration::Function(function_declaration) => {
                 check_block_doc_comments(&function_declaration.body, violations);
             }
-            Declaration::Import(_) | Declaration::Exports(_) | Declaration::Constant(_) => {}
+            SyntaxDeclaration::Import(_)
+            | SyntaxDeclaration::Exports(_)
+            | SyntaxDeclaration::Constant(_) => {}
         }
     }
 }
 
-fn check_file_item_doc_comments(items: &[FileItem], violations: &mut Vec<SyntaxRuleViolation>) {
+fn check_file_item_doc_comments(
+    items: &[SyntaxFileItem],
+    violations: &mut Vec<SyntaxRuleViolation>,
+) {
     for (index, item) in items.iter().enumerate() {
-        let FileItem::DocComment(doc_comment) = item else {
+        let SyntaxFileItem::DocComment(doc_comment) = item else {
             continue;
         };
-        let Some(FileItem::Declaration(declaration)) = items.get(index + 1) else {
+        let Some(SyntaxFileItem::Declaration(declaration)) = items.get(index + 1) else {
             violations.push(SyntaxRuleViolation {
                 kind: SyntaxRuleViolationKind::DocCommentMustDocumentDeclaration,
                 span: doc_comment.span.clone(),
@@ -112,11 +117,11 @@ fn check_file_item_doc_comments(items: &[FileItem], violations: &mut Vec<SyntaxR
             continue;
         };
         let declaration_line = match declaration.as_ref() {
-            Declaration::Import(import_declaration) => import_declaration.span.line,
-            Declaration::Exports(exports_declaration) => exports_declaration.span.line,
-            Declaration::Type(type_declaration) => type_declaration.span.line,
-            Declaration::Constant(constant_declaration) => constant_declaration.span.line,
-            Declaration::Function(function_declaration) => function_declaration.span.line,
+            SyntaxDeclaration::Import(import_declaration) => import_declaration.span.line,
+            SyntaxDeclaration::Exports(exports_declaration) => exports_declaration.span.line,
+            SyntaxDeclaration::Type(type_declaration) => type_declaration.span.line,
+            SyntaxDeclaration::Constant(constant_declaration) => constant_declaration.span.line,
+            SyntaxDeclaration::Function(function_declaration) => function_declaration.span.line,
         };
         if declaration_line != doc_comment.end_line + 1 {
             violations.push(SyntaxRuleViolation {
@@ -128,11 +133,11 @@ fn check_file_item_doc_comments(items: &[FileItem], violations: &mut Vec<SyntaxR
 }
 
 fn check_struct_member_doc_comments(
-    items: &[StructMemberItem],
+    items: &[SyntaxStructMemberItem],
     violations: &mut Vec<SyntaxRuleViolation>,
 ) {
     for (index, item) in items.iter().enumerate() {
-        let StructMemberItem::DocComment(doc_comment) = item else {
+        let SyntaxStructMemberItem::DocComment(doc_comment) = item else {
             continue;
         };
         let Some(next_item) = items.get(index + 1) else {
@@ -143,9 +148,13 @@ fn check_struct_member_doc_comments(
             continue;
         };
         let declaration_line = match next_item {
-            StructMemberItem::Field(field_declaration) => field_declaration.as_ref().span.line,
-            StructMemberItem::Method(method_declaration) => method_declaration.as_ref().span.line,
-            StructMemberItem::DocComment(_) => {
+            SyntaxStructMemberItem::Field(field_declaration) => {
+                field_declaration.as_ref().span.line
+            }
+            SyntaxStructMemberItem::Method(method_declaration) => {
+                method_declaration.as_ref().span.line
+            }
+            SyntaxStructMemberItem::DocComment(_) => {
                 violations.push(SyntaxRuleViolation {
                     kind: SyntaxRuleViolationKind::DocCommentMustDocumentDeclaration,
                     span: doc_comment.span.clone(),
@@ -162,15 +171,15 @@ fn check_struct_member_doc_comments(
     }
 }
 
-fn check_block_doc_comments(block: &Block, violations: &mut Vec<SyntaxRuleViolation>) {
+fn check_block_doc_comments(block: &SyntaxBlock, violations: &mut Vec<SyntaxRuleViolation>) {
     for item in &block.items {
         match item {
-            BlockItem::DocComment(doc_comment) => violations.push(SyntaxRuleViolation {
+            SyntaxBlockItem::DocComment(doc_comment) => violations.push(SyntaxRuleViolation {
                 kind: SyntaxRuleViolationKind::DocCommentMustDocumentDeclaration,
                 span: doc_comment.span.clone(),
             }),
-            BlockItem::Statement(statement) => match statement {
-                Statement::If {
+            SyntaxBlockItem::Statement(statement) => match statement {
+                SyntaxStatement::If {
                     then_block,
                     else_block,
                     ..
@@ -180,16 +189,16 @@ fn check_block_doc_comments(block: &Block, violations: &mut Vec<SyntaxRuleViolat
                         check_block_doc_comments(block, violations);
                     }
                 }
-                Statement::For { body, .. } => {
+                SyntaxStatement::For { body, .. } => {
                     check_block_doc_comments(body, violations);
                 }
-                Statement::Binding { .. }
-                | Statement::Assign { .. }
-                | Statement::Return { .. }
-                | Statement::Abort { .. }
-                | Statement::Break { .. }
-                | Statement::Continue { .. }
-                | Statement::Expression { .. } => {}
+                SyntaxStatement::Binding { .. }
+                | SyntaxStatement::Assign { .. }
+                | SyntaxStatement::Return { .. }
+                | SyntaxStatement::Abort { .. }
+                | SyntaxStatement::Break { .. }
+                | SyntaxStatement::Continue { .. }
+                | SyntaxStatement::Expression { .. } => {}
             },
         }
     }

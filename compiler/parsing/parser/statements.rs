@@ -1,22 +1,22 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
-use compiler__syntax::{Block, BlockItem, Statement};
+use compiler__syntax::{SyntaxBlock, SyntaxBlockItem, SyntaxStatement};
 
 use super::{ExpressionSpan, ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_block(&mut self) -> ParseResult<Block> {
+    pub(super) fn parse_block(&mut self) -> ParseResult<SyntaxBlock> {
         let start = self.expect_symbol(Symbol::LeftBrace)?;
         let mut items = Vec::new();
         self.skip_statement_terminators();
         while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
             if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
-                items.push(BlockItem::DocComment(doc_comment));
+                items.push(SyntaxBlockItem::DocComment(doc_comment));
                 self.skip_statement_terminators();
                 continue;
             }
             match self.parse_statement() {
-                Ok(statement) => items.push(BlockItem::Statement(statement)),
+                Ok(statement) => items.push(SyntaxBlockItem::Statement(statement)),
                 Err(error) => {
                     self.report_parse_error(&error);
                     self.synchronize_statement();
@@ -25,7 +25,7 @@ impl Parser {
             self.skip_statement_terminators();
         }
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Ok(Block {
+        Ok(SyntaxBlock {
             items,
             span: Span {
                 start: start.start,
@@ -36,11 +36,11 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_statement(&mut self) -> ParseResult<Statement> {
+    pub(super) fn parse_statement(&mut self) -> ParseResult<SyntaxStatement> {
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
             let value = self.parse_expression()?;
-            return Ok(Statement::Return { value, span });
+            return Ok(SyntaxStatement::Return { value, span });
         }
         if self.peek_is_keyword(Keyword::Abort) {
             let start = self.expect_keyword(Keyword::Abort)?;
@@ -53,15 +53,15 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Ok(Statement::Abort { message, span });
+            return Ok(SyntaxStatement::Abort { message, span });
         }
         if self.peek_is_keyword(Keyword::Break) {
             let span = self.expect_keyword(Keyword::Break)?;
-            return Ok(Statement::Break { span });
+            return Ok(SyntaxStatement::Break { span });
         }
         if self.peek_is_keyword(Keyword::Continue) {
             let span = self.expect_keyword(Keyword::Continue)?;
-            return Ok(Statement::Continue { span });
+            return Ok(SyntaxStatement::Continue { span });
         }
         if self.peek_is_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
@@ -82,7 +82,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Ok(Statement::If {
+            return Ok(SyntaxStatement::If {
                 condition,
                 then_block,
                 else_block,
@@ -103,7 +103,7 @@ impl Parser {
                 line: start.line,
                 column: start.column,
             };
-            return Ok(Statement::For {
+            return Ok(SyntaxStatement::For {
                 condition,
                 body,
                 span,
@@ -127,7 +127,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(Statement::Binding {
+            return Ok(SyntaxStatement::Binding {
                 name,
                 mutable: true,
                 type_name,
@@ -146,7 +146,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(Statement::Assign {
+            return Ok(SyntaxStatement::Assign {
                 name,
                 name_span,
                 value,
@@ -173,7 +173,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(Statement::Binding {
+            return Ok(SyntaxStatement::Binding {
                 name,
                 mutable: false,
                 type_name,
@@ -184,6 +184,6 @@ impl Parser {
 
         let value = self.parse_expression()?;
         let span = value.span();
-        Ok(Statement::Expression { value, span })
+        Ok(SyntaxStatement::Expression { value, span })
     }
 }

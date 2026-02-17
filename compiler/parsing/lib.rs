@@ -4,10 +4,10 @@ mod parser;
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::FileRole;
-use compiler__syntax::ParsedFile;
+use compiler__syntax::SyntaxParsedFile;
 
 #[must_use]
-pub fn parse_file(source: &str, role: FileRole) -> PhaseOutput<ParsedFile> {
+pub fn parse_file(source: &str, role: FileRole) -> PhaseOutput<SyntaxParsedFile> {
     let mut lexer = lexer::Lexer::new(source);
     let tokens = lexer.lex_all_tokens();
     let mut diagnostics: Vec<PhaseDiagnostic> = lexer

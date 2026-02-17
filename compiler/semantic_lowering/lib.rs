@@ -3,36 +3,38 @@ use compiler__semantic_program as semantic;
 use compiler__syntax as syntax;
 
 #[must_use]
-pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semantic::SemanticFile> {
+pub fn lower_parsed_file(
+    parsed_file: &syntax::SyntaxParsedFile,
+) -> PhaseOutput<semantic::SemanticFile> {
     let mut declarations = Vec::new();
-    let mut pending_doc_comment: Option<semantic::DocComment> = None;
+    let mut pending_doc_comment: Option<semantic::SemanticDocComment> = None;
 
     for item in &parsed_file.items {
         match item {
-            syntax::FileItem::DocComment(doc_comment) => {
+            syntax::SyntaxFileItem::DocComment(doc_comment) => {
                 pending_doc_comment = Some(lower_doc_comment(doc_comment));
             }
-            syntax::FileItem::Declaration(declaration) => match declaration.as_ref() {
-                syntax::Declaration::Type(type_declaration) => {
+            syntax::SyntaxFileItem::Declaration(declaration) => match declaration.as_ref() {
+                syntax::SyntaxDeclaration::Type(type_declaration) => {
                     let lowered =
                         lower_type_declaration(type_declaration, pending_doc_comment.take());
-                    declarations.push(semantic::Declaration::Type(lowered.clone()));
+                    declarations.push(semantic::SemanticDeclaration::Type(lowered.clone()));
                 }
-                syntax::Declaration::Constant(constant_declaration) => {
+                syntax::SyntaxDeclaration::Constant(constant_declaration) => {
                     let lowered = lower_constant_declaration(
                         constant_declaration,
                         pending_doc_comment.take(),
                     );
-                    declarations.push(semantic::Declaration::Constant(lowered.clone()));
+                    declarations.push(semantic::SemanticDeclaration::Constant(lowered.clone()));
                 }
-                syntax::Declaration::Function(function_declaration) => {
+                syntax::SyntaxDeclaration::Function(function_declaration) => {
                     let lowered = lower_function_declaration(
                         function_declaration,
                         pending_doc_comment.take(),
                     );
-                    declarations.push(semantic::Declaration::Function(lowered.clone()));
+                    declarations.push(semantic::SemanticDeclaration::Function(lowered.clone()));
                 }
-                syntax::Declaration::Import(_) | syntax::Declaration::Exports(_) => {}
+                syntax::SyntaxDeclaration::Import(_) | syntax::SyntaxDeclaration::Exports(_) => {}
             },
         }
     }
@@ -47,26 +49,26 @@ pub fn lower_parsed_file(parsed_file: &syntax::ParsedFile) -> PhaseOutput<semant
     }
 }
 
-fn lower_doc_comment(doc_comment: &syntax::DocComment) -> semantic::DocComment {
-    semantic::DocComment {
+fn lower_doc_comment(doc_comment: &syntax::SyntaxDocComment) -> semantic::SemanticDocComment {
+    semantic::SemanticDocComment {
         lines: doc_comment.lines.clone(),
         span: doc_comment.span.clone(),
         end_line: doc_comment.end_line,
     }
 }
 
-fn lower_visibility(visibility: syntax::Visibility) -> semantic::Visibility {
+fn lower_visibility(visibility: syntax::SyntaxVisibility) -> semantic::SemanticVisibility {
     match visibility {
-        syntax::Visibility::Private => semantic::Visibility::Private,
-        syntax::Visibility::Public => semantic::Visibility::Public,
+        syntax::SyntaxVisibility::Private => semantic::SemanticVisibility::Private,
+        syntax::SyntaxVisibility::Public => semantic::SemanticVisibility::Public,
     }
 }
 
 fn lower_type_declaration(
-    type_declaration: &syntax::TypeDeclaration,
-    doc: Option<semantic::DocComment>,
-) -> semantic::TypeDeclaration {
-    semantic::TypeDeclaration {
+    type_declaration: &syntax::SyntaxTypeDeclaration,
+    doc: Option<semantic::SemanticDocComment>,
+) -> semantic::SemanticTypeDeclaration {
+    semantic::SemanticTypeDeclaration {
         name: type_declaration.name.clone(),
         type_parameters: type_declaration
             .type_parameters
@@ -81,49 +83,53 @@ fn lower_type_declaration(
 }
 
 fn lower_type_declaration_kind(
-    kind: &syntax::TypeDeclarationKind,
-) -> semantic::TypeDeclarationKind {
+    kind: &syntax::SyntaxTypeDeclarationKind,
+) -> semantic::SemanticTypeDeclarationKind {
     match kind {
-        syntax::TypeDeclarationKind::Struct { items } => {
+        syntax::SyntaxTypeDeclarationKind::Struct { items } => {
             let mut fields = Vec::new();
             let mut methods = Vec::new();
-            let mut pending_doc_comment: Option<semantic::DocComment> = None;
+            let mut pending_doc_comment: Option<semantic::SemanticDocComment> = None;
             for item in items {
                 match item {
-                    syntax::StructMemberItem::DocComment(doc_comment) => {
+                    syntax::SyntaxStructMemberItem::DocComment(doc_comment) => {
                         pending_doc_comment = Some(lower_doc_comment(doc_comment));
                     }
-                    syntax::StructMemberItem::Field(field) => {
+                    syntax::SyntaxStructMemberItem::Field(field) => {
                         fields.push(lower_field_declaration(field, pending_doc_comment.take()));
                     }
-                    syntax::StructMemberItem::Method(method) => {
+                    syntax::SyntaxStructMemberItem::Method(method) => {
                         methods.push(lower_method_declaration(method, pending_doc_comment.take()));
                     }
                 }
             }
-            semantic::TypeDeclarationKind::Struct { fields, methods }
+            semantic::SemanticTypeDeclarationKind::Struct { fields, methods }
         }
-        syntax::TypeDeclarationKind::Enum { variants } => semantic::TypeDeclarationKind::Enum {
-            variants: variants.iter().map(lower_enum_variant).collect(),
-        },
-        syntax::TypeDeclarationKind::Union { variants } => semantic::TypeDeclarationKind::Union {
-            variants: variants.iter().map(lower_type_name).collect(),
-        },
+        syntax::SyntaxTypeDeclarationKind::Enum { variants } => {
+            semantic::SemanticTypeDeclarationKind::Enum {
+                variants: variants.iter().map(lower_enum_variant).collect(),
+            }
+        }
+        syntax::SyntaxTypeDeclarationKind::Union { variants } => {
+            semantic::SemanticTypeDeclarationKind::Union {
+                variants: variants.iter().map(lower_type_name).collect(),
+            }
+        }
     }
 }
 
-fn lower_enum_variant(variant: &syntax::EnumVariant) -> semantic::EnumVariant {
-    semantic::EnumVariant {
+fn lower_enum_variant(variant: &syntax::SyntaxEnumVariant) -> semantic::SemanticEnumVariant {
+    semantic::SemanticEnumVariant {
         name: variant.name.clone(),
         span: variant.span.clone(),
     }
 }
 
 fn lower_field_declaration(
-    field: &syntax::FieldDeclaration,
-    doc: Option<semantic::DocComment>,
-) -> semantic::FieldDeclaration {
-    semantic::FieldDeclaration {
+    field: &syntax::SyntaxFieldDeclaration,
+    doc: Option<semantic::SemanticDocComment>,
+) -> semantic::SemanticFieldDeclaration {
+    semantic::SemanticFieldDeclaration {
         name: field.name.clone(),
         type_name: lower_type_name(&field.type_name),
         doc,
@@ -133,10 +139,10 @@ fn lower_field_declaration(
 }
 
 fn lower_method_declaration(
-    method: &syntax::MethodDeclaration,
-    doc: Option<semantic::DocComment>,
-) -> semantic::MethodDeclaration {
-    semantic::MethodDeclaration {
+    method: &syntax::SyntaxMethodDeclaration,
+    doc: Option<semantic::SemanticDocComment>,
+) -> semantic::SemanticMethodDeclaration {
+    semantic::SemanticMethodDeclaration {
         name: method.name.clone(),
         name_span: method.name_span.clone(),
         self_span: method.self_span.clone(),
@@ -155,10 +161,10 @@ fn lower_method_declaration(
 }
 
 fn lower_constant_declaration(
-    constant: &syntax::ConstantDeclaration,
-    doc: Option<semantic::DocComment>,
-) -> semantic::ConstantDeclaration {
-    semantic::ConstantDeclaration {
+    constant: &syntax::SyntaxConstantDeclaration,
+    doc: Option<semantic::SemanticDocComment>,
+) -> semantic::SemanticConstantDeclaration {
+    semantic::SemanticConstantDeclaration {
         name: constant.name.clone(),
         type_name: lower_type_name(&constant.type_name),
         expression: lower_expression(&constant.expression),
@@ -169,10 +175,10 @@ fn lower_constant_declaration(
 }
 
 fn lower_function_declaration(
-    function: &syntax::FunctionDeclaration,
-    doc: Option<semantic::DocComment>,
-) -> semantic::FunctionDeclaration {
-    semantic::FunctionDeclaration {
+    function: &syntax::SyntaxFunctionDeclaration,
+    doc: Option<semantic::SemanticDocComment>,
+) -> semantic::SemanticFunctionDeclaration {
+    semantic::SemanticFunctionDeclaration {
         name: function.name.clone(),
         name_span: function.name_span.clone(),
         type_parameters: function
@@ -194,180 +200,190 @@ fn lower_function_declaration(
 }
 
 fn lower_parameter_declaration(
-    parameter: &syntax::ParameterDeclaration,
-) -> semantic::ParameterDeclaration {
-    semantic::ParameterDeclaration {
+    parameter: &syntax::SyntaxParameterDeclaration,
+) -> semantic::SemanticParameterDeclaration {
+    semantic::SemanticParameterDeclaration {
         name: parameter.name.clone(),
         type_name: lower_type_name(&parameter.type_name),
         span: parameter.span.clone(),
     }
 }
 
-fn lower_block(block: &syntax::Block) -> semantic::Block {
-    semantic::Block {
+fn lower_block(block: &syntax::SyntaxBlock) -> semantic::SemanticBlock {
+    semantic::SemanticBlock {
         statements: block
             .items
             .iter()
             .filter_map(|item| match item {
-                syntax::BlockItem::DocComment(_) => None,
-                syntax::BlockItem::Statement(statement) => Some(lower_statement(statement)),
+                syntax::SyntaxBlockItem::DocComment(_) => None,
+                syntax::SyntaxBlockItem::Statement(statement) => Some(lower_statement(statement)),
             })
             .collect(),
         span: block.span.clone(),
     }
 }
 
-fn lower_statement(statement: &syntax::Statement) -> semantic::Statement {
+fn lower_statement(statement: &syntax::SyntaxStatement) -> semantic::SemanticStatement {
     match statement {
-        syntax::Statement::Binding {
+        syntax::SyntaxStatement::Binding {
             name,
             mutable,
             type_name,
             initializer,
             span,
-        } => semantic::Statement::Binding {
+        } => semantic::SemanticStatement::Binding {
             name: name.clone(),
             mutable: *mutable,
             type_name: type_name.as_ref().map(lower_type_name),
             initializer: lower_expression(initializer),
             span: span.clone(),
         },
-        syntax::Statement::Assign {
+        syntax::SyntaxStatement::Assign {
             name,
             name_span,
             value,
             span,
-        } => semantic::Statement::Assign {
+        } => semantic::SemanticStatement::Assign {
             name: name.clone(),
             name_span: name_span.clone(),
             value: lower_expression(value),
             span: span.clone(),
         },
-        syntax::Statement::Return { value, span } => semantic::Statement::Return {
+        syntax::SyntaxStatement::Return { value, span } => semantic::SemanticStatement::Return {
             value: lower_expression(value),
             span: span.clone(),
         },
-        syntax::Statement::Abort { message, span } => semantic::Statement::Abort {
+        syntax::SyntaxStatement::Abort { message, span } => semantic::SemanticStatement::Abort {
             message: lower_expression(message),
             span: span.clone(),
         },
-        syntax::Statement::Break { span } => semantic::Statement::Break { span: span.clone() },
-        syntax::Statement::Continue { span } => {
-            semantic::Statement::Continue { span: span.clone() }
+        syntax::SyntaxStatement::Break { span } => {
+            semantic::SemanticStatement::Break { span: span.clone() }
         }
-        syntax::Statement::If {
+        syntax::SyntaxStatement::Continue { span } => {
+            semantic::SemanticStatement::Continue { span: span.clone() }
+        }
+        syntax::SyntaxStatement::If {
             condition,
             then_block,
             else_block,
             span,
-        } => semantic::Statement::If {
+        } => semantic::SemanticStatement::If {
             condition: lower_expression(condition),
             then_block: lower_block(then_block),
             else_block: else_block.as_ref().map(lower_block),
             span: span.clone(),
         },
-        syntax::Statement::For {
+        syntax::SyntaxStatement::For {
             condition,
             body,
             span,
-        } => semantic::Statement::For {
+        } => semantic::SemanticStatement::For {
             condition: condition.as_ref().map(lower_expression),
             body: lower_block(body),
             span: span.clone(),
         },
-        syntax::Statement::Expression { value, span } => semantic::Statement::Expression {
-            value: lower_expression(value),
-            span: span.clone(),
-        },
+        syntax::SyntaxStatement::Expression { value, span } => {
+            semantic::SemanticStatement::Expression {
+                value: lower_expression(value),
+                span: span.clone(),
+            }
+        }
     }
 }
 
-fn lower_expression(expression: &syntax::Expression) -> semantic::Expression {
+fn lower_expression(expression: &syntax::SyntaxExpression) -> semantic::SemanticExpression {
     match expression {
-        syntax::Expression::IntegerLiteral { value, span } => {
-            semantic::Expression::IntegerLiteral {
+        syntax::SyntaxExpression::IntegerLiteral { value, span } => {
+            semantic::SemanticExpression::IntegerLiteral {
                 value: *value,
                 span: span.clone(),
             }
         }
-        syntax::Expression::NilLiteral { span } => {
-            semantic::Expression::NilLiteral { span: span.clone() }
+        syntax::SyntaxExpression::NilLiteral { span } => {
+            semantic::SemanticExpression::NilLiteral { span: span.clone() }
         }
-        syntax::Expression::BooleanLiteral { value, span } => {
-            semantic::Expression::BooleanLiteral {
+        syntax::SyntaxExpression::BooleanLiteral { value, span } => {
+            semantic::SemanticExpression::BooleanLiteral {
                 value: *value,
                 span: span.clone(),
             }
         }
-        syntax::Expression::StringLiteral { value, span } => semantic::Expression::StringLiteral {
-            value: value.clone(),
-            span: span.clone(),
-        },
-        syntax::Expression::Identifier { name, span } => semantic::Expression::Identifier {
-            name: name.clone(),
-            span: span.clone(),
-        },
-        syntax::Expression::StructLiteral {
+        syntax::SyntaxExpression::StringLiteral { value, span } => {
+            semantic::SemanticExpression::StringLiteral {
+                value: value.clone(),
+                span: span.clone(),
+            }
+        }
+        syntax::SyntaxExpression::Identifier { name, span } => {
+            semantic::SemanticExpression::Identifier {
+                name: name.clone(),
+                span: span.clone(),
+            }
+        }
+        syntax::SyntaxExpression::StructLiteral {
             type_name,
             fields,
             span,
-        } => semantic::Expression::StructLiteral {
+        } => semantic::SemanticExpression::StructLiteral {
             type_name: lower_type_name(type_name),
             fields: fields.iter().map(lower_struct_literal_field).collect(),
             span: span.clone(),
         },
-        syntax::Expression::FieldAccess {
+        syntax::SyntaxExpression::FieldAccess {
             target,
             field,
             field_span,
             span,
-        } => semantic::Expression::FieldAccess {
+        } => semantic::SemanticExpression::FieldAccess {
             target: Box::new(lower_expression(target)),
             field: field.clone(),
             field_span: field_span.clone(),
             span: span.clone(),
         },
-        syntax::Expression::Call {
+        syntax::SyntaxExpression::Call {
             callee,
             type_arguments,
             arguments,
             span,
-        } => semantic::Expression::Call {
+        } => semantic::SemanticExpression::Call {
             callee: Box::new(lower_expression(callee)),
             type_arguments: type_arguments.iter().map(lower_type_name).collect(),
             arguments: arguments.iter().map(lower_expression).collect(),
             span: span.clone(),
         },
-        syntax::Expression::Unary {
+        syntax::SyntaxExpression::Unary {
             operator,
             expression,
             span,
-        } => semantic::Expression::Unary {
+        } => semantic::SemanticExpression::Unary {
             operator: lower_unary_operator(*operator),
             expression: Box::new(lower_expression(expression)),
             span: span.clone(),
         },
-        syntax::Expression::Binary {
+        syntax::SyntaxExpression::Binary {
             operator,
             left,
             right,
             span,
-        } => semantic::Expression::Binary {
+        } => semantic::SemanticExpression::Binary {
             operator: lower_binary_operator(*operator),
             left: Box::new(lower_expression(left)),
             right: Box::new(lower_expression(right)),
             span: span.clone(),
         },
-        syntax::Expression::Match { target, arms, span } => semantic::Expression::Match {
-            target: Box::new(lower_expression(target)),
-            arms: arms.iter().map(lower_match_arm).collect(),
-            span: span.clone(),
-        },
-        syntax::Expression::Matches {
+        syntax::SyntaxExpression::Match { target, arms, span } => {
+            semantic::SemanticExpression::Match {
+                target: Box::new(lower_expression(target)),
+                arms: arms.iter().map(lower_match_arm).collect(),
+                span: span.clone(),
+            }
+        }
+        syntax::SyntaxExpression::Matches {
             value,
             type_name,
             span,
-        } => semantic::Expression::Matches {
+        } => semantic::SemanticExpression::Matches {
             value: Box::new(lower_expression(value)),
             type_name: lower_type_name(type_name),
             span: span.clone(),
@@ -375,32 +391,40 @@ fn lower_expression(expression: &syntax::Expression) -> semantic::Expression {
     }
 }
 
-fn lower_binary_operator(operator: syntax::BinaryOperator) -> semantic::BinaryOperator {
+fn lower_binary_operator(
+    operator: syntax::SyntaxBinaryOperator,
+) -> semantic::SemanticBinaryOperator {
     match operator {
-        syntax::BinaryOperator::Add => semantic::BinaryOperator::Add,
-        syntax::BinaryOperator::Subtract => semantic::BinaryOperator::Subtract,
-        syntax::BinaryOperator::Multiply => semantic::BinaryOperator::Multiply,
-        syntax::BinaryOperator::Divide => semantic::BinaryOperator::Divide,
-        syntax::BinaryOperator::EqualEqual => semantic::BinaryOperator::EqualEqual,
-        syntax::BinaryOperator::NotEqual => semantic::BinaryOperator::NotEqual,
-        syntax::BinaryOperator::LessThan => semantic::BinaryOperator::LessThan,
-        syntax::BinaryOperator::LessThanOrEqual => semantic::BinaryOperator::LessThanOrEqual,
-        syntax::BinaryOperator::GreaterThan => semantic::BinaryOperator::GreaterThan,
-        syntax::BinaryOperator::GreaterThanOrEqual => semantic::BinaryOperator::GreaterThanOrEqual,
-        syntax::BinaryOperator::And => semantic::BinaryOperator::And,
-        syntax::BinaryOperator::Or => semantic::BinaryOperator::Or,
+        syntax::SyntaxBinaryOperator::Add => semantic::SemanticBinaryOperator::Add,
+        syntax::SyntaxBinaryOperator::Subtract => semantic::SemanticBinaryOperator::Subtract,
+        syntax::SyntaxBinaryOperator::Multiply => semantic::SemanticBinaryOperator::Multiply,
+        syntax::SyntaxBinaryOperator::Divide => semantic::SemanticBinaryOperator::Divide,
+        syntax::SyntaxBinaryOperator::EqualEqual => semantic::SemanticBinaryOperator::EqualEqual,
+        syntax::SyntaxBinaryOperator::NotEqual => semantic::SemanticBinaryOperator::NotEqual,
+        syntax::SyntaxBinaryOperator::LessThan => semantic::SemanticBinaryOperator::LessThan,
+        syntax::SyntaxBinaryOperator::LessThanOrEqual => {
+            semantic::SemanticBinaryOperator::LessThanOrEqual
+        }
+        syntax::SyntaxBinaryOperator::GreaterThan => semantic::SemanticBinaryOperator::GreaterThan,
+        syntax::SyntaxBinaryOperator::GreaterThanOrEqual => {
+            semantic::SemanticBinaryOperator::GreaterThanOrEqual
+        }
+        syntax::SyntaxBinaryOperator::And => semantic::SemanticBinaryOperator::And,
+        syntax::SyntaxBinaryOperator::Or => semantic::SemanticBinaryOperator::Or,
     }
 }
 
-fn lower_unary_operator(operator: syntax::UnaryOperator) -> semantic::UnaryOperator {
+fn lower_unary_operator(operator: syntax::SyntaxUnaryOperator) -> semantic::SemanticUnaryOperator {
     match operator {
-        syntax::UnaryOperator::Not => semantic::UnaryOperator::Not,
-        syntax::UnaryOperator::Negate => semantic::UnaryOperator::Negate,
+        syntax::SyntaxUnaryOperator::Not => semantic::SemanticUnaryOperator::Not,
+        syntax::SyntaxUnaryOperator::Negate => semantic::SemanticUnaryOperator::Negate,
     }
 }
 
-fn lower_struct_literal_field(field: &syntax::StructLiteralField) -> semantic::StructLiteralField {
-    semantic::StructLiteralField {
+fn lower_struct_literal_field(
+    field: &syntax::SyntaxStructLiteralField,
+) -> semantic::SemanticStructLiteralField {
+    semantic::SemanticStructLiteralField {
         name: field.name.clone(),
         name_span: field.name_span.clone(),
         value: lower_expression(&field.value),
@@ -408,26 +432,28 @@ fn lower_struct_literal_field(field: &syntax::StructLiteralField) -> semantic::S
     }
 }
 
-fn lower_match_arm(arm: &syntax::MatchArm) -> semantic::MatchArm {
-    semantic::MatchArm {
+fn lower_match_arm(arm: &syntax::SyntaxMatchArm) -> semantic::SemanticMatchArm {
+    semantic::SemanticMatchArm {
         pattern: lower_match_pattern(&arm.pattern),
         value: lower_expression(&arm.value),
         span: arm.span.clone(),
     }
 }
 
-fn lower_match_pattern(pattern: &syntax::MatchPattern) -> semantic::MatchPattern {
+fn lower_match_pattern(pattern: &syntax::SyntaxMatchPattern) -> semantic::SemanticMatchPattern {
     match pattern {
-        syntax::MatchPattern::Type { type_name, span } => semantic::MatchPattern::Type {
-            type_name: lower_type_name(type_name),
-            span: span.clone(),
-        },
-        syntax::MatchPattern::Binding {
+        syntax::SyntaxMatchPattern::Type { type_name, span } => {
+            semantic::SemanticMatchPattern::Type {
+                type_name: lower_type_name(type_name),
+                span: span.clone(),
+            }
+        }
+        syntax::SyntaxMatchPattern::Binding {
             name,
             name_span,
             type_name,
             span,
-        } => semantic::MatchPattern::Binding {
+        } => semantic::SemanticMatchPattern::Binding {
             name: name.clone(),
             name_span: name_span.clone(),
             type_name: lower_type_name(type_name),
@@ -436,12 +462,12 @@ fn lower_match_pattern(pattern: &syntax::MatchPattern) -> semantic::MatchPattern
     }
 }
 
-fn lower_type_name(type_name: &syntax::TypeName) -> semantic::TypeName {
-    semantic::TypeName {
+fn lower_type_name(type_name: &syntax::SyntaxTypeName) -> semantic::SemanticTypeName {
+    semantic::SemanticTypeName {
         names: type_name
             .names
             .iter()
-            .map(|atom| semantic::TypeNameAtom {
+            .map(|atom| semantic::SemanticTypeNameAtom {
                 name: atom.name.clone(),
                 type_arguments: atom.type_arguments.iter().map(lower_type_name).collect(),
                 span: atom.span.clone(),
@@ -451,8 +477,10 @@ fn lower_type_name(type_name: &syntax::TypeName) -> semantic::TypeName {
     }
 }
 
-fn lower_type_parameter(type_parameter: &syntax::TypeParameter) -> semantic::TypeParameter {
-    semantic::TypeParameter {
+fn lower_type_parameter(
+    type_parameter: &syntax::SyntaxTypeParameter,
+) -> semantic::SemanticTypeParameter {
+    semantic::SemanticTypeParameter {
         name: type_parameter.name.clone(),
         constraint: type_parameter.constraint.as_ref().map(lower_type_name),
         span: type_parameter.span.clone(),

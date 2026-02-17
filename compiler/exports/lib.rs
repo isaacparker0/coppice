@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::FileRole;
 use compiler__symbols::{PackageDiagnostic, PackageFile, SymbolsByPackage};
-use compiler__syntax::Declaration;
+use compiler__syntax::SyntaxDeclaration;
 
 pub type ExportsByPackage = BTreeMap<String, BTreeSet<String>>;
 
@@ -32,7 +32,7 @@ pub fn build_exports(
             .or_default();
 
         for declaration in file.parsed.top_level_declarations() {
-            let Declaration::Exports(exports) = declaration else {
+            let SyntaxDeclaration::Exports(exports) = declaration else {
                 continue;
             };
 

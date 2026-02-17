@@ -1,7 +1,10 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::{FileRole, Span};
-use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, Visibility};
+use compiler__syntax::{
+    SyntaxDeclaration, SyntaxFunctionDeclaration, SyntaxParsedFile, SyntaxTypeName,
+    SyntaxVisibility,
+};
 
 /// Run file-role policy checks.
 ///
@@ -16,7 +19,7 @@ use compiler__syntax::{Declaration, FunctionDeclaration, ParsedFile, TypeName, V
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
 /// intent deterministic.
 #[must_use]
-pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
+pub fn check_file(file: &SyntaxParsedFile) -> PhaseOutput<()> {
     let mut diagnostics = Vec::new();
     check_exports_declaration_roles(file, &mut diagnostics);
     check_public_declaration_roles(file, &mut diagnostics);
@@ -35,9 +38,13 @@ pub fn check_file(file: &ParsedFile) -> PhaseOutput<()> {
     }
 }
 
-fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
+fn check_exports_declaration_roles(
+    file: &SyntaxParsedFile,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) {
     for declaration in file.top_level_declarations() {
-        if file.role == FileRole::PackageManifest && !matches!(declaration, Declaration::Exports(_))
+        if file.role == FileRole::PackageManifest
+            && !matches!(declaration, SyntaxDeclaration::Exports(_))
         {
             if is_main_function_declaration(declaration) {
                 // `main` has a dedicated role diagnostic.
@@ -50,7 +57,8 @@ fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Phas
             continue;
         }
 
-        if file.role != FileRole::PackageManifest && matches!(declaration, Declaration::Exports(_))
+        if file.role != FileRole::PackageManifest
+            && matches!(declaration, SyntaxDeclaration::Exports(_))
         {
             diagnostics.push(PhaseDiagnostic::new(
                 "exports declarations are only allowed in PACKAGE.coppice",
@@ -60,14 +68,14 @@ fn check_exports_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Phas
     }
 }
 
-fn is_main_function_declaration(declaration: &Declaration) -> bool {
+fn is_main_function_declaration(declaration: &SyntaxDeclaration) -> bool {
     matches!(
         declaration,
-        Declaration::Function(function_declaration) if function_declaration.name == "main"
+        SyntaxDeclaration::Function(function_declaration) if function_declaration.name == "main"
     )
 }
 
-fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
+fn check_public_declaration_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
     if file.role != FileRole::BinaryEntrypoint && file.role != FileRole::Test {
         return;
     }
@@ -81,21 +89,21 @@ fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Phase
 
     for declaration in file.top_level_declarations() {
         match declaration {
-            Declaration::Type(type_declaration) => {
-                if type_declaration.visibility == Visibility::Public {
+            SyntaxDeclaration::Type(type_declaration) => {
+                if type_declaration.visibility == SyntaxVisibility::Public {
                     diagnostics.push(PhaseDiagnostic::new(message, type_declaration.span.clone()));
                 }
             }
-            Declaration::Constant(constant_declaration)
-                if constant_declaration.visibility == Visibility::Public =>
+            SyntaxDeclaration::Constant(constant_declaration)
+                if constant_declaration.visibility == SyntaxVisibility::Public =>
             {
                 diagnostics.push(PhaseDiagnostic::new(
                     message,
                     constant_declaration.span.clone(),
                 ));
             }
-            Declaration::Function(function_declaration)
-                if function_declaration.visibility == Visibility::Public =>
+            SyntaxDeclaration::Function(function_declaration)
+                if function_declaration.visibility == SyntaxVisibility::Public =>
             {
                 diagnostics.push(PhaseDiagnostic::new(
                     message,
@@ -107,11 +115,11 @@ fn check_public_declaration_roles(file: &ParsedFile, diagnostics: &mut Vec<Phase
     }
 }
 
-fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
-    let main_functions: Vec<&FunctionDeclaration> = file
+fn check_main_function_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
+    let main_functions: Vec<&SyntaxFunctionDeclaration> = file
         .top_level_declarations()
         .filter_map(|declaration| match declaration {
-            Declaration::Function(function) if function.name == "main" => Some(function),
+            SyntaxDeclaration::Function(function) if function.name == "main" => Some(function),
             _ => None,
         })
         .collect();
@@ -148,28 +156,28 @@ fn check_main_function_roles(file: &ParsedFile, diagnostics: &mut Vec<PhaseDiagn
 }
 
 fn check_binary_main_signature(
-    main_function: &FunctionDeclaration,
+    main_function_declaration: &SyntaxFunctionDeclaration,
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) {
-    if !main_function.parameters.is_empty() {
+    if !main_function_declaration.parameters.is_empty() {
         diagnostics.push(PhaseDiagnostic::new(
             "main in .bin.coppice must not declare parameters",
-            main_function.name_span.clone(),
+            main_function_declaration.name_span.clone(),
         ));
     }
-    if !is_nil_type(&main_function.return_type) {
+    if !is_nil_type(&main_function_declaration.return_type) {
         diagnostics.push(PhaseDiagnostic::new(
             "main in .bin.coppice must return nil",
-            main_function.return_type.span.clone(),
+            main_function_declaration.return_type.span.clone(),
         ));
     }
 }
 
-fn is_nil_type(type_name: &TypeName) -> bool {
+fn is_nil_type(type_name: &SyntaxTypeName) -> bool {
     type_name.names.len() == 1 && type_name.names[0].name == "nil"
 }
 
-fn fallback_file_span(file: &ParsedFile) -> Span {
+fn fallback_file_span(file: &SyntaxParsedFile) -> Span {
     if let Some(declaration) = file.top_level_declarations().next() {
         return declaration_span(declaration).clone();
     }
@@ -182,12 +190,12 @@ fn fallback_file_span(file: &ParsedFile) -> Span {
     }
 }
 
-fn declaration_span(declaration: &Declaration) -> &Span {
+fn declaration_span(declaration: &SyntaxDeclaration) -> &Span {
     match declaration {
-        Declaration::Import(import_declaration) => &import_declaration.span,
-        Declaration::Exports(exports_declaration) => &exports_declaration.span,
-        Declaration::Type(type_declaration) => &type_declaration.span,
-        Declaration::Constant(constant_declaration) => &constant_declaration.span,
-        Declaration::Function(function_declaration) => &function_declaration.span,
+        SyntaxDeclaration::Import(import_declaration) => &import_declaration.span,
+        SyntaxDeclaration::Exports(exports_declaration) => &exports_declaration.span,
+        SyntaxDeclaration::Type(type_declaration) => &type_declaration.span,
+        SyntaxDeclaration::Constant(constant_declaration) => &constant_declaration.span,
+        SyntaxDeclaration::Function(function_declaration) => &function_declaration.span,
     }
 }

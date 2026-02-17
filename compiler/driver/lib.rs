@@ -46,7 +46,7 @@ struct ParsedUnit {
     package_id: PackageId,
     package_path: String,
     path: PathBuf,
-    parsed: compiler__syntax::ParsedFile,
+    parsed: compiler__syntax::SyntaxParsedFile,
     phase_state: FilePhaseState,
 }
 

@@ -27,6 +27,17 @@ Status: Draft.
 3. For lowering phase package names, use `<target>_lowering`.
 4. For conversion function names, include both source and target when it
    improves clarity.
+5. For model/data types that exist in multiple compiler representations, prefer
+   globally unambiguous type names over local import aliasing.
+6. For cross-representation model types, use canonical phase prefixes:
+   - `Syntax*` for syntax representation types.
+   - `Semantic*` for semantic program representation types.
+   - `TypeAnnotated*` for type-annotated representation types.
+   - `Executable*` for executable representation types.
+7. Use consistent suffixes by semantic role:
+   - `*Declaration` for declaration nodes.
+   - `*Statement` / `*Expression` for executable/body nodes.
+   - `*Signature` for callable/type contracts.
 
 Examples:
 
@@ -34,6 +45,11 @@ Examples:
 - Good function names:
   - `lower_parsed_file_to_semantic_file`
   - `lower_semantic_file_to_executable_file`
+- Good model type patterns:
+  - `SyntaxFunctionDeclaration`
+  - `SemanticFunctionDeclaration`
+  - `TypeAnnotatedFunctionDeclaration`
+  - `ExecutableStatement`
 
 ---
 

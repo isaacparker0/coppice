@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use compiler__semantic_program::{
-    ConstantDeclaration, FunctionDeclaration, TypeDeclaration, TypeDeclarationKind,
+    SemanticConstantDeclaration, SemanticFunctionDeclaration, SemanticTypeDeclaration,
+    SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{
     GenericTypeParameter, ImportedTypeShape, NominalTypeId, NominalTypeRef,
@@ -158,7 +159,7 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn collect_type_declarations(&mut self, types: &[TypeDeclaration]) {
+    pub(super) fn collect_type_declarations(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
             self.check_type_name(&type_declaration.name, &type_declaration.span);
             if self.types.contains_key(&type_declaration.name) {
@@ -169,12 +170,13 @@ impl TypeChecker<'_> {
                 continue;
             }
             let kind = match &type_declaration.kind {
-                TypeDeclarationKind::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
-                TypeDeclarationKind::Enum { .. } | TypeDeclarationKind::Union { .. } => {
-                    TypeKind::Union {
-                        variants: Vec::new(),
-                    }
+                SemanticTypeDeclarationKind::Struct { .. } => {
+                    TypeKind::Struct { fields: Vec::new() }
                 }
+                SemanticTypeDeclarationKind::Enum { .. }
+                | SemanticTypeDeclarationKind::Union { .. } => TypeKind::Union {
+                    variants: Vec::new(),
+                },
             };
             self.types.insert(
                 type_declaration.name.clone(),
@@ -219,7 +221,7 @@ impl TypeChecker<'_> {
             }
 
             match &type_declaration.kind {
-                TypeDeclarationKind::Struct { fields, .. } => {
+                SemanticTypeDeclarationKind::Struct { fields, .. } => {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for field in fields {
@@ -242,7 +244,7 @@ impl TypeChecker<'_> {
                         };
                     }
                 }
-                TypeDeclarationKind::Enum { variants } => {
+                SemanticTypeDeclarationKind::Enum { variants } => {
                     if !type_declaration.type_parameters.is_empty() {
                         self.error(
                             format!(
@@ -284,7 +286,7 @@ impl TypeChecker<'_> {
                         };
                     }
                 }
-                TypeDeclarationKind::Union { variants } => {
+                SemanticTypeDeclarationKind::Union { variants } => {
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
@@ -314,7 +316,10 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn collect_function_signatures(&mut self, functions: &[FunctionDeclaration]) {
+    pub(super) fn collect_function_signatures(
+        &mut self,
+        functions: &[SemanticFunctionDeclaration],
+    ) {
         for function in functions {
             self.check_function_name(&function.name, &function.name_span);
             if self.functions.contains_key(&function.name) {
@@ -362,9 +367,9 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn collect_method_signatures(&mut self, types: &[TypeDeclaration]) {
+    pub(super) fn collect_method_signatures(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
-            let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
+            let SemanticTypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
             let names_and_spans = type_declaration
@@ -414,7 +419,10 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn check_constant_declarations(&mut self, constants: &[ConstantDeclaration]) {
+    pub(super) fn check_constant_declarations(
+        &mut self,
+        constants: &[SemanticConstantDeclaration],
+    ) {
         for constant in constants {
             self.check_constant_name(&constant.name, &constant.span);
             let value_type = self.check_expression(&constant.expression);

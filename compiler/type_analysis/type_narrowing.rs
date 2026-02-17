@@ -1,4 +1,6 @@
-use compiler__semantic_program::{BinaryOperator, Block, Expression, MatchArm};
+use compiler__semantic_program::{
+    SemanticBinaryOperator, SemanticBlock, SemanticExpression, SemanticMatchArm,
+};
 
 use compiler__semantic_types::Type;
 
@@ -7,7 +9,7 @@ use super::{BranchNarrowing, TypeChecker};
 impl TypeChecker<'_> {
     pub(super) fn check_block_with_type_narrowing(
         &mut self,
-        block: &Block,
+        block: &SemanticBlock,
         type_narrowing: Option<&BranchNarrowing>,
         use_true_branch: bool,
     ) -> bool {
@@ -62,29 +64,35 @@ impl TypeChecker<'_> {
 
     pub(super) fn derive_condition_type_narrowing(
         &mut self,
-        condition: &Expression,
+        condition: &SemanticExpression,
     ) -> Option<BranchNarrowing> {
-        if let Expression::Binary {
+        if let SemanticExpression::Binary {
             operator,
             left,
             right,
             ..
         } = condition
         {
-            if *operator != BinaryOperator::EqualEqual && *operator != BinaryOperator::NotEqual {
+            if *operator != SemanticBinaryOperator::EqualEqual
+                && *operator != SemanticBinaryOperator::NotEqual
+            {
                 return None;
             }
 
-            let (name, is_nil_test) = if let Expression::Identifier { name, .. } = left.as_ref() {
-                (
-                    name,
-                    matches!(right.as_ref(), Expression::NilLiteral { .. }),
-                )
-            } else if let Expression::Identifier { name, .. } = right.as_ref() {
-                (name, matches!(left.as_ref(), Expression::NilLiteral { .. }))
-            } else {
-                return None;
-            };
+            let (name, is_nil_test) =
+                if let SemanticExpression::Identifier { name, .. } = left.as_ref() {
+                    (
+                        name,
+                        matches!(right.as_ref(), SemanticExpression::NilLiteral { .. }),
+                    )
+                } else if let SemanticExpression::Identifier { name, .. } = right.as_ref() {
+                    (
+                        name,
+                        matches!(left.as_ref(), SemanticExpression::NilLiteral { .. }),
+                    )
+                } else {
+                    return None;
+                };
 
             if !is_nil_test {
                 return None;
@@ -94,8 +102,8 @@ impl TypeChecker<'_> {
             let non_nil_type = Self::without_type_member(&variable_type, &Type::Nil);
 
             let (when_true, when_false) = match *operator {
-                BinaryOperator::EqualEqual => (Type::Nil, non_nil_type),
-                BinaryOperator::NotEqual => (non_nil_type, Type::Nil),
+                SemanticBinaryOperator::EqualEqual => (Type::Nil, non_nil_type),
+                SemanticBinaryOperator::NotEqual => (non_nil_type, Type::Nil),
                 _ => return None,
             };
             return Some(BranchNarrowing {
@@ -105,13 +113,13 @@ impl TypeChecker<'_> {
             });
         }
 
-        if let Expression::Matches {
+        if let SemanticExpression::Matches {
             value,
             type_name,
             span: _,
         } = condition
         {
-            let Expression::Identifier { name, .. } = value.as_ref() else {
+            let SemanticExpression::Identifier { name, .. } = value.as_ref() else {
                 return None;
             };
             let pattern_type = self.resolve_match_pattern_type_name(type_name, &type_name.span);
@@ -140,13 +148,13 @@ impl TypeChecker<'_> {
         None
     }
 
-    pub(super) fn is_boolean_membership_match(arms: &[MatchArm]) -> bool {
+    pub(super) fn is_boolean_membership_match(arms: &[SemanticMatchArm]) -> bool {
         let mut true_count = 0usize;
         let mut false_count = 0usize;
         for arm in arms {
             match &arm.value {
-                Expression::BooleanLiteral { value: true, .. } => true_count += 1,
-                Expression::BooleanLiteral { value: false, .. } => false_count += 1,
+                SemanticExpression::BooleanLiteral { value: true, .. } => true_count += 1,
+                SemanticExpression::BooleanLiteral { value: false, .. } => false_count += 1,
                 _ => return false,
             }
         }

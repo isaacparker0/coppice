@@ -1,8 +1,8 @@
 use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 use compiler__syntax::{
-    BinaryOperator, Expression, MatchArm, MatchPattern, StructLiteralField, TypeName, TypeNameAtom,
-    UnaryOperator,
+    SyntaxBinaryOperator, SyntaxExpression, SyntaxMatchArm, SyntaxMatchPattern,
+    SyntaxStructLiteralField, SyntaxTypeName, SyntaxTypeNameAtom, SyntaxUnaryOperator,
 };
 
 use super::{
@@ -11,13 +11,13 @@ use super::{
 };
 
 impl Parser {
-    pub(super) fn parse_expression(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_expression(&mut self) -> ParseResult<SyntaxExpression> {
         let result = self.parse_or();
         self.flush_deferred_parse_errors();
         result
     }
 
-    pub(super) fn parse_or(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_or(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_and()?;
         loop {
             if !self.peek_is_keyword(Keyword::Or) {
@@ -31,8 +31,8 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
-                operator: BinaryOperator::Or,
+            expression = SyntaxExpression::Binary {
+                operator: SyntaxBinaryOperator::Or,
                 left: Box::new(expression),
                 right: Box::new(right),
                 span,
@@ -41,7 +41,7 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_and(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_and(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_equality()?;
         loop {
             if !self.peek_is_keyword(Keyword::And) {
@@ -55,8 +55,8 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
-                operator: BinaryOperator::And,
+            expression = SyntaxExpression::Binary {
+                operator: SyntaxBinaryOperator::And,
                 left: Box::new(expression),
                 right: Box::new(right),
                 span,
@@ -65,7 +65,7 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_equality(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_equality(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_comparison()?;
         loop {
             if self.peek_is_symbol(Symbol::Equal) {
@@ -78,9 +78,9 @@ impl Parser {
                 continue;
             }
             let operator = if self.peek_is_symbol(Symbol::EqualEqual) {
-                BinaryOperator::EqualEqual
+                SyntaxBinaryOperator::EqualEqual
             } else if self.peek_is_symbol(Symbol::BangEqual) {
-                BinaryOperator::NotEqual
+                SyntaxBinaryOperator::NotEqual
             } else {
                 break;
             };
@@ -92,7 +92,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
+            expression = SyntaxExpression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
@@ -102,7 +102,7 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_comparison(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_comparison(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_additive()?;
         loop {
             if self.peek_is_keyword(Keyword::Matches) {
@@ -114,7 +114,7 @@ impl Parser {
                     line: operator_span.line,
                     column: operator_span.column,
                 };
-                expression = Expression::Matches {
+                expression = SyntaxExpression::Matches {
                     value: Box::new(expression),
                     type_name,
                     span,
@@ -122,13 +122,13 @@ impl Parser {
                 continue;
             }
             let operator = if self.peek_is_symbol(Symbol::Less) {
-                BinaryOperator::LessThan
+                SyntaxBinaryOperator::LessThan
             } else if self.peek_is_symbol(Symbol::LessEqual) {
-                BinaryOperator::LessThanOrEqual
+                SyntaxBinaryOperator::LessThanOrEqual
             } else if self.peek_is_symbol(Symbol::Greater) {
-                BinaryOperator::GreaterThan
+                SyntaxBinaryOperator::GreaterThan
             } else if self.peek_is_symbol(Symbol::GreaterEqual) {
-                BinaryOperator::GreaterThanOrEqual
+                SyntaxBinaryOperator::GreaterThanOrEqual
             } else {
                 break;
             };
@@ -140,7 +140,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
+            expression = SyntaxExpression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
@@ -150,13 +150,13 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_additive(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_additive(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_multiplicative()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Plus) {
-                BinaryOperator::Add
+                SyntaxBinaryOperator::Add
             } else if self.peek_is_symbol(Symbol::Minus) {
-                BinaryOperator::Subtract
+                SyntaxBinaryOperator::Subtract
             } else {
                 break;
             };
@@ -168,7 +168,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
+            expression = SyntaxExpression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
@@ -178,13 +178,13 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_multiplicative(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_multiplicative(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_unary()?;
         loop {
             let operator = if self.peek_is_symbol(Symbol::Star) {
-                BinaryOperator::Multiply
+                SyntaxBinaryOperator::Multiply
             } else if self.peek_is_symbol(Symbol::Slash) {
-                BinaryOperator::Divide
+                SyntaxBinaryOperator::Divide
             } else {
                 break;
             };
@@ -196,7 +196,7 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            expression = Expression::Binary {
+            expression = SyntaxExpression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
@@ -206,7 +206,7 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_postfix(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_postfix(&mut self) -> ParseResult<SyntaxExpression> {
         let mut expression = self.parse_primary()?;
         loop {
             if self.peek_is_symbol(Symbol::LeftParenthesis) {
@@ -219,7 +219,7 @@ impl Parser {
                     line: left_parenthesis.line,
                     column: left_parenthesis.column,
                 };
-                expression = Expression::Call {
+                expression = SyntaxExpression::Call {
                     callee: Box::new(expression),
                     type_arguments: Vec::new(),
                     arguments,
@@ -243,7 +243,7 @@ impl Parser {
                     line: left_parenthesis.line,
                     column: left_parenthesis.column,
                 };
-                expression = Expression::Call {
+                expression = SyntaxExpression::Call {
                     callee: Box::new(expression),
                     type_arguments,
                     arguments,
@@ -260,7 +260,7 @@ impl Parser {
                     line: dot.line,
                     column: dot.column,
                 };
-                expression = Expression::FieldAccess {
+                expression = SyntaxExpression::FieldAccess {
                     target: Box::new(expression),
                     field,
                     field_span,
@@ -273,7 +273,7 @@ impl Parser {
         Ok(expression)
     }
 
-    pub(super) fn parse_unary(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_unary(&mut self) -> ParseResult<SyntaxExpression> {
         if self.peek_is_keyword(Keyword::Not) {
             let operator_span = self.advance().span.clone();
             let expression = self.parse_unary()?;
@@ -283,8 +283,8 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            return Ok(Expression::Unary {
-                operator: UnaryOperator::Not,
+            return Ok(SyntaxExpression::Unary {
+                operator: SyntaxUnaryOperator::Not,
                 expression: Box::new(expression),
                 span,
             });
@@ -298,8 +298,8 @@ impl Parser {
                 line: operator_span.line,
                 column: operator_span.column,
             };
-            return Ok(Expression::Unary {
-                operator: UnaryOperator::Negate,
+            return Ok(SyntaxExpression::Unary {
+                operator: SyntaxUnaryOperator::Negate,
                 expression: Box::new(expression),
                 span,
             });
@@ -307,7 +307,7 @@ impl Parser {
         self.parse_postfix()
     }
 
-    pub(super) fn parse_arguments(&mut self) -> Vec<Expression> {
+    pub(super) fn parse_arguments(&mut self) -> Vec<SyntaxExpression> {
         let mut arguments = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightParenthesis) {
@@ -340,19 +340,21 @@ impl Parser {
         arguments
     }
 
-    pub(super) fn parse_primary(&mut self) -> ParseResult<Expression> {
+    pub(super) fn parse_primary(&mut self) -> ParseResult<SyntaxExpression> {
         let token = self.advance();
         match token.kind {
-            TokenKind::IntegerLiteral(value) => Ok(Expression::IntegerLiteral {
+            TokenKind::IntegerLiteral(value) => Ok(SyntaxExpression::IntegerLiteral {
                 value,
                 span: token.span,
             }),
-            TokenKind::Keyword(Keyword::Nil) => Ok(Expression::NilLiteral { span: token.span }),
-            TokenKind::StringLiteral(value) => Ok(Expression::StringLiteral {
+            TokenKind::Keyword(Keyword::Nil) => {
+                Ok(SyntaxExpression::NilLiteral { span: token.span })
+            }
+            TokenKind::StringLiteral(value) => Ok(SyntaxExpression::StringLiteral {
                 value,
                 span: token.span,
             }),
-            TokenKind::BooleanLiteral(value) => Ok(Expression::BooleanLiteral {
+            TokenKind::BooleanLiteral(value) => Ok(SyntaxExpression::BooleanLiteral {
                 value,
                 span: token.span,
             }),
@@ -365,7 +367,7 @@ impl Parser {
                     && (self.peek_is_symbol(Symbol::LeftBrace)
                         || self.peek_is_symbol(Symbol::LeftBracket))
                 {
-                    let mut atom = TypeNameAtom {
+                    let mut atom = SyntaxTypeNameAtom {
                         name,
                         type_arguments: Vec::new(),
                         span: token.span.clone(),
@@ -375,13 +377,13 @@ impl Parser {
                         atom.type_arguments = type_arguments;
                         atom.span.end = right_bracket.end;
                     }
-                    let type_name = TypeName {
+                    let type_name = SyntaxTypeName {
                         names: vec![atom.clone()],
                         span: atom.span,
                     };
                     return self.parse_struct_literal(type_name);
                 }
-                Ok(Expression::Identifier {
+                Ok(SyntaxExpression::Identifier {
                     name,
                     span: token.span,
                 })
@@ -400,7 +402,10 @@ impl Parser {
         }
     }
 
-    pub(super) fn parse_struct_literal(&mut self, type_name: TypeName) -> ParseResult<Expression> {
+    pub(super) fn parse_struct_literal(
+        &mut self,
+        type_name: SyntaxTypeName,
+    ) -> ParseResult<SyntaxExpression> {
         let left_brace = self.expect_symbol(Symbol::LeftBrace)?;
         let fields = self.parse_struct_literal_fields();
         let right_brace = self.expect_symbol(Symbol::RightBrace)?;
@@ -410,14 +415,17 @@ impl Parser {
             line: left_brace.line,
             column: left_brace.column,
         };
-        Ok(Expression::StructLiteral {
+        Ok(SyntaxExpression::StructLiteral {
             type_name,
             fields,
             span,
         })
     }
 
-    pub(super) fn parse_match_expression(&mut self, start_span: &Span) -> ParseResult<Expression> {
+    pub(super) fn parse_match_expression(
+        &mut self,
+        start_span: &Span,
+    ) -> ParseResult<SyntaxExpression> {
         let target = self.parse_expression()?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let arms = self.parse_match_arms();
@@ -428,14 +436,14 @@ impl Parser {
             line: start_span.line,
             column: start_span.column,
         };
-        Ok(Expression::Match {
+        Ok(SyntaxExpression::Match {
             target: Box::new(target),
             arms,
             span,
         })
     }
 
-    pub(super) fn parse_match_arms(&mut self) -> Vec<MatchArm> {
+    pub(super) fn parse_match_arms(&mut self) -> Vec<SyntaxMatchArm> {
         let mut arms = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
@@ -474,7 +482,7 @@ impl Parser {
         arms
     }
 
-    pub(super) fn parse_match_arm(&mut self) -> ParseResult<MatchArm> {
+    pub(super) fn parse_match_arm(&mut self) -> ParseResult<SyntaxMatchArm> {
         let pattern = self.parse_match_pattern()?;
         self.expect_symbol(Symbol::FatArrow)?;
         let value = self.parse_expression()?;
@@ -484,14 +492,14 @@ impl Parser {
             line: pattern.span().line,
             column: pattern.span().column,
         };
-        Ok(MatchArm {
+        Ok(SyntaxMatchArm {
             pattern,
             value,
             span,
         })
     }
 
-    pub(super) fn parse_match_pattern(&mut self) -> ParseResult<MatchPattern> {
+    pub(super) fn parse_match_pattern(&mut self) -> ParseResult<SyntaxMatchPattern> {
         let (name, name_span) = self.expect_identifier()?;
         if self.peek_is_symbol(Symbol::Colon) {
             self.advance();
@@ -502,7 +510,7 @@ impl Parser {
                 line: name_span.line,
                 column: name_span.column,
             };
-            return Ok(MatchPattern::Binding {
+            return Ok(SyntaxMatchPattern::Binding {
                 name,
                 name_span,
                 type_name,
@@ -520,21 +528,21 @@ impl Parser {
             qualified_span.end = segment_span.end;
         }
 
-        let type_name = TypeName {
-            names: vec![TypeNameAtom {
+        let type_name = SyntaxTypeName {
+            names: vec![SyntaxTypeNameAtom {
                 name: qualified_name,
                 type_arguments: Vec::new(),
                 span: qualified_span.clone(),
             }],
             span: qualified_span.clone(),
         };
-        Ok(MatchPattern::Type {
+        Ok(SyntaxMatchPattern::Type {
             type_name,
             span: qualified_span,
         })
     }
 
-    pub(super) fn parse_struct_literal_fields(&mut self) -> Vec<StructLiteralField> {
+    pub(super) fn parse_struct_literal_fields(&mut self) -> Vec<SyntaxStructLiteralField> {
         let mut fields = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
@@ -567,7 +575,7 @@ impl Parser {
         fields
     }
 
-    pub(super) fn parse_struct_literal_field(&mut self) -> ParseResult<StructLiteralField> {
+    pub(super) fn parse_struct_literal_field(&mut self) -> ParseResult<SyntaxStructLiteralField> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let value = self.parse_expression()?;
@@ -577,7 +585,7 @@ impl Parser {
             line: name_span.line,
             column: name_span.column,
         };
-        Ok(StructLiteralField {
+        Ok(SyntaxStructLiteralField {
             name,
             name_span,
             value,

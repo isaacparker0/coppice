@@ -5,7 +5,7 @@ use compiler__source::Span;
 #[derive(Clone, Default)]
 pub struct TypeAnnotatedFile {
     pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
-    pub main_function: Option<TypeAnnotatedFunction>,
+    pub main_function_declaration: Option<TypeAnnotatedFunctionDeclaration>,
 }
 
 #[derive(Clone)]
@@ -16,7 +16,7 @@ pub struct TypeAnnotatedFunctionSignature {
 }
 
 #[derive(Clone)]
-pub struct TypeAnnotatedFunction {
+pub struct TypeAnnotatedFunctionDeclaration {
     pub name: String,
     pub span: Span,
     pub statements: Vec<TypeAnnotatedStatement>,

@@ -5,7 +5,7 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__exports::ExportsByPackage;
 use compiler__source::Span;
 use compiler__symbols::{PackageDiagnostic, PackageFile, SymbolsByPackage};
-use compiler__syntax::{Declaration, ImportDeclaration, ImportMember};
+use compiler__syntax::{SyntaxDeclaration, SyntaxImportDeclaration, SyntaxImportMember};
 
 pub struct ResolvedImportBinding {
     pub imported_name: String,
@@ -39,7 +39,7 @@ pub fn resolve_imports(
 
     for file in &ordered_files {
         for declaration in file.parsed.top_level_declarations() {
-            let Declaration::Import(import_declaration) = declaration else {
+            let SyntaxDeclaration::Import(import_declaration) = declaration else {
                 continue;
             };
             let resolved = resolve_import_declaration(
@@ -60,7 +60,7 @@ pub fn resolve_imports(
 
 fn resolve_import_declaration(
     file: &PackageFile<'_>,
-    import_declaration: &ImportDeclaration,
+    import_declaration: &SyntaxImportDeclaration,
     symbols_by_package: &SymbolsByPackage,
     exports_by_package: &ExportsByPackage,
     diagnostics: &mut Vec<PackageDiagnostic>,
@@ -167,7 +167,7 @@ fn resolve_import_package_path(
     Err("import path must start with import origin 'workspace', 'std/', or 'external/'".to_string())
 }
 
-fn import_local_name(member: &ImportMember) -> &str {
+fn import_local_name(member: &SyntaxImportMember) -> &str {
     member.alias.as_deref().unwrap_or(&member.name)
 }
 

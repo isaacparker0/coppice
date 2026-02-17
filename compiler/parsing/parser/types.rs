@@ -1,11 +1,13 @@
 use crate::lexer::Symbol;
 use compiler__source::Span;
-use compiler__syntax::{EnumVariant, TypeName, TypeNameAtom, TypeParameter};
+use compiler__syntax::{
+    SyntaxEnumVariant, SyntaxTypeName, SyntaxTypeNameAtom, SyntaxTypeParameter,
+};
 
 use super::{ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
-    pub(super) fn parse_type_name(&mut self) -> ParseResult<TypeName> {
+    pub(super) fn parse_type_name(&mut self) -> ParseResult<SyntaxTypeName> {
         let first = self.parse_type_name_atom()?;
         let mut names = vec![first];
         while self.peek_is_symbol(Symbol::Pipe) {
@@ -15,7 +17,7 @@ impl Parser {
         }
         let first_span = names[0].span.clone();
         let end = names.last().map_or(first_span.end, |atom| atom.span.end);
-        Ok(TypeName {
+        Ok(SyntaxTypeName {
             names,
             span: Span {
                 start: first_span.start,
@@ -26,17 +28,17 @@ impl Parser {
         })
     }
 
-    pub(super) fn parse_union_type_declaration(&mut self) -> ParseResult<Vec<TypeName>> {
+    pub(super) fn parse_union_type_declaration(&mut self) -> ParseResult<Vec<SyntaxTypeName>> {
         let mut variants = Vec::new();
         let first_atom = self.parse_type_name_atom()?;
-        variants.push(TypeName {
+        variants.push(SyntaxTypeName {
             names: vec![first_atom.clone()],
             span: first_atom.span.clone(),
         });
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
             let atom = self.parse_type_name_atom()?;
-            variants.push(TypeName {
+            variants.push(SyntaxTypeName {
                 names: vec![atom.clone()],
                 span: atom.span.clone(),
             });
@@ -44,7 +46,7 @@ impl Parser {
         Ok(variants)
     }
 
-    pub(super) fn parse_type_name_atom(&mut self) -> ParseResult<TypeNameAtom> {
+    pub(super) fn parse_type_name_atom(&mut self) -> ParseResult<SyntaxTypeNameAtom> {
         let (name, mut span) = self.expect_type_name_part()?;
         let mut type_arguments = Vec::new();
         if self.peek_is_symbol(Symbol::LeftBracket) {
@@ -52,14 +54,14 @@ impl Parser {
             type_arguments = arguments;
             span.end = right_bracket.end;
         }
-        Ok(TypeNameAtom {
+        Ok(SyntaxTypeNameAtom {
             name,
             type_arguments,
             span,
         })
     }
 
-    pub(super) fn parse_type_argument_list(&mut self) -> ParseResult<(Vec<TypeName>, Span)> {
+    pub(super) fn parse_type_argument_list(&mut self) -> ParseResult<(Vec<SyntaxTypeName>, Span)> {
         self.expect_symbol(Symbol::LeftBracket)?;
         let mut arguments = Vec::new();
         self.skip_statement_terminators();
@@ -97,7 +99,7 @@ impl Parser {
 
     pub(super) fn parse_type_parameter_list(
         &mut self,
-    ) -> ParseResult<(Vec<TypeParameter>, Vec<ParseError>)> {
+    ) -> ParseResult<(Vec<SyntaxTypeParameter>, Vec<ParseError>)> {
         if !self.peek_is_symbol(Symbol::LeftBracket) {
             return Ok((Vec::new(), Vec::new()));
         }
@@ -122,7 +124,7 @@ impl Parser {
             } else {
                 None
             };
-            type_parameters.push(TypeParameter {
+            type_parameters.push(SyntaxTypeParameter {
                 name,
                 constraint,
                 span,
@@ -144,7 +146,7 @@ impl Parser {
 
     pub(super) fn parse_enum_type_declaration(
         &mut self,
-    ) -> ParseResult<(Vec<EnumVariant>, Vec<ParseError>)> {
+    ) -> ParseResult<(Vec<SyntaxEnumVariant>, Vec<ParseError>)> {
         self.expect_symbol(Symbol::LeftBrace)?;
         let mut variants = Vec::new();
         let mut recoveries = Vec::new();
@@ -160,7 +162,7 @@ impl Parser {
         loop {
             self.skip_statement_terminators();
             let (name, span) = self.expect_identifier()?;
-            variants.push(EnumVariant {
+            variants.push(SyntaxEnumVariant {
                 name,
                 span: span.clone(),
             });

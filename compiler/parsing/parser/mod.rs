@@ -2,7 +2,10 @@ use crate::lexer::{Keyword, Symbol, Token, TokenKind};
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::FileRole;
 use compiler__source::Span;
-use compiler__syntax::{Declaration, DocComment, Expression, FileItem, ParsedFile, Visibility};
+use compiler__syntax::{
+    SyntaxDeclaration, SyntaxDocComment, SyntaxExpression, SyntaxFileItem, SyntaxParsedFile,
+    SyntaxVisibility,
+};
 
 mod declarations;
 mod exports;
@@ -97,25 +100,25 @@ impl Parser {
             .collect()
     }
 
-    pub(crate) fn parse_file_tokens(&mut self, role: FileRole) -> ParsedFile {
+    pub(crate) fn parse_file_tokens(&mut self, role: FileRole) -> SyntaxParsedFile {
         let items = self.parse_declarations();
 
-        ParsedFile { role, items }
+        SyntaxParsedFile { role, items }
     }
 
-    fn parse_declarations(&mut self) -> Vec<FileItem> {
+    fn parse_declarations(&mut self) -> Vec<SyntaxFileItem> {
         let mut items = Vec::new();
         while !self.at_eof() {
             self.skip_statement_terminators();
             if let Some(doc_comment) = self.parse_leading_doc_comment_block() {
-                items.push(FileItem::DocComment(doc_comment));
+                items.push(SyntaxFileItem::DocComment(doc_comment));
             }
             if self.at_eof() {
                 break;
             }
             match self.parse_declaration() {
                 Ok(declaration) => {
-                    items.push(FileItem::Declaration(Box::new(declaration)));
+                    items.push(SyntaxFileItem::Declaration(Box::new(declaration)));
                 }
                 Err(error) => {
                     self.report_parse_error(&error);
@@ -127,21 +130,23 @@ impl Parser {
         items
     }
 
-    fn parse_declaration(&mut self) -> ParseResult<Declaration> {
+    fn parse_declaration(&mut self) -> ParseResult<SyntaxDeclaration> {
         if self.peek_is_keyword(Keyword::Public) {
             let visibility = self.parse_visibility();
             if self.peek_is_keyword(Keyword::Type) {
                 return self
                     .parse_type_declaration(visibility)
-                    .map(Declaration::Type);
+                    .map(SyntaxDeclaration::Type);
             }
             if self.peek_is_keyword(Keyword::Function) {
-                return self.parse_function(visibility).map(Declaration::Function);
+                return self
+                    .parse_function(visibility)
+                    .map(SyntaxDeclaration::Function);
             }
             if self.peek_is_identifier() {
                 return self
                     .parse_constant_declaration(visibility)
-                    .map(Declaration::Constant);
+                    .map(SyntaxDeclaration::Constant);
             }
             return Err(ParseError::Recovered {
                 kind: RecoveredKind::ExpectedDeclarationAfterPublic,
@@ -151,19 +156,23 @@ impl Parser {
 
         if self.peek_is_keyword(Keyword::Type) {
             return self
-                .parse_type_declaration(Visibility::Private)
-                .map(Declaration::Type);
+                .parse_type_declaration(SyntaxVisibility::Private)
+                .map(SyntaxDeclaration::Type);
         }
         if self.peek_is_keyword(Keyword::Import) {
-            return self.parse_import_declaration().map(Declaration::Import);
+            return self
+                .parse_import_declaration()
+                .map(SyntaxDeclaration::Import);
         }
         if self.peek_is_keyword(Keyword::Exports) {
-            return self.parse_exports_declaration().map(Declaration::Exports);
+            return self
+                .parse_exports_declaration()
+                .map(SyntaxDeclaration::Exports);
         }
         if self.peek_is_keyword(Keyword::Function) {
             return self
-                .parse_function(Visibility::Private)
-                .map(Declaration::Function);
+                .parse_function(SyntaxVisibility::Private)
+                .map(SyntaxDeclaration::Function);
         }
         if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
             let span = self.peek_span();
@@ -175,8 +184,8 @@ impl Parser {
         }
         if self.peek_is_identifier() {
             return self
-                .parse_constant_declaration(Visibility::Private)
-                .map(Declaration::Constant);
+                .parse_constant_declaration(SyntaxVisibility::Private)
+                .map(SyntaxDeclaration::Constant);
         }
         Err(ParseError::Recovered {
             kind: RecoveredKind::ExpectedDeclaration,
@@ -184,12 +193,12 @@ impl Parser {
         })
     }
 
-    fn parse_visibility(&mut self) -> Visibility {
+    fn parse_visibility(&mut self) -> SyntaxVisibility {
         if self.peek_is_keyword(Keyword::Public) {
             self.advance();
-            Visibility::Public
+            SyntaxVisibility::Public
         } else {
-            Visibility::Private
+            SyntaxVisibility::Private
         }
     }
 
@@ -246,7 +255,7 @@ impl Parser {
         }
     }
 
-    fn parse_leading_doc_comment_block(&mut self) -> Option<DocComment> {
+    fn parse_leading_doc_comment_block(&mut self) -> Option<SyntaxDocComment> {
         if !self.peek_is_doc_comment() {
             return None;
         }
@@ -260,7 +269,7 @@ impl Parser {
             end = token.span.end;
             end_line = token.span.line;
         }
-        Some(DocComment {
+        Some(SyntaxDocComment {
             lines,
             span: Span {
                 start: start_span.start,
@@ -363,21 +372,21 @@ trait ExpressionSpan {
     fn span(&self) -> Span;
 }
 
-impl ExpressionSpan for Expression {
+impl ExpressionSpan for SyntaxExpression {
     fn span(&self) -> Span {
         match self {
-            Expression::IntegerLiteral { span, .. }
-            | Expression::NilLiteral { span, .. }
-            | Expression::BooleanLiteral { span, .. }
-            | Expression::StringLiteral { span, .. }
-            | Expression::Identifier { span, .. }
-            | Expression::StructLiteral { span, .. }
-            | Expression::FieldAccess { span, .. }
-            | Expression::Call { span, .. }
-            | Expression::Unary { span, .. }
-            | Expression::Binary { span, .. }
-            | Expression::Match { span, .. }
-            | Expression::Matches { span, .. } => span.clone(),
+            SyntaxExpression::IntegerLiteral { span, .. }
+            | SyntaxExpression::NilLiteral { span, .. }
+            | SyntaxExpression::BooleanLiteral { span, .. }
+            | SyntaxExpression::StringLiteral { span, .. }
+            | SyntaxExpression::Identifier { span, .. }
+            | SyntaxExpression::StructLiteral { span, .. }
+            | SyntaxExpression::FieldAccess { span, .. }
+            | SyntaxExpression::Call { span, .. }
+            | SyntaxExpression::Unary { span, .. }
+            | SyntaxExpression::Binary { span, .. }
+            | SyntaxExpression::Match { span, .. }
+            | SyntaxExpression::Matches { span, .. } => span.clone(),
         }
     }
 }

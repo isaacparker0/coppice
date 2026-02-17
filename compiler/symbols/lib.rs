@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::{FileRole, Span};
-use compiler__syntax::{Declaration, ParsedFile, Visibility};
+use compiler__syntax::{SyntaxDeclaration, SyntaxParsedFile, SyntaxVisibility};
 
 pub struct PackageFile<'a> {
     pub package_path: &'a str,
     pub path: &'a Path,
-    pub parsed: &'a ParsedFile,
+    pub parsed: &'a SyntaxParsedFile,
 }
 
 pub struct PackageDiagnostic {
@@ -18,7 +18,7 @@ pub struct PackageDiagnostic {
 
 pub struct TopLevelSymbol {
     pub name: String,
-    pub visibility: Visibility,
+    pub visibility: SyntaxVisibility,
     pub span: Span,
 }
 
@@ -56,7 +56,7 @@ pub fn collect_symbols(
                 continue;
             };
             package_symbols.declared.insert(symbol.name.clone());
-            if symbol.visibility == Visibility::Public
+            if symbol.visibility == SyntaxVisibility::Public
                 && !package_symbols.package_visible.insert(symbol.name.clone())
             {
                 diagnostics.push(PackageDiagnostic {
@@ -74,23 +74,23 @@ pub fn collect_symbols(
 }
 
 #[must_use]
-pub fn top_level_symbol(declaration: &Declaration) -> Option<TopLevelSymbol> {
+pub fn top_level_symbol(declaration: &SyntaxDeclaration) -> Option<TopLevelSymbol> {
     match declaration {
-        Declaration::Type(type_declaration) => Some(TopLevelSymbol {
+        SyntaxDeclaration::Type(type_declaration) => Some(TopLevelSymbol {
             name: type_declaration.name.clone(),
             visibility: type_declaration.visibility,
             span: type_declaration.span.clone(),
         }),
-        Declaration::Constant(constant_declaration) => Some(TopLevelSymbol {
+        SyntaxDeclaration::Constant(constant_declaration) => Some(TopLevelSymbol {
             name: constant_declaration.name.clone(),
             visibility: constant_declaration.visibility,
             span: constant_declaration.span.clone(),
         }),
-        Declaration::Function(function_declaration) => Some(TopLevelSymbol {
+        SyntaxDeclaration::Function(function_declaration) => Some(TopLevelSymbol {
             name: function_declaration.name.clone(),
             visibility: function_declaration.visibility,
             span: function_declaration.span.clone(),
         }),
-        Declaration::Import(_) | Declaration::Exports(_) => None,
+        SyntaxDeclaration::Import(_) | SyntaxDeclaration::Exports(_) => None,
     }
 }

@@ -1,17 +1,17 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
-use compiler__syntax::{ImportDeclaration, ImportMember};
+use compiler__syntax::{SyntaxImportDeclaration, SyntaxImportMember};
 
 use super::{ParseResult, Parser};
 
 impl Parser {
-    pub(super) fn parse_import_declaration(&mut self) -> ParseResult<ImportDeclaration> {
+    pub(super) fn parse_import_declaration(&mut self) -> ParseResult<SyntaxImportDeclaration> {
         let start = self.expect_keyword(Keyword::Import)?;
         let package_path = self.parse_import_package_path()?;
         self.expect_symbol(Symbol::LeftBrace)?;
         let members = self.parse_import_members();
         let end = self.expect_symbol(Symbol::RightBrace)?;
-        Ok(ImportDeclaration {
+        Ok(SyntaxImportDeclaration {
             package_path,
             members,
             span: Span {
@@ -34,7 +34,7 @@ impl Parser {
         Ok(segments.join("/"))
     }
 
-    fn parse_import_members(&mut self) -> Vec<ImportMember> {
+    fn parse_import_members(&mut self) -> Vec<SyntaxImportMember> {
         let mut members = Vec::new();
         self.skip_statement_terminators();
         if self.peek_is_symbol(Symbol::RightBrace) {
@@ -69,7 +69,7 @@ impl Parser {
         members
     }
 
-    fn parse_import_member(&mut self) -> ParseResult<ImportMember> {
+    fn parse_import_member(&mut self) -> ParseResult<SyntaxImportMember> {
         let (name, name_span) = self.expect_identifier()?;
         let mut alias = None;
         let mut alias_span = None;
@@ -81,7 +81,7 @@ impl Parser {
             end = parsed_alias_span.end;
             alias_span = Some(parsed_alias_span);
         }
-        Ok(ImportMember {
+        Ok(SyntaxImportMember {
             name,
             alias,
             alias_span,

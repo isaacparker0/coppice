@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use compiler__semantic_program::{
-    Block, Expression, FunctionDeclaration, MethodDeclaration, Statement, TypeDeclaration,
-    TypeDeclarationKind,
+    SemanticBlock, SemanticExpression, SemanticFunctionDeclaration, SemanticMethodDeclaration,
+    SemanticStatement, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 
 use super::{ExpressionSpan, FallthroughNarrowing, StatementOutcome, StatementSpan, TypeChecker};
 
 impl TypeChecker<'_> {
-    pub(super) fn check_function(&mut self, function: &FunctionDeclaration) {
+    pub(super) fn check_function(&mut self, function: &SemanticFunctionDeclaration) {
         let names_and_spans = function
             .type_parameters
             .iter()
@@ -51,9 +51,9 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn check_methods(&mut self, types: &[TypeDeclaration]) {
+    pub(super) fn check_methods(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
-            let TypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
+            let SemanticTypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
                 continue;
             };
             for method in methods {
@@ -64,8 +64,8 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_method(
         &mut self,
-        type_declaration: &TypeDeclaration,
-        method: &MethodDeclaration,
+        type_declaration: &SemanticTypeDeclaration,
+        method: &SemanticMethodDeclaration,
     ) {
         let names_and_spans = type_declaration
             .type_parameters
@@ -147,7 +147,7 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub(super) fn check_block(&mut self, block: &Block) -> bool {
+    pub(super) fn check_block(&mut self, block: &SemanticBlock) -> bool {
         self.scopes.push(HashMap::new());
         let mut falls_through = true;
         let mut has_reported_unreachable = false;
@@ -176,9 +176,9 @@ impl TypeChecker<'_> {
         !falls_through
     }
 
-    pub(super) fn check_statement(&mut self, statement: &Statement) -> StatementOutcome {
+    pub(super) fn check_statement(&mut self, statement: &SemanticStatement) -> StatementOutcome {
         match statement {
-            Statement::Binding {
+            SemanticStatement::Binding {
                 name,
                 mutable,
                 type_name,
@@ -216,7 +216,7 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Assign {
+            SemanticStatement::Assign {
                 name,
                 name_span,
                 value,
@@ -262,7 +262,7 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Return { value, span: _ } => {
+            SemanticStatement::Return { value, span: _ } => {
                 let value_type = self.check_expression(value);
                 if self.current_return_type != Type::Unknown
                     && value_type != Type::Unknown
@@ -282,7 +282,7 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Abort { message, .. } => {
+            SemanticStatement::Abort { message, .. } => {
                 let message_type = self.check_expression(message);
                 if message_type != Type::String && message_type != Type::Unknown {
                     self.error("abort message must be string", message.span());
@@ -292,7 +292,7 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Break { span } => {
+            SemanticStatement::Break { span } => {
                 if self.loop_depth == 0 {
                     self.error("break can only be used inside a loop", span.clone());
                     StatementOutcome {
@@ -306,7 +306,7 @@ impl TypeChecker<'_> {
                     }
                 }
             }
-            Statement::Continue { span } => {
+            SemanticStatement::Continue { span } => {
                 if self.loop_depth == 0 {
                     self.error("continue can only be used inside a loop", span.clone());
                     StatementOutcome {
@@ -320,7 +320,7 @@ impl TypeChecker<'_> {
                     }
                 }
             }
-            Statement::If {
+            SemanticStatement::If {
                 condition,
                 then_block,
                 else_block,
@@ -365,7 +365,7 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing,
                 }
             }
-            Statement::For {
+            SemanticStatement::For {
                 condition, body, ..
             } => {
                 if let Some(condition) = condition {
@@ -382,9 +382,9 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            Statement::Expression { value, .. } => {
+            SemanticStatement::Expression { value, .. } => {
                 let _ = self.check_expression(value);
-                if !matches!(value, Expression::Call { .. }) {
+                if !matches!(value, SemanticExpression::Call { .. }) {
                     self.error("expression statements must be calls", value.span());
                 }
                 StatementOutcome {
