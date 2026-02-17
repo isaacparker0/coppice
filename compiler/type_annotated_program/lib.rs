@@ -46,6 +46,12 @@ pub enum TypeAnnotatedStatement {
         body_statements: Vec<TypeAnnotatedStatement>,
         span: Span,
     },
+    Break {
+        span: Span,
+    },
+    Continue {
+        span: Span,
+    },
     Expression {
         value: TypeAnnotatedExpression,
         span: Span,
@@ -100,4 +106,10 @@ pub enum TypeAnnotatedExpression {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeAnnotatedBinaryOperator {
     Add,
+    EqualEqual,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }

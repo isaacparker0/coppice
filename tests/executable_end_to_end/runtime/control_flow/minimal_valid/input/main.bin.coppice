@@ -1,14 +1,15 @@
 function main() -> nil {
-    if true {
-        print("if then")
-    } else {
-        print("if else")
+    mut i: int64 := 0
+    for i < 5 {
+        i = i + 1
+        if i == 2 {
+            continue
+        }
+        if i >= 4 {
+            break
+        }
+        print("tick")
     }
-
-    for false {
-        print("loop body")
-    }
-
-    print("after loop")
+    print("done")
     return nil
 }

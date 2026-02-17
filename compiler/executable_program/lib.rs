@@ -26,6 +26,8 @@ pub enum ExecutableStatement {
         condition: Option<ExecutableExpression>,
         body_statements: Vec<ExecutableStatement>,
     },
+    Break,
+    Continue,
     Expression {
         expression: ExecutableExpression,
     },
@@ -50,7 +52,8 @@ pub enum ExecutableExpression {
     Identifier {
         name: String,
     },
-    Add {
+    Binary {
+        operator: ExecutableBinaryOperator,
         left: Box<ExecutableExpression>,
         right: Box<ExecutableExpression>,
     },
@@ -58,4 +61,16 @@ pub enum ExecutableExpression {
         callee: Box<ExecutableExpression>,
         arguments: Vec<ExecutableExpression>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutableBinaryOperator {
+    Add,
+    EqualEqual,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }

@@ -155,6 +155,8 @@ fn type_annotated_statement_from_semantic_statement(
                 .collect(),
             span: span.clone(),
         },
+        Statement::Break { span } => TypeAnnotatedStatement::Break { span: span.clone() },
+        Statement::Continue { span } => TypeAnnotatedStatement::Continue { span: span.clone() },
         Statement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
@@ -163,9 +165,7 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
         },
-        _ => TypeAnnotatedStatement::Unsupported {
-            span: statement.span(),
-        },
+        Statement::Abort { span, .. } => TypeAnnotatedStatement::Unsupported { span: span.clone() },
     }
 }
 
@@ -200,6 +200,42 @@ fn type_annotated_expression_from_semantic_expression(
         } => match operator {
             SemanticBinaryOperator::Add => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Add,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::EqualEqual => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::EqualEqual,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::NotEqual => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::NotEqual,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::LessThan => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::LessThan,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::LessThanOrEqual => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::LessThanOrEqual,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::GreaterThan => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::GreaterThan,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::GreaterThanOrEqual => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::GreaterThanOrEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(left)),
                 right: Box::new(type_annotated_expression_from_semantic_expression(right)),
                 span: span.clone(),

@@ -2,7 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use compiler__executable_program::{ExecutableExpression, ExecutableProgram, ExecutableStatement};
+use compiler__executable_program::{
+    ExecutableBinaryOperator, ExecutableExpression, ExecutableProgram, ExecutableStatement,
+};
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
 
@@ -142,6 +144,14 @@ fn emit_statement(
             output.push_str(&indent);
             output.push_str("}\n");
         }
+        ExecutableStatement::Break => {
+            output.push_str(&indent);
+            output.push_str("break;\n");
+        }
+        ExecutableStatement::Continue => {
+            output.push_str(&indent);
+            output.push_str("continue;\n");
+        }
         ExecutableStatement::Expression { expression } => {
             let expression_source = emit_expression(expression)?;
             output.push_str(&indent);
@@ -172,10 +182,23 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
         ExecutableExpression::NilLiteral => Ok("()".to_string()),
         ExecutableExpression::StringLiteral { value } => Ok(format!("{value:?}")),
         ExecutableExpression::Identifier { name } => Ok(name.clone()),
-        ExecutableExpression::Add { left, right } => {
+        ExecutableExpression::Binary {
+            operator,
+            left,
+            right,
+        } => {
             let left_source = emit_expression(left)?;
             let right_source = emit_expression(right)?;
-            Ok(format!("({left_source} + {right_source})"))
+            let operator_source = match operator {
+                ExecutableBinaryOperator::Add => "+",
+                ExecutableBinaryOperator::EqualEqual => "==",
+                ExecutableBinaryOperator::NotEqual => "!=",
+                ExecutableBinaryOperator::LessThan => "<",
+                ExecutableBinaryOperator::LessThanOrEqual => "<=",
+                ExecutableBinaryOperator::GreaterThan => ">",
+                ExecutableBinaryOperator::GreaterThanOrEqual => ">=",
+            };
+            Ok(format!("({left_source} {operator_source} {right_source})"))
         }
         ExecutableExpression::Call { callee, arguments } => {
             let ExecutableExpression::Identifier { name } = callee.as_ref() else {

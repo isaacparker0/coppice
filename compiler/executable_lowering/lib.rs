@@ -1,5 +1,7 @@
 use compiler__diagnostics::PhaseDiagnostic;
-use compiler__executable_program::{ExecutableExpression, ExecutableProgram, ExecutableStatement};
+use compiler__executable_program::{
+    ExecutableBinaryOperator, ExecutableExpression, ExecutableProgram, ExecutableStatement,
+};
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
@@ -129,6 +131,8 @@ fn lower_statement(
                 .map(|expression| lower_expression(expression, diagnostics)),
             body_statements: lower_statements(body_statements, diagnostics),
         }),
+        TypeAnnotatedStatement::Break { .. } => Some(ExecutableStatement::Break),
+        TypeAnnotatedStatement::Continue { .. } => Some(ExecutableStatement::Continue),
         TypeAnnotatedStatement::Expression { value, .. } => {
             let executable_expression = lower_expression(value, diagnostics);
             Some(ExecutableStatement::Expression {
@@ -176,11 +180,22 @@ fn lower_expression(
             left,
             right,
             ..
-        } => match operator {
-            TypeAnnotatedBinaryOperator::Add => ExecutableExpression::Add {
-                left: Box::new(lower_expression(left, diagnostics)),
-                right: Box::new(lower_expression(right, diagnostics)),
+        } => ExecutableExpression::Binary {
+            operator: match operator {
+                TypeAnnotatedBinaryOperator::Add => ExecutableBinaryOperator::Add,
+                TypeAnnotatedBinaryOperator::EqualEqual => ExecutableBinaryOperator::EqualEqual,
+                TypeAnnotatedBinaryOperator::NotEqual => ExecutableBinaryOperator::NotEqual,
+                TypeAnnotatedBinaryOperator::LessThan => ExecutableBinaryOperator::LessThan,
+                TypeAnnotatedBinaryOperator::LessThanOrEqual => {
+                    ExecutableBinaryOperator::LessThanOrEqual
+                }
+                TypeAnnotatedBinaryOperator::GreaterThan => ExecutableBinaryOperator::GreaterThan,
+                TypeAnnotatedBinaryOperator::GreaterThanOrEqual => {
+                    ExecutableBinaryOperator::GreaterThanOrEqual
+                }
             },
+            left: Box::new(lower_expression(left, diagnostics)),
+            right: Box::new(lower_expression(right, diagnostics)),
         },
         TypeAnnotatedExpression::Call {
             callee,
