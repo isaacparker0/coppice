@@ -33,8 +33,8 @@ impl TypeChecker<'_> {
             SemanticExpression::NilLiteral { .. } => Type::Nil,
             SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
             SemanticExpression::StringLiteral { .. } => Type::String,
-            SemanticExpression::Symbol { name, kind, span } => {
-                self.check_symbol_expression(name, *kind, span)
+            SemanticExpression::NameReference { name, kind, span } => {
+                self.check_name_reference_expression(name, *kind, span)
             }
             SemanticExpression::StructLiteral {
                 type_name,
@@ -47,7 +47,7 @@ impl TypeChecker<'_> {
                 field_span,
                 ..
             } => {
-                if let SemanticExpression::Symbol { name, .. } = target.as_ref() {
+                if let SemanticExpression::NameReference { name, .. } = target.as_ref() {
                     let is_enum_like_union = self.types.get(name).is_some_and(|info| {
                         if let TypeKind::Union { variants } = &info.kind {
                             let enum_like_prefix = format!("{name}.");
@@ -83,10 +83,13 @@ impl TypeChecker<'_> {
                 arguments,
                 span,
             } => {
-                let resolved_target = if let SemanticExpression::Symbol { name, span, .. } =
-                    callee.as_ref()
+                let resolved_target = if let SemanticExpression::NameReference {
+                    name, span, ..
+                } = callee.as_ref()
                 {
-                    if let Some(info) = self.functions.get(name).cloned() {
+                    if self.name_reference_resolves_to_value_binding(name) {
+                        None
+                    } else if let Some(info) = self.functions.get(name).cloned() {
                         let instantiated = self.instantiate_function_call_signature(
                             name,
                             &info.type_parameters,
@@ -95,11 +98,11 @@ impl TypeChecker<'_> {
                             type_arguments,
                             span,
                         );
-                        ResolvedCallTarget {
+                        Some(ResolvedCallTarget {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
-                        }
+                        })
                     } else if let Some(info) = self.imported_functions.get(name).cloned() {
                         self.mark_import_used(name);
                         let instantiated = self.instantiate_function_call_signature(
@@ -110,11 +113,11 @@ impl TypeChecker<'_> {
                             type_arguments,
                             span,
                         );
-                        ResolvedCallTarget {
+                        Some(ResolvedCallTarget {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
-                        }
+                        })
                     } else {
                         if self.imported_bindings.contains_key(name) {
                             self.mark_import_used(name);
@@ -185,7 +188,8 @@ impl TypeChecker<'_> {
                         let method_parameter_types = instantiated_signature.parameter_types;
                         let method_return_type = instantiated_signature.return_type;
                         if method_self_mutable {
-                            if let SemanticExpression::Symbol { name, .. } = target.as_ref() {
+                            if let SemanticExpression::NameReference { name, .. } = target.as_ref()
+                            {
                                 let receiver_is_mutable = self
                                     .lookup_variable_for_assignment(name)
                                     .is_some_and(|(is_mutable, _)| is_mutable);
@@ -218,11 +222,11 @@ impl TypeChecker<'_> {
                                 return Type::Unknown;
                             }
                         }
-                        ResolvedCallTarget {
+                        Some(ResolvedCallTarget {
                             display_name: field.clone(),
                             parameter_types: method_parameter_types,
                             return_type: method_return_type,
-                        }
+                        })
                     } else {
                         self.error(
                             format!("unknown method '{receiver_type_name}.{field}'"),
@@ -234,11 +238,40 @@ impl TypeChecker<'_> {
                         return Type::Unknown;
                     }
                 } else {
-                    self.error("invalid call target", callee.span());
-                    for argument in arguments {
-                        self.check_expression(argument);
+                    None
+                };
+
+                let resolved_target = if let Some(resolved_target) = resolved_target {
+                    resolved_target
+                } else {
+                    if !type_arguments.is_empty() {
+                        self.error(
+                            "type arguments are only allowed on direct function calls",
+                            span.clone(),
+                        );
                     }
-                    return Type::Unknown;
+                    let callee_type = self.check_expression(callee);
+                    let Type::Function {
+                        parameter_types,
+                        return_type,
+                    } = callee_type
+                    else {
+                        if callee_type != Type::Unknown {
+                            self.error(
+                                format!("cannot call value of type {}", callee_type.display()),
+                                callee.span(),
+                            );
+                        }
+                        for argument in arguments {
+                            self.check_expression(argument);
+                        }
+                        return Type::Unknown;
+                    };
+                    ResolvedCallTarget {
+                        display_name: "function value".to_string(),
+                        parameter_types,
+                        return_type: *return_type,
+                    }
                 };
 
                 if arguments.len() != resolved_target.parameter_types.len() {

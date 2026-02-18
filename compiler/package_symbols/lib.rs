@@ -487,6 +487,34 @@ fn resolve_type_name_to_semantic_type(
 ) -> Type {
     let mut resolved = Vec::new();
     for segment in &type_name.names {
+        if segment.name == "function" {
+            if segment.type_arguments.is_empty() {
+                return Type::Unknown;
+            }
+            let mut resolved_type_arguments = segment
+                .type_arguments
+                .iter()
+                .map(|argument| {
+                    resolve_type_name_to_semantic_type(
+                        argument,
+                        target_package_id,
+                        nominal_type_id_by_lookup_key,
+                        type_parameters,
+                    )
+                })
+                .collect::<Vec<_>>();
+            if resolved_type_arguments.contains(&Type::Unknown) {
+                return Type::Unknown;
+            }
+            let return_type = resolved_type_arguments
+                .pop()
+                .expect("function type arguments must include a return type");
+            resolved.push(Type::Function {
+                parameter_types: resolved_type_arguments,
+                return_type: Box::new(return_type),
+            });
+            continue;
+        }
         if type_parameters.contains(&segment.name.as_str()) {
             if !segment.type_arguments.is_empty() {
                 return Type::Unknown;

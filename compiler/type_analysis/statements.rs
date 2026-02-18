@@ -386,15 +386,8 @@ impl TypeChecker<'_> {
             }
             SemanticStatement::Expression { value, .. } => {
                 let value_type = self.check_expression(value);
-                let is_callable_symbol = matches!(
-                    value,
-                    SemanticExpression::Symbol {
-                        name,
-                        kind,
-                        ..
-                    } if self.symbol_expression_is_callable(name, *kind)
-                );
-                if !matches!(value, SemanticExpression::Call { .. }) && !is_callable_symbol {
+                if !matches!(value, SemanticExpression::Call { .. }) && value_type != Type::Unknown
+                {
                     self.error("expression statements must be calls", value.span());
                 }
                 StatementOutcome {

@@ -41,6 +41,10 @@ pub enum Type {
         base: NominalTypeRef,
         arguments: Vec<Type>,
     },
+    Function {
+        parameter_types: Vec<Type>,
+        return_type: Box<Type>,
+    },
     TypeParameter(String),
     Union(Vec<Type>),
     Unknown,
@@ -57,6 +61,7 @@ impl Type {
             Type::Never => "never",
             Type::Named(named) => named.display_name.as_str(),
             Type::Applied { .. } => "<applied>",
+            Type::Function { .. } => "<function>",
             Type::TypeParameter(name) => name,
             Type::Union(_) => "<union>",
             Type::Unknown => "<unknown>",
@@ -73,6 +78,20 @@ impl Type {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}[{joined}]", base.display_name)
+            }
+            Type::Function {
+                parameter_types,
+                return_type,
+            } => {
+                let joined_parameter_types = parameter_types
+                    .iter()
+                    .map(Type::display)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "function({joined_parameter_types}) -> {}",
+                    return_type.display()
+                )
             }
             Type::Union(types) => types
                 .iter()

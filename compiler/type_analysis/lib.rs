@@ -5,7 +5,7 @@ use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
-    SemanticFile, SemanticFunctionDeclaration, SemanticStatement, SemanticSymbolKind,
+    SemanticFile, SemanticFunctionDeclaration, SemanticNameReferenceKind, SemanticStatement,
     SemanticTypeDeclaration, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
@@ -17,9 +17,10 @@ use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
-    TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedSymbolKind,
-    TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedNameReferenceKind, TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
+    TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -249,14 +250,18 @@ fn type_annotated_expression_from_semantic_expression(
                 span: span.clone(),
             }
         }
-        SemanticExpression::Symbol { name, kind, span } => TypeAnnotatedExpression::Symbol {
-            name: name.clone(),
-            kind: match kind {
-                SemanticSymbolKind::UserDefined => TypeAnnotatedSymbolKind::UserDefined,
-                SemanticSymbolKind::Builtin => TypeAnnotatedSymbolKind::Builtin,
-            },
-            span: span.clone(),
-        },
+        SemanticExpression::NameReference { name, kind, span } => {
+            TypeAnnotatedExpression::NameReference {
+                name: name.clone(),
+                kind: match kind {
+                    SemanticNameReferenceKind::UserDefined => {
+                        TypeAnnotatedNameReferenceKind::UserDefined
+                    }
+                    SemanticNameReferenceKind::Builtin => TypeAnnotatedNameReferenceKind::Builtin,
+                },
+                span: span.clone(),
+            }
+        }
         SemanticExpression::StructLiteral {
             type_name,
             fields,
@@ -675,33 +680,51 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn symbol_expression_is_callable(&self, name: &str, kind: SemanticSymbolKind) -> bool {
-        kind == SemanticSymbolKind::Builtin
+    fn name_reference_expression_is_callable(
+        &self,
+        name: &str,
+        kind: SemanticNameReferenceKind,
+    ) -> bool {
+        kind == SemanticNameReferenceKind::Builtin
             || self.functions.contains_key(name)
             || self.imported_functions.contains_key(name)
     }
 
-    fn check_symbol_expression(
+    fn name_reference_resolves_to_value_binding(&self, name: &str) -> bool {
+        self.lookup_variable_type(name).is_some()
+            || self.constants.contains_key(name)
+            || self.imported_constant_type(name).is_some()
+    }
+
+    fn check_name_reference_expression(
         &mut self,
         name: &str,
-        kind: SemanticSymbolKind,
+        kind: SemanticNameReferenceKind,
         span: &Span,
     ) -> Type {
-        if self.symbol_expression_is_callable(name, kind) {
-            // TODO: when first-class function types are introduced, return the function
-            // value type here instead of requiring an immediate call.
-            if kind == SemanticSymbolKind::Builtin {
-                self.error(
-                    format!("builtin function '{name}' must be called"),
-                    span.clone(),
-                );
+        if self.name_reference_expression_is_callable(name, kind) {
+            let function_info = if kind == SemanticNameReferenceKind::Builtin {
+                self.functions.get(name).cloned()
+            } else if let Some(imported_function_info) = self.imported_functions.get(name).cloned()
+            {
+                self.mark_import_used(name);
+                Some(imported_function_info)
             } else {
-                if self.imported_functions.contains_key(name) {
-                    self.mark_import_used(name);
+                self.functions.get(name).cloned()
+            };
+            if let Some(function_info) = function_info {
+                if !function_info.type_parameters.is_empty() {
+                    self.error(
+                        format!("generic function '{name}' cannot be used as a value"),
+                        span.clone(),
+                    );
+                    return Type::Unknown;
                 }
-                self.error(format!("function '{name}' must be called"), span.clone());
+                return Type::Function {
+                    parameter_types: function_info.parameter_types,
+                    return_type: Box::new(function_info.return_type),
+                };
             }
-            return Type::Unknown;
         }
         self.resolve_variable(name, span)
     }
@@ -773,6 +796,16 @@ impl<'a> TypeChecker<'a> {
                 .get(name)
                 .cloned()
                 .unwrap_or_else(|| value_type.clone()),
+            Type::Function {
+                parameter_types,
+                return_type,
+            } => Type::Function {
+                parameter_types: parameter_types
+                    .iter()
+                    .map(|parameter_type| Self::instantiate_type(parameter_type, substitutions))
+                    .collect(),
+                return_type: Box::new(Self::instantiate_type(return_type, substitutions)),
+            },
             Type::Union(inner) => {
                 let instantiated = inner
                     .iter()
@@ -825,6 +858,34 @@ impl<'a> TypeChecker<'a> {
         let mut has_unknown = false;
         for segment in &type_name.names {
             let name = segment.name.as_str();
+            if name == "function" {
+                if segment.type_arguments.is_empty() {
+                    self.error(
+                        "function type must include a return type",
+                        segment.span.clone(),
+                    );
+                    has_unknown = true;
+                    continue;
+                }
+                let resolved_type_arguments = segment
+                    .type_arguments
+                    .iter()
+                    .map(|argument| self.resolve_type_name(argument))
+                    .collect::<Vec<_>>();
+                if resolved_type_arguments.contains(&Type::Unknown) {
+                    has_unknown = true;
+                    continue;
+                }
+                let mut resolved_type_arguments = resolved_type_arguments;
+                let return_type = resolved_type_arguments
+                    .pop()
+                    .expect("function type arguments must include return type");
+                resolved.push(Type::Function {
+                    parameter_types: resolved_type_arguments,
+                    return_type: Box::new(return_type),
+                });
+                continue;
+            }
             if let Some(type_parameter) = self.resolve_type_parameter(name) {
                 if !segment.type_arguments.is_empty() {
                     self.error(
@@ -1020,7 +1081,7 @@ impl ExpressionSpan for SemanticExpression {
             | SemanticExpression::NilLiteral { span, .. }
             | SemanticExpression::BooleanLiteral { span, .. }
             | SemanticExpression::StringLiteral { span, .. }
-            | SemanticExpression::Symbol { span, .. }
+            | SemanticExpression::NameReference { span, .. }
             | SemanticExpression::StructLiteral { span, .. }
             | SemanticExpression::FieldAccess { span, .. }
             | SemanticExpression::Call { span, .. }

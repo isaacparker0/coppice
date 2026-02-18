@@ -8,11 +8,11 @@ use super::{ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
     pub(super) fn parse_type_name(&mut self) -> ParseResult<SyntaxTypeName> {
-        let first = self.parse_type_name_segment()?;
+        let first = self.parse_type_name_member()?;
         let mut names = vec![first];
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let next = self.parse_type_name_segment()?;
+            let next = self.parse_type_name_member()?;
             names.push(next);
         }
         let first_span = names[0].span.clone();
@@ -32,20 +32,27 @@ impl Parser {
 
     pub(super) fn parse_union_type_declaration(&mut self) -> ParseResult<Vec<SyntaxTypeName>> {
         let mut variants = Vec::new();
-        let first_segment = self.parse_type_name_segment()?;
+        let first_segment = self.parse_type_name_member()?;
         variants.push(SyntaxTypeName {
             names: vec![first_segment.clone()],
             span: first_segment.span.clone(),
         });
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
-            let segment = self.parse_type_name_segment()?;
+            let segment = self.parse_type_name_member()?;
             variants.push(SyntaxTypeName {
                 names: vec![segment.clone()],
                 span: segment.span.clone(),
             });
         }
         Ok(variants)
+    }
+
+    pub(super) fn parse_type_name_member(&mut self) -> ParseResult<SyntaxTypeNameSegment> {
+        if self.peek_is_keyword(crate::lexer::Keyword::Function) {
+            return self.parse_function_type_name_segment();
+        }
+        self.parse_type_name_segment()
     }
 
     pub(super) fn parse_type_name_segment(&mut self) -> ParseResult<SyntaxTypeNameSegment> {
@@ -60,6 +67,55 @@ impl Parser {
             name,
             type_arguments,
             span,
+        })
+    }
+
+    pub(super) fn parse_function_type_name_segment(
+        &mut self,
+    ) -> ParseResult<SyntaxTypeNameSegment> {
+        let function_span = self.expect_keyword(crate::lexer::Keyword::Function)?;
+        self.expect_symbol(Symbol::LeftParenthesis)?;
+        let mut parameter_type_names = Vec::new();
+        self.skip_statement_terminators();
+        if !self.peek_is_symbol(Symbol::RightParenthesis) {
+            loop {
+                self.skip_statement_terminators();
+                match self.parse_type_name() {
+                    Ok(parameter_type_name) => parameter_type_names.push(parameter_type_name),
+                    Err(error) => {
+                        self.report_parse_error(&error);
+                        self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
+                        if self.peek_is_symbol(Symbol::RightParenthesis) {
+                            break;
+                        }
+                    }
+                }
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::Comma) {
+                    self.advance();
+                    self.skip_statement_terminators();
+                    if self.peek_is_symbol(Symbol::RightParenthesis) {
+                        break;
+                    }
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect_symbol(Symbol::RightParenthesis)?;
+        self.expect_symbol(Symbol::Arrow)?;
+        let return_type_name = self.parse_type_name()?;
+        let mut function_type_arguments = parameter_type_names;
+        function_type_arguments.push(return_type_name.clone());
+        Ok(SyntaxTypeNameSegment {
+            name: "function".to_string(),
+            type_arguments: function_type_arguments,
+            span: Span {
+                start: function_span.start,
+                end: return_type_name.span.end,
+                line: function_span.line,
+                column: function_span.column,
+            },
         })
     }
 

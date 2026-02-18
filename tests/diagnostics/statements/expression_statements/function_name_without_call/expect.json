@@ -4,12 +4,12 @@
         {
             "phase": "type_analysis",
             "path": "lib.coppice",
-            "message": "invalid call target",
+            "message": "expression statements must be calls",
             "span": {
-                "start": 38,
-                "end": 39,
+                "start": 30,
+                "end": 35,
                 "line": 2,
-                "column": 13
+                "column": 5
             }
         }
     ]

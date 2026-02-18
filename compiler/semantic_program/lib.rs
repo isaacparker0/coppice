@@ -180,9 +180,9 @@ pub enum SemanticExpression {
         value: String,
         span: Span,
     },
-    Symbol {
+    NameReference {
         name: String,
-        kind: SemanticSymbolKind,
+        kind: SemanticNameReferenceKind,
         span: Span,
     },
     StructLiteral {
@@ -226,7 +226,7 @@ pub enum SemanticExpression {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SemanticSymbolKind {
+pub enum SemanticNameReferenceKind {
     UserDefined,
     Builtin,
 }

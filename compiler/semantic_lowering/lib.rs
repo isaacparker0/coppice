@@ -322,14 +322,16 @@ fn lower_expression(expression: &syntax::SyntaxExpression) -> semantic::Semantic
                 span: span.clone(),
             }
         }
-        syntax::SyntaxExpression::Symbol { name, kind, span } => {
-            semantic::SemanticExpression::Symbol {
+        syntax::SyntaxExpression::NameReference { name, kind, span } => {
+            semantic::SemanticExpression::NameReference {
                 name: name.clone(),
                 kind: match kind {
-                    syntax::SyntaxSymbolKind::UserDefined => {
-                        semantic::SemanticSymbolKind::UserDefined
+                    syntax::SyntaxNameReferenceKind::UserDefined => {
+                        semantic::SemanticNameReferenceKind::UserDefined
                     }
-                    syntax::SyntaxSymbolKind::Builtin => semantic::SemanticSymbolKind::Builtin,
+                    syntax::SyntaxNameReferenceKind::Builtin => {
+                        semantic::SemanticNameReferenceKind::Builtin
+                    }
                 },
                 span: span.clone(),
             }

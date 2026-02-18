@@ -245,7 +245,7 @@ fn lower_expression(
                 value: value.clone(),
             }
         }
-        TypeAnnotatedExpression::Symbol { name, .. } => {
+        TypeAnnotatedExpression::NameReference { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
         TypeAnnotatedExpression::StructLiteral {

@@ -2,7 +2,7 @@ use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxBinaryOperator, SyntaxExpression, SyntaxMatchArm, SyntaxMatchPattern,
-    SyntaxStructLiteralField, SyntaxSymbolKind, SyntaxTypeName, SyntaxTypeNameSegment,
+    SyntaxNameReferenceKind, SyntaxStructLiteralField, SyntaxTypeName, SyntaxTypeNameSegment,
     SyntaxUnaryOperator,
 };
 
@@ -384,20 +384,20 @@ impl Parser {
                     };
                     return self.parse_struct_literal(type_name);
                 }
-                Ok(SyntaxExpression::Symbol {
+                Ok(SyntaxExpression::NameReference {
                     name,
-                    kind: SyntaxSymbolKind::UserDefined,
+                    kind: SyntaxNameReferenceKind::UserDefined,
                     span: token.span,
                 })
             }
-            TokenKind::Keyword(Keyword::Abort) => Ok(SyntaxExpression::Symbol {
+            TokenKind::Keyword(Keyword::Abort) => Ok(SyntaxExpression::NameReference {
                 name: "abort".to_string(),
-                kind: SyntaxSymbolKind::Builtin,
+                kind: SyntaxNameReferenceKind::Builtin,
                 span: token.span,
             }),
-            TokenKind::Keyword(Keyword::Print) => Ok(SyntaxExpression::Symbol {
+            TokenKind::Keyword(Keyword::Print) => Ok(SyntaxExpression::NameReference {
                 name: "print".to_string(),
-                kind: SyntaxSymbolKind::Builtin,
+                kind: SyntaxNameReferenceKind::Builtin,
                 span: token.span,
             }),
             TokenKind::Keyword(Keyword::Match) => self.parse_match_expression(&token.span),

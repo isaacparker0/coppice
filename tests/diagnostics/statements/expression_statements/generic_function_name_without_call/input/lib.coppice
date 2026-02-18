@@ -1,0 +1,8 @@
+function identity[T](value: T) -> T {
+    return value
+}
+
+function run() -> int64 {
+    identity
+    return 0
+}

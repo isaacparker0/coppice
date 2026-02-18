@@ -106,9 +106,9 @@ pub enum TypeAnnotatedExpression {
         value: String,
         span: Span,
     },
-    Symbol {
+    NameReference {
         name: String,
-        kind: TypeAnnotatedSymbolKind,
+        kind: TypeAnnotatedNameReferenceKind,
         span: Span,
     },
     StructLiteral {
@@ -166,7 +166,7 @@ pub enum TypeAnnotatedUnaryOperator {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TypeAnnotatedSymbolKind {
+pub enum TypeAnnotatedNameReferenceKind {
     UserDefined,
     Builtin,
 }

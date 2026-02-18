@@ -225,9 +225,9 @@ pub enum SyntaxExpression {
         value: String,
         span: Span,
     },
-    Symbol {
+    NameReference {
         name: String,
-        kind: SyntaxSymbolKind,
+        kind: SyntaxNameReferenceKind,
         span: Span,
     },
     StructLiteral {
@@ -271,7 +271,7 @@ pub enum SyntaxExpression {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SyntaxSymbolKind {
+pub enum SyntaxNameReferenceKind {
     UserDefined,
     Builtin,
 }

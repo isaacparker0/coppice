@@ -1,5 +1,6 @@
 use compiler__semantic_program::{
-    SemanticBinaryOperator, SemanticBlock, SemanticExpression, SemanticMatchArm, SemanticSymbolKind,
+    SemanticBinaryOperator, SemanticBlock, SemanticExpression, SemanticMatchArm,
+    SemanticNameReferenceKind,
 };
 
 use compiler__semantic_types::Type;
@@ -79,9 +80,9 @@ impl TypeChecker<'_> {
                 return None;
             }
 
-            let (name, is_nil_test) = if let SemanticExpression::Symbol {
+            let (name, is_nil_test) = if let SemanticExpression::NameReference {
                 name,
-                kind: SemanticSymbolKind::UserDefined,
+                kind: SemanticNameReferenceKind::UserDefined,
                 ..
             } = left.as_ref()
             {
@@ -89,9 +90,9 @@ impl TypeChecker<'_> {
                     name,
                     matches!(right.as_ref(), SemanticExpression::NilLiteral { .. }),
                 )
-            } else if let SemanticExpression::Symbol {
+            } else if let SemanticExpression::NameReference {
                 name,
-                kind: SemanticSymbolKind::UserDefined,
+                kind: SemanticNameReferenceKind::UserDefined,
                 ..
             } = right.as_ref()
             {
@@ -128,9 +129,9 @@ impl TypeChecker<'_> {
             span: _,
         } = condition
         {
-            let SemanticExpression::Symbol {
+            let SemanticExpression::NameReference {
                 name,
-                kind: SemanticSymbolKind::UserDefined,
+                kind: SemanticNameReferenceKind::UserDefined,
                 ..
             } = value.as_ref()
             else {

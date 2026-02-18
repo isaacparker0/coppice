@@ -4,12 +4,12 @@
         {
             "phase": "type_analysis",
             "path": "lib.coppice",
-            "message": "builtin function 'abort' must be called",
+            "message": "argument 1 to 'function value' must be int64, got string",
             "span": {
-                "start": 30,
-                "end": 35,
+                "start": 84,
+                "end": 87,
                 "line": 2,
-                "column": 5
+                "column": 19
             }
         }
     ]

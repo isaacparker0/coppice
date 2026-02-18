@@ -1,3 +1,0 @@
-lib.coppice:2:5: error: builtin function 'abort' must be called
-      abort
-      ^
