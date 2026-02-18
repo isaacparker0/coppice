@@ -203,13 +203,15 @@ High-level direction:
 5. `semantic_lowering -> {syntax,semantic_program}`
 6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
 7. `executable_lowering -> {type_annotated_program,executable_program}`
-8. `driver` depends on phase crates for orchestration
+8. `rust_backend -> {executable_program,runtime_interface}`
+9. `driver` depends on phase crates for orchestration
 
 Key prohibitions:
 
 1. `type_analysis` must not depend on `syntax`
 2. `package_symbols` must not depend on `syntax`
 3. semantic phase crates must not depend on `driver`
+4. frontend phase crates must not depend on backend/runtime interface crates
 
 These are enforced by Bazel dependency-enforcement tests.
 

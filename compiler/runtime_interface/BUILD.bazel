@@ -2,32 +2,19 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "rust_backend",
+    name = "runtime_interface",
     srcs = ["lib.rs"],
-    data = [
-        "@rules_rust//rust/toolchain:current_rustc_files",
-        "@toolchains_llvm_bootstrapped//tools:clang",
-    ],
-    rustc_env = {
-        "HERMETIC_CLANG": "$(rlocationpath @toolchains_llvm_bootstrapped//tools:clang)",
-        "HERMETIC_RUSTC": "$(rlocationpath @rules_rust//rust/toolchain:current_rustc_files)",
-    },
     visibility = ["//:__subpackages__"],
-    deps = [
-        "//compiler/executable_program",
-        "//compiler/reports",
-        "//compiler/runtime_interface",
-        "@rules_rust//tools/runfiles",
-    ],
 )
 
 dependency_enforcement_test(
-    name = "rust_backend_forbidden_dependencies",
+    name = "runtime_interface_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
         "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/executable_lowering",
+        "//compiler/executable_program",
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
@@ -35,16 +22,20 @@ dependency_enforcement_test(
         "//compiler/packages",
         "//compiler/parsing",
         "//compiler/phase_results",
+        "//compiler/reports",
         "//compiler/resolution",
+        "//compiler/rust_backend",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
         "//compiler/semantic_types",
+        "//compiler/source",
         "//compiler/symbols",
         "//compiler/syntax",
         "//compiler/syntax_rules",
+        "//compiler/type_annotated_program",
         "//compiler/type_analysis",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":rust_backend",
+    target = ":runtime_interface",
 )

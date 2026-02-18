@@ -98,6 +98,11 @@ Decision:
 
 - Canonical runtime interface contract (symbols, signatures, representation
   rules required by backends).
+- Scope: language runtime operation contracts only (for example `print`,
+  `abort`, and other runtime-provided operations).
+- Non-scope (for now): general user-callable symbol mangling and host-entry shim
+  naming policy; these remain backend implementation details unless later
+  promoted to a shared linkage contract.
 
 4. `compiler/rust_backend` (optional first backend target)
 

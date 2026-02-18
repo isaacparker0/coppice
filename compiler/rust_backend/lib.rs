@@ -7,6 +7,9 @@ use compiler__executable_program::{
     ExecutableProgram, ExecutableStatement, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
+use compiler__runtime_interface::{
+    ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT, RuntimeType, USER_ENTRYPOINT_FUNCTION_NAME,
+};
 use runfiles::Runfiles;
 
 pub struct BuiltRustProgram {
@@ -62,6 +65,7 @@ pub fn run_program(binary_path: &Path) -> Result<i32, CompilerFailure> {
 
 fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailure> {
     let mut output = String::new();
+    emit_runtime_support(&mut output);
     for struct_declaration in &program.struct_declarations {
         output.push_str("struct ");
         output.push_str(&struct_declaration.name);
@@ -82,9 +86,38 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
     }
 
     output.push_str("fn main() {\n");
-    output.push_str("    coppice_main();\n");
+    output.push_str("    ");
+    output.push_str(&callable_identifier(USER_ENTRYPOINT_FUNCTION_NAME));
+    output.push_str("();\n");
     output.push_str("}\n");
     Ok(output)
+}
+
+fn emit_runtime_support(output: &mut String) {
+    output.push_str("fn ");
+    output.push_str(PRINT_FUNCTION_CONTRACT.lowered_symbol_name);
+    output.push('(');
+    output.push_str("value: ");
+    output.push_str(runtime_type_source(
+        PRINT_FUNCTION_CONTRACT.parameter_types[0],
+    ));
+    output.push_str(") {\n");
+    output.push_str("    println!(\"{}\", value);\n");
+    output.push_str("}\n\n");
+
+    output.push_str("fn ");
+    output.push_str(ABORT_FUNCTION_CONTRACT.lowered_symbol_name);
+    output.push('(');
+    output.push_str("message: ");
+    output.push_str(runtime_type_source(
+        ABORT_FUNCTION_CONTRACT.parameter_types[0],
+    ));
+    output.push_str(") -> ");
+    output.push_str(runtime_type_source(ABORT_FUNCTION_CONTRACT.return_type));
+    output.push_str(" {\n");
+    output.push_str("    eprintln!(\"{}\", message);\n");
+    output.push_str("    std::process::exit(1);\n");
+    output.push_str("}\n\n");
 }
 
 fn emit_function_declaration(
@@ -199,11 +232,10 @@ fn emit_statement(
         ExecutableStatement::Abort { message } => {
             let message_source = emit_expression(message)?;
             output.push_str(&indent);
-            output.push_str("eprintln!(\"{}\", ");
+            output.push_str(ABORT_FUNCTION_CONTRACT.lowered_symbol_name);
+            output.push('(');
             output.push_str(&message_source);
             output.push_str(");\n");
-            output.push_str(&indent);
-            output.push_str("std::process::exit(1);\n");
         }
         ExecutableStatement::Expression { expression } => {
             let expression_source = emit_expression(expression)?;
@@ -288,8 +320,8 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
                     details: Vec::new(),
                 });
             };
-            if name == "print" {
-                if arguments.len() != 1 {
+            if name == PRINT_FUNCTION_CONTRACT.language_name {
+                if arguments.len() != PRINT_FUNCTION_CONTRACT.parameter_types.len() {
                     return Err(CompilerFailure {
                         kind: CompilerFailureKind::BuildFailed,
                         message:
@@ -300,7 +332,10 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
                     });
                 }
                 let argument_source = emit_expression(&arguments[0])?;
-                return Ok(format!("println!(\"{{}}\", {argument_source})"));
+                return Ok(format!(
+                    "{}({argument_source})",
+                    PRINT_FUNCTION_CONTRACT.lowered_symbol_name
+                ));
             }
             let argument_source = arguments
                 .iter()
@@ -323,6 +358,14 @@ fn type_reference_source(type_reference: &ExecutableTypeReference) -> &str {
         ExecutableTypeReference::String => "&'static str",
         ExecutableTypeReference::Nil => "()",
         ExecutableTypeReference::Named { name } => name,
+    }
+}
+
+fn runtime_type_source(runtime_type: RuntimeType) -> &'static str {
+    match runtime_type {
+        RuntimeType::Nil => "()",
+        RuntimeType::Never => "!",
+        RuntimeType::String => "&'static str",
     }
 }
 
