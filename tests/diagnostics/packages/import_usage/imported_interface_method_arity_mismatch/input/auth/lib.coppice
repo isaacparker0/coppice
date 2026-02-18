@@ -9,21 +9,10 @@ visible type Token implements Incrementer :: struct {
     },
 }
 
-visible type Box[T] :: struct {
-    value: T,
-    function get(self) -> T {
-        return self.value
-    },
-}
-
-visible type Maybe[T] :: T | nil
-
-visible START_ID: int64 := 1
-
 visible function makeToken(id: int64) -> Token {
     return Token { id: id }
 }
 
-visible function identity[T](value: T) -> T {
-    return value
+visible function makeIncrementer(id: int64) -> Incrementer {
+    return Token { id: id }
 }

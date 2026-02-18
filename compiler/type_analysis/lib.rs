@@ -511,7 +511,7 @@ struct ImportedBindingInfo {
 struct TypeInfo {
     nominal_type_id: NominalTypeId,
     type_parameters: Vec<GenericTypeParameter>,
-    implemented_interfaces: Vec<Type>,
+    implemented_interface_entries: Vec<ImplementedInterfaceEntry>,
     kind: TypeKind,
 }
 
@@ -526,6 +526,12 @@ enum TypeKind {
     Union {
         variants: Vec<Type>,
     },
+}
+
+#[derive(Clone)]
+struct ImplementedInterfaceEntry {
+    source_span: Option<Span>,
+    resolved_type: Type,
 }
 
 #[derive(Clone)]

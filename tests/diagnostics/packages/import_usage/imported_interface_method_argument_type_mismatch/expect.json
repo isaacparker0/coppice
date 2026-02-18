@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "argument 1 to 'bump' must be int64, got boolean",
+            "span": {
+                "start": 161,
+                "end": 165,
+                "line": 5,
+                "column": 29
+            }
+        }
+    ]
+}

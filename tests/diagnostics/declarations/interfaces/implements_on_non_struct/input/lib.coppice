@@ -1,0 +1,8 @@
+type Printable :: interface {
+    function toString(self) -> string,
+}
+
+type Outcome implements Printable :: enum {
+    Ok,
+    Err,
+}

@@ -1,0 +1,6 @@
+import workspace/auth { Incrementer, makeIncrementer }
+
+function run() -> int64 {
+    incrementer: Incrementer := makeIncrementer(1)
+    return incrementer.bump(true)
+}

@@ -1,0 +1,10 @@
+type Printable :: interface {
+    function toString(self) -> string,
+}
+
+type User implements Printable, Printable :: struct {
+    name: string,
+    function toString(self) -> string {
+        return self.name
+    },
+}

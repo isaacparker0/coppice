@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "unknown type 'Missing'",
+            "span": {
+                "start": 21,
+                "end": 28,
+                "line": 1,
+                "column": 22
+            }
+        }
+    ]
+}

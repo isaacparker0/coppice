@@ -1,6 +1,21 @@
+type Named :: interface {
+    function name(self) -> string,
+}
+
+type User implements Named :: struct {
+    value: string,
+    function name(self) -> string {
+        return self.value
+    },
+}
+
 function keep() -> int64 {
     mut x: int64 := 1
-    return x
+    named: Named := User { value: "Ada" }
+    if named.name() == "Ada" {
+        return x
+    }
+    return 0
 }
 
 function keepOptional() -> int64 {

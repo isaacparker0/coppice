@@ -1,0 +1,6 @@
+import workspace/auth { User, makeUser, requirePrintable }
+
+function run() -> nil {
+    requirePrintable[User](makeUser())
+    return nil
+}

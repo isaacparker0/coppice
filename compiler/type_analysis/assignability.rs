@@ -60,9 +60,9 @@ impl TypeChecker<'_> {
             return false;
         };
         value_type_info
-            .implemented_interfaces
+            .implemented_interface_entries
             .iter()
-            .any(|implemented_interface| implemented_interface == expected_type)
+            .any(|implemented_interface| implemented_interface.resolved_type == *expected_type)
     }
 
     pub(super) fn normalize_union(types: Vec<Type>) -> Type {

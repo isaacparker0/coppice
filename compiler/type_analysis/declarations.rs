@@ -9,8 +9,8 @@ use compiler__semantic_types::{
 };
 
 use super::{
-    FunctionInfo, ImportedTypeDeclaration, InterfaceMethodSignature, MethodInfo, MethodKey,
-    TypeChecker, TypeInfo, TypeKind, TypedFunctionSignature,
+    FunctionInfo, ImplementedInterfaceEntry, ImportedTypeDeclaration, InterfaceMethodSignature,
+    MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind, TypedFunctionSignature,
 };
 
 struct ImportedTypeBinding {
@@ -55,10 +55,15 @@ impl TypeChecker<'_> {
                 TypeInfo {
                     nominal_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
                     type_parameters: imported_binding.type_declaration.type_parameters.clone(),
-                    implemented_interfaces: imported_binding
+                    implemented_interface_entries: imported_binding
                         .type_declaration
                         .implemented_interfaces
-                        .clone(),
+                        .iter()
+                        .map(|implemented_interface| ImplementedInterfaceEntry {
+                            source_span: None,
+                            resolved_type: implemented_interface.clone(),
+                        })
+                        .collect(),
                     kind,
                 },
             );
@@ -188,6 +193,11 @@ impl TypeChecker<'_> {
     }
 
     pub(super) fn collect_type_declarations(&mut self, types: &[SemanticTypeDeclaration]) {
+        self.collect_type_declaration_headers(types);
+        self.resolve_type_declaration_definitions(types);
+    }
+
+    fn collect_type_declaration_headers(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
             self.check_type_name(&type_declaration.name, &type_declaration.span);
             if self.types.contains_key(&type_declaration.name) {
@@ -224,12 +234,14 @@ impl TypeChecker<'_> {
                             constraint: None,
                         })
                         .collect(),
-                    implemented_interfaces: Vec::new(),
+                    implemented_interface_entries: Vec::new(),
                     kind,
                 },
             );
         }
+    }
 
+    fn resolve_type_declaration_definitions(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
             let names_and_spans = type_declaration
                 .type_parameters
@@ -248,14 +260,17 @@ impl TypeChecker<'_> {
                         .map(|constraint| self.resolve_type_name(constraint)),
                 })
                 .collect::<Vec<_>>();
-            let resolved_implemented_interfaces = type_declaration
+            let resolved_implemented_interface_entries = type_declaration
                 .implemented_interfaces
                 .iter()
-                .map(|implemented_interface| self.resolve_type_name(implemented_interface))
+                .map(|implemented_interface| ImplementedInterfaceEntry {
+                    source_span: Some(implemented_interface.span.clone()),
+                    resolved_type: self.resolve_type_name(implemented_interface),
+                })
                 .collect::<Vec<_>>();
             if let Some(info) = self.types.get_mut(&type_declaration.name) {
                 info.type_parameters = resolved_type_parameters;
-                info.implemented_interfaces = resolved_implemented_interfaces;
+                info.implemented_interface_entries = resolved_implemented_interface_entries;
             }
 
             match &type_declaration.kind {
@@ -506,13 +521,10 @@ impl TypeChecker<'_> {
                             method_name: method.name.clone(),
                         };
                         if self.methods.contains_key(&method_key) {
-                            self.error(
-                                format!(
-                                    "duplicate method '{}.{}'",
-                                    type_declaration.name, method.name
-                                ),
-                                method.name_span.clone(),
-                            );
+                            // Duplicate interface method names are already
+                            // reported in declaration collection. Skip here to
+                            // prevent duplicate user-facing diagnostics for the
+                            // same source error.
                             continue;
                         }
 
@@ -613,9 +625,17 @@ impl TypeChecker<'_> {
             return;
         };
         let struct_type_id = struct_type_info.nominal_type_id;
+        let implemented_interface_entries = struct_type_info.implemented_interface_entries;
+        let fallback_span = type_declaration.implemented_interfaces.first().map_or_else(
+            || type_declaration.span.clone(),
+            |interface| interface.span.clone(),
+        );
         let mut seen_interface_names = HashSet::new();
-        for implemented_interface in &type_declaration.implemented_interfaces {
-            let implemented_interface_type = self.resolve_type_name(implemented_interface);
+        for implemented_interface_entry in implemented_interface_entries {
+            let implemented_interface_type = implemented_interface_entry.resolved_type;
+            let diagnostic_span = implemented_interface_entry
+                .source_span
+                .unwrap_or_else(|| fallback_span.clone());
             if implemented_interface_type == super::Type::Unknown {
                 continue;
             }
@@ -623,7 +643,7 @@ impl TypeChecker<'_> {
             if !seen_interface_names.insert(interface_name.clone()) {
                 self.error(
                     format!("duplicate implements entry '{interface_name}'"),
-                    implemented_interface.span.clone(),
+                    diagnostic_span.clone(),
                 );
                 continue;
             }
@@ -633,7 +653,7 @@ impl TypeChecker<'_> {
             else {
                 self.error(
                     format!("implemented type '{interface_name}' must be an interface declaration"),
-                    implemented_interface.span.clone(),
+                    diagnostic_span.clone(),
                 );
                 continue;
             };
@@ -644,7 +664,7 @@ impl TypeChecker<'_> {
             let TypeKind::Interface { methods } = &interface_type_info.kind else {
                 self.error(
                     format!("implemented type '{interface_name}' must be an interface declaration"),
-                    implemented_interface.span.clone(),
+                    diagnostic_span.clone(),
                 );
                 continue;
             };
@@ -661,7 +681,7 @@ impl TypeChecker<'_> {
                             "type '{}' does not implement interface '{}': missing method '{}'",
                             type_declaration.name, interface_name, interface_method.name
                         ),
-                        implemented_interface.span.clone(),
+                        diagnostic_span.clone(),
                     );
                     continue;
                 };
@@ -674,7 +694,7 @@ impl TypeChecker<'_> {
                             "type '{}' method '{}' does not match interface '{}'",
                             type_declaration.name, interface_method.name, interface_name
                         ),
-                        implemented_interface.span.clone(),
+                        diagnostic_span.clone(),
                     );
                 }
             }

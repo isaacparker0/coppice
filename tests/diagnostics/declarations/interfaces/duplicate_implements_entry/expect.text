@@ -1,0 +1,3 @@
+lib.coppice:5:33: error: duplicate implements entry 'Printable'
+  type User implements Printable, Printable :: struct {
+                                  ^

@@ -1,0 +1,3 @@
+lib.coppice:4:5: error: type argument 'User' does not satisfy constraint 'Printable' for type parameter 'T' on 'requirePrintable'
+      requirePrintable[User](makeUser())
+      ^
