@@ -917,12 +917,20 @@ ever needed.
 ### Compilation Units
 
 Parsing is file-level and independent. Typechecking and visibility resolution
-are package-level. This preserves granular incremental work while keeping
-cross-file semantics explicit and deterministic.
+are package-level.
 
-- Granular caching (change one file, recompile one file).
-- Parallelism (files compile in parallel).
-- Fast incremental builds.
+Build action granularity is package-target level (`coppice_library`,
+`coppice_binary`, `coppice_test`) in v1.
+
+This keeps cross-file semantics explicit and deterministic while still allowing
+internal compiler parallelism:
+
+- File-level parsing and early passes run in parallel inside one target build.
+- Resolution and type analysis operate over the full package.
+- Incremental performance in v1 comes from fast compiler internals and target
+  caching; per-file Bazel action decomposition (for example, one action per
+  source file plus explicit per-file interface artifacts) is an optional future
+  optimization.
 
 ### Deterministic Output
 
