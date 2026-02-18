@@ -1,0 +1,18 @@
+actions:
+    - name: CI
+      container_image: "ubuntu-24.04"
+      triggers:
+        push:
+            branches:
+                - main
+        pull_request:
+            branches:
+                - "*"
+      steps:
+        - run: bazel mod deps --lockfile_mode=error
+        - run: bazel run //:gazelle -- -mode=diff
+        - run: bazel run //:format -- check
+        - run: bazel build //...
+        - run: bazel test //...
+        - run: bazel run --run_in_cwd @multitool//tools/typos
+        - run: bazel run //tools/filename_linter:main
