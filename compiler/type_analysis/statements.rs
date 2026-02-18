@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__semantic_program::{
     SemanticBlock, SemanticExpression, SemanticFunctionDeclaration, SemanticMethodDeclaration,
-    SemanticStatement, SemanticSymbolKind, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
+    SemanticStatement, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 
@@ -392,9 +392,7 @@ impl TypeChecker<'_> {
                         name,
                         kind,
                         ..
-                    } if *kind == SemanticSymbolKind::Builtin
-                        || self.functions.contains_key(name)
-                        || self.imported_functions.contains_key(name)
+                    } if self.symbol_expression_is_callable(name, *kind)
                 );
                 if !matches!(value, SemanticExpression::Call { .. }) && !is_callable_symbol {
                     self.error("expression statements must be calls", value.span());

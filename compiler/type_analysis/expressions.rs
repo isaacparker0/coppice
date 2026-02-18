@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticExpression, SemanticMatchArm, SemanticMatchPattern,
-    SemanticStructLiteralField, SemanticSymbolKind, SemanticTypeName, SemanticUnaryOperator,
+    SemanticStructLiteralField, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__source::Span;
 
@@ -33,18 +33,9 @@ impl TypeChecker<'_> {
             SemanticExpression::NilLiteral { .. } => Type::Nil,
             SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
             SemanticExpression::StringLiteral { .. } => Type::String,
-            SemanticExpression::Symbol { name, kind, span } => match kind {
-                SemanticSymbolKind::UserDefined => self.resolve_variable(name, span),
-                SemanticSymbolKind::Builtin => {
-                    // Builtin functions are callable intrinsics, not first-class values.
-                    // If/when function types are introduced, this rule can be revisited.
-                    self.error(
-                        format!("builtin function '{name}' must be called"),
-                        span.clone(),
-                    );
-                    Type::Unknown
-                }
-            },
+            SemanticExpression::Symbol { name, kind, span } => {
+                self.check_symbol_expression(name, *kind, span)
+            }
             SemanticExpression::StructLiteral {
                 type_name,
                 fields,

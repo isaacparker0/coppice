@@ -675,6 +675,37 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    fn symbol_expression_is_callable(&self, name: &str, kind: SemanticSymbolKind) -> bool {
+        kind == SemanticSymbolKind::Builtin
+            || self.functions.contains_key(name)
+            || self.imported_functions.contains_key(name)
+    }
+
+    fn check_symbol_expression(
+        &mut self,
+        name: &str,
+        kind: SemanticSymbolKind,
+        span: &Span,
+    ) -> Type {
+        if self.symbol_expression_is_callable(name, kind) {
+            // TODO: when first-class function types are introduced, return the function
+            // value type here instead of requiring an immediate call.
+            if kind == SemanticSymbolKind::Builtin {
+                self.error(
+                    format!("builtin function '{name}' must be called"),
+                    span.clone(),
+                );
+            } else {
+                if self.imported_functions.contains_key(name) {
+                    self.mark_import_used(name);
+                }
+                self.error(format!("function '{name}' must be called"), span.clone());
+            }
+            return Type::Unknown;
+        }
+        self.resolve_variable(name, span)
+    }
+
     fn resolve_variable(&mut self, name: &str, span: &Span) -> Type {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(info) = scope.get_mut(name) {
@@ -688,15 +719,6 @@ impl<'a> TypeChecker<'a> {
         if let Some(value_type) = self.imported_constant_type(name) {
             self.mark_import_used(name);
             return value_type;
-        }
-        if self.functions.contains_key(name) {
-            self.error(format!("function '{name}' must be called"), span.clone());
-            return Type::Unknown;
-        }
-        if self.imported_functions.contains_key(name) {
-            self.mark_import_used(name);
-            self.error(format!("function '{name}' must be called"), span.clone());
-            return Type::Unknown;
         }
         if self.imported_bindings.contains_key(name) {
             self.mark_import_used(name);
