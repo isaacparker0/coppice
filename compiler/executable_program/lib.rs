@@ -36,6 +36,7 @@ pub enum ExecutableTypeReference {
     Boolean,
     String,
     Nil,
+    Never,
     Named { name: String },
 }
 
@@ -58,9 +59,6 @@ pub enum ExecutableStatement {
     For {
         condition: Option<ExecutableExpression>,
         body_statements: Vec<ExecutableStatement>,
-    },
-    Abort {
-        message: ExecutableExpression,
     },
     Break,
     Continue,

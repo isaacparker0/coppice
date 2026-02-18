@@ -6,8 +6,12 @@ use super::TypeChecker;
 
 impl TypeChecker<'_> {
     pub(super) fn is_assignable(value_type: &Type, expected_type: &Type) -> bool {
+        if matches!(value_type, Type::Never) {
+            return true;
+        }
         match expected_type {
             Type::Unknown => true,
+            Type::Never => matches!(value_type, Type::Unknown | Type::Never),
             Type::Union(members) => match value_type {
                 Type::Unknown => true,
                 Type::Union(value_members) => value_members
@@ -33,17 +37,26 @@ impl TypeChecker<'_> {
         for value_type in types {
             if let Type::Union(inner) = value_type {
                 for inner_type in inner {
+                    if matches!(inner_type, Type::Never) {
+                        continue;
+                    }
                     let key = inner_type.display();
                     if seen.insert(key) {
                         flat.push(inner_type);
                     }
                 }
             } else {
+                if matches!(value_type, Type::Never) {
+                    continue;
+                }
                 let key = value_type.display();
                 if seen.insert(key) {
                     flat.push(value_type);
                 }
             }
+        }
+        if flat.is_empty() {
+            return Type::Never;
         }
         if flat.len() == 1 {
             flat.remove(0)

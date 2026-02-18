@@ -35,6 +35,7 @@ pub enum Type {
     Boolean,
     String,
     Nil,
+    Never,
     Named(NominalTypeRef),
     Applied {
         base: NominalTypeRef,
@@ -53,6 +54,7 @@ impl Type {
             Type::Boolean => "boolean",
             Type::String => "string",
             Type::Nil => "nil",
+            Type::Never => "never",
             Type::Named(named) => named.display_name.as_str(),
             Type::Applied { .. } => "<applied>",
             Type::TypeParameter(name) => name,
@@ -89,6 +91,7 @@ pub fn type_from_builtin_name(name: &str) -> Option<Type> {
         "boolean" => Some(Type::Boolean),
         "string" => Some(Type::String),
         "nil" => Some(Type::Nil),
+        "never" => Some(Type::Never),
         _ => None,
     }
 }

@@ -206,12 +206,6 @@ fn lower_statement(
         }),
         TypeAnnotatedStatement::Break { .. } => Some(ExecutableStatement::Break),
         TypeAnnotatedStatement::Continue { .. } => Some(ExecutableStatement::Continue),
-        TypeAnnotatedStatement::Abort { message, .. } => {
-            let executable_message = lower_expression(message, diagnostics);
-            Some(ExecutableStatement::Abort {
-                message: executable_message,
-            })
-        }
         TypeAnnotatedStatement::Expression { value, .. } => {
             let executable_expression = lower_expression(value, diagnostics);
             Some(ExecutableStatement::Expression {
@@ -251,7 +245,7 @@ fn lower_expression(
                 value: value.clone(),
             }
         }
-        TypeAnnotatedExpression::Identifier { name, .. } => {
+        TypeAnnotatedExpression::Symbol { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
         TypeAnnotatedExpression::StructLiteral {
@@ -369,6 +363,7 @@ fn lower_type_name_to_type_reference(
                 None
             }
         }
+        "never" => Some(ExecutableTypeReference::Never),
         _ => Some(ExecutableTypeReference::Named { name }),
     }
 }

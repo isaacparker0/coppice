@@ -195,7 +195,6 @@ fn check_block_doc_comments(block: &SyntaxBlock, violations: &mut Vec<SyntaxRule
                 SyntaxStatement::Binding { .. }
                 | SyntaxStatement::Assign { .. }
                 | SyntaxStatement::Return { .. }
-                | SyntaxStatement::Abort { .. }
                 | SyntaxStatement::Break { .. }
                 | SyntaxStatement::Continue { .. }
                 | SyntaxStatement::Expression { .. } => {}

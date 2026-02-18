@@ -229,14 +229,6 @@ fn emit_statement(
             output.push_str(&indent);
             output.push_str("continue;\n");
         }
-        ExecutableStatement::Abort { message } => {
-            let message_source = emit_expression(message)?;
-            output.push_str(&indent);
-            output.push_str(ABORT_FUNCTION_CONTRACT.lowered_symbol_name);
-            output.push('(');
-            output.push_str(&message_source);
-            output.push_str(");\n");
-        }
         ExecutableStatement::Expression { expression } => {
             let expression_source = emit_expression(expression)?;
             output.push_str(&indent);
@@ -337,6 +329,23 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
                     PRINT_FUNCTION_CONTRACT.lowered_symbol_name
                 ));
             }
+            if name == ABORT_FUNCTION_CONTRACT.language_name {
+                if arguments.len() != ABORT_FUNCTION_CONTRACT.parameter_types.len() {
+                    return Err(CompilerFailure {
+                        kind: CompilerFailureKind::BuildFailed,
+                        message:
+                            "build mode currently supports abort(...) with exactly one argument"
+                                .to_string(),
+                        path: None,
+                        details: Vec::new(),
+                    });
+                }
+                let argument_source = emit_expression(&arguments[0])?;
+                return Ok(format!(
+                    "{}({argument_source})",
+                    ABORT_FUNCTION_CONTRACT.lowered_symbol_name
+                ));
+            }
             let argument_source = arguments
                 .iter()
                 .map(emit_expression)
@@ -357,6 +366,7 @@ fn type_reference_source(type_reference: &ExecutableTypeReference) -> &str {
         ExecutableTypeReference::Boolean => "bool",
         ExecutableTypeReference::String => "&'static str",
         ExecutableTypeReference::Nil => "()",
+        ExecutableTypeReference::Never => "!",
         ExecutableTypeReference::Named { name } => name,
     }
 }

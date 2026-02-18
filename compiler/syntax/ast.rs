@@ -185,10 +185,6 @@ pub enum SyntaxStatement {
         value: SyntaxExpression,
         span: Span,
     },
-    Abort {
-        message: SyntaxExpression,
-        span: Span,
-    },
     Break {
         span: Span,
     },
@@ -229,8 +225,9 @@ pub enum SyntaxExpression {
         value: String,
         span: Span,
     },
-    Identifier {
+    Symbol {
         name: String,
+        kind: SyntaxSymbolKind,
         span: Span,
     },
     StructLiteral {
@@ -271,6 +268,12 @@ pub enum SyntaxExpression {
         type_name: SyntaxTypeName,
         span: Span,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SyntaxSymbolKind {
+    UserDefined,
+    Builtin,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

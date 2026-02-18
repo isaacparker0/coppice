@@ -140,10 +140,6 @@ pub enum SemanticStatement {
         value: SemanticExpression,
         span: Span,
     },
-    Abort {
-        message: SemanticExpression,
-        span: Span,
-    },
     Break {
         span: Span,
     },
@@ -184,8 +180,9 @@ pub enum SemanticExpression {
         value: String,
         span: Span,
     },
-    Identifier {
+    Symbol {
         name: String,
+        kind: SemanticSymbolKind,
         span: Span,
     },
     StructLiteral {
@@ -226,6 +223,12 @@ pub enum SemanticExpression {
         type_name: SemanticTypeName,
         span: Span,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemanticSymbolKind {
+    UserDefined,
+    Builtin,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

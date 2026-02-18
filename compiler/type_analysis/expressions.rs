@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticExpression, SemanticMatchArm, SemanticMatchPattern,
-    SemanticStructLiteralField, SemanticTypeName, SemanticUnaryOperator,
+    SemanticStructLiteralField, SemanticSymbolKind, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__source::Span;
 
@@ -33,7 +33,18 @@ impl TypeChecker<'_> {
             SemanticExpression::NilLiteral { .. } => Type::Nil,
             SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
             SemanticExpression::StringLiteral { .. } => Type::String,
-            SemanticExpression::Identifier { name, span } => self.resolve_variable(name, span),
+            SemanticExpression::Symbol { name, kind, span } => match kind {
+                SemanticSymbolKind::UserDefined => self.resolve_variable(name, span),
+                SemanticSymbolKind::Builtin => {
+                    // Builtin functions are callable intrinsics, not first-class values.
+                    // If/when function types are introduced, this rule can be revisited.
+                    self.error(
+                        format!("builtin function '{name}' must be called"),
+                        span.clone(),
+                    );
+                    Type::Unknown
+                }
+            },
             SemanticExpression::StructLiteral {
                 type_name,
                 fields,
@@ -45,7 +56,7 @@ impl TypeChecker<'_> {
                 field_span,
                 ..
             } => {
-                if let SemanticExpression::Identifier { name, .. } = target.as_ref() {
+                if let SemanticExpression::Symbol { name, .. } = target.as_ref() {
                     let is_enum_like_union = self.types.get(name).is_some_and(|info| {
                         if let TypeKind::Union { variants } = &info.kind {
                             let enum_like_prefix = format!("{name}.");
@@ -81,7 +92,7 @@ impl TypeChecker<'_> {
                 arguments,
                 span,
             } => {
-                let resolved_target = if let SemanticExpression::Identifier { name, span } =
+                let resolved_target = if let SemanticExpression::Symbol { name, span, .. } =
                     callee.as_ref()
                 {
                     if let Some(info) = self.functions.get(name).cloned() {
@@ -183,7 +194,7 @@ impl TypeChecker<'_> {
                         let method_parameter_types = instantiated_signature.parameter_types;
                         let method_return_type = instantiated_signature.return_type;
                         if method_self_mutable {
-                            if let SemanticExpression::Identifier { name, .. } = target.as_ref() {
+                            if let SemanticExpression::Symbol { name, .. } = target.as_ref() {
                                 let receiver_is_mutable = self
                                     .lookup_variable_for_assignment(name)
                                     .is_some_and(|(is_mutable, _)| is_mutable);

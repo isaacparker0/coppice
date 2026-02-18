@@ -42,19 +42,6 @@ impl Parser {
             let value = self.parse_expression()?;
             return Ok(SyntaxStatement::Return { value, span });
         }
-        if self.peek_is_keyword(Keyword::Abort) {
-            let start = self.expect_keyword(Keyword::Abort)?;
-            self.expect_symbol(Symbol::LeftParenthesis)?;
-            let message = self.parse_expression()?;
-            let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
-            let span = Span {
-                start: start.start,
-                end: right_parenthesis.end,
-                line: start.line,
-                column: start.column,
-            };
-            return Ok(SyntaxStatement::Abort { message, span });
-        }
         if self.peek_is_keyword(Keyword::Break) {
             let span = self.expect_keyword(Keyword::Break)?;
             return Ok(SyntaxStatement::Break { span });

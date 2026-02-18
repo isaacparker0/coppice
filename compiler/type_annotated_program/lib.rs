@@ -76,10 +76,6 @@ pub enum TypeAnnotatedStatement {
     Continue {
         span: Span,
     },
-    Abort {
-        message: TypeAnnotatedExpression,
-        span: Span,
-    },
     Expression {
         value: TypeAnnotatedExpression,
         span: Span,
@@ -110,8 +106,9 @@ pub enum TypeAnnotatedExpression {
         value: String,
         span: Span,
     },
-    Identifier {
+    Symbol {
         name: String,
+        kind: TypeAnnotatedSymbolKind,
         span: Span,
     },
     StructLiteral {
@@ -166,6 +163,12 @@ pub enum TypeAnnotatedBinaryOperator {
 pub enum TypeAnnotatedUnaryOperator {
     Not,
     Negate,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeAnnotatedSymbolKind {
+    UserDefined,
+    Builtin,
 }
 
 #[derive(Clone)]

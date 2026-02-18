@@ -5,8 +5,8 @@ use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
-    SemanticFile, SemanticFunctionDeclaration, SemanticStatement, SemanticTypeDeclaration,
-    SemanticTypeName, SemanticUnaryOperator,
+    SemanticFile, SemanticFunctionDeclaration, SemanticStatement, SemanticSymbolKind,
+    SemanticTypeDeclaration, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -18,8 +18,8 @@ use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
     TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName,
-    TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedSymbolKind,
+    TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -213,10 +213,6 @@ fn type_annotated_statement_from_semantic_statement(
         SemanticStatement::Continue { span } => {
             TypeAnnotatedStatement::Continue { span: span.clone() }
         }
-        SemanticStatement::Abort { message, span } => TypeAnnotatedStatement::Abort {
-            message: type_annotated_expression_from_semantic_expression(message),
-            span: span.clone(),
-        },
         SemanticStatement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(value),
             span: span.clone(),
@@ -253,8 +249,12 @@ fn type_annotated_expression_from_semantic_expression(
                 span: span.clone(),
             }
         }
-        SemanticExpression::Identifier { name, span } => TypeAnnotatedExpression::Identifier {
+        SemanticExpression::Symbol { name, kind, span } => TypeAnnotatedExpression::Symbol {
             name: name.clone(),
+            kind: match kind {
+                SemanticSymbolKind::UserDefined => TypeAnnotatedSymbolKind::UserDefined,
+                SemanticSymbolKind::Builtin => TypeAnnotatedSymbolKind::Builtin,
+            },
             span: span.clone(),
         },
         SemanticExpression::StructLiteral {
@@ -689,6 +689,15 @@ impl<'a> TypeChecker<'a> {
             self.mark_import_used(name);
             return value_type;
         }
+        if self.functions.contains_key(name) {
+            self.error(format!("function '{name}' must be called"), span.clone());
+            return Type::Unknown;
+        }
+        if self.imported_functions.contains_key(name) {
+            self.mark_import_used(name);
+            self.error(format!("function '{name}' must be called"), span.clone());
+            return Type::Unknown;
+        }
         if self.imported_bindings.contains_key(name) {
             self.mark_import_used(name);
         }
@@ -964,6 +973,14 @@ impl<'a> TypeChecker<'a> {
 fn builtin_functions() -> HashMap<String, FunctionInfo> {
     let mut functions = HashMap::new();
     functions.insert(
+        "abort".to_string(),
+        FunctionInfo {
+            type_parameters: Vec::new(),
+            parameter_types: vec![Type::String],
+            return_type: Type::Never,
+        },
+    );
+    functions.insert(
         "print".to_string(),
         FunctionInfo {
             type_parameters: Vec::new(),
@@ -981,7 +998,7 @@ impl ExpressionSpan for SemanticExpression {
             | SemanticExpression::NilLiteral { span, .. }
             | SemanticExpression::BooleanLiteral { span, .. }
             | SemanticExpression::StringLiteral { span, .. }
-            | SemanticExpression::Identifier { span, .. }
+            | SemanticExpression::Symbol { span, .. }
             | SemanticExpression::StructLiteral { span, .. }
             | SemanticExpression::FieldAccess { span, .. }
             | SemanticExpression::Call { span, .. }
@@ -999,7 +1016,6 @@ impl StatementSpan for SemanticStatement {
             SemanticStatement::Binding { span, .. }
             | SemanticStatement::Assign { span, .. }
             | SemanticStatement::Return { span, .. }
-            | SemanticStatement::Abort { span, .. }
             | SemanticStatement::If { span, .. }
             | SemanticStatement::For { span, .. }
             | SemanticStatement::Break { span, .. }

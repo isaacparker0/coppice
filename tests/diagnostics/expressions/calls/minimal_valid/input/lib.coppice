@@ -14,5 +14,6 @@ function run() -> int64 {
     result := add(1, 2)
     genericResult := identity[int64](result)
     constrainedResult := identityConstrained[int64](genericResult)
+    print("ok")
     return constrainedResult
 }

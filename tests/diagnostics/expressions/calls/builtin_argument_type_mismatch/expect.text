@@ -1,0 +1,3 @@
+lib.coppice:2:11: error: argument 1 to 'abort' must be string, got int64
+      abort(1)
+            ^

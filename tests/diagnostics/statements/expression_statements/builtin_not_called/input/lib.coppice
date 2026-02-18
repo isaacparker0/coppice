@@ -1,0 +1,4 @@
+function run() -> int64 {
+    abort
+    return 0
+}

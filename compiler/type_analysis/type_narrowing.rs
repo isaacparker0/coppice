@@ -1,5 +1,5 @@
 use compiler__semantic_program::{
-    SemanticBinaryOperator, SemanticBlock, SemanticExpression, SemanticMatchArm,
+    SemanticBinaryOperator, SemanticBlock, SemanticExpression, SemanticMatchArm, SemanticSymbolKind,
 };
 
 use compiler__semantic_types::Type;
@@ -79,20 +79,29 @@ impl TypeChecker<'_> {
                 return None;
             }
 
-            let (name, is_nil_test) =
-                if let SemanticExpression::Identifier { name, .. } = left.as_ref() {
-                    (
-                        name,
-                        matches!(right.as_ref(), SemanticExpression::NilLiteral { .. }),
-                    )
-                } else if let SemanticExpression::Identifier { name, .. } = right.as_ref() {
-                    (
-                        name,
-                        matches!(left.as_ref(), SemanticExpression::NilLiteral { .. }),
-                    )
-                } else {
-                    return None;
-                };
+            let (name, is_nil_test) = if let SemanticExpression::Symbol {
+                name,
+                kind: SemanticSymbolKind::UserDefined,
+                ..
+            } = left.as_ref()
+            {
+                (
+                    name,
+                    matches!(right.as_ref(), SemanticExpression::NilLiteral { .. }),
+                )
+            } else if let SemanticExpression::Symbol {
+                name,
+                kind: SemanticSymbolKind::UserDefined,
+                ..
+            } = right.as_ref()
+            {
+                (
+                    name,
+                    matches!(left.as_ref(), SemanticExpression::NilLiteral { .. }),
+                )
+            } else {
+                return None;
+            };
 
             if !is_nil_test {
                 return None;
@@ -119,7 +128,12 @@ impl TypeChecker<'_> {
             span: _,
         } = condition
         {
-            let SemanticExpression::Identifier { name, .. } = value.as_ref() else {
+            let SemanticExpression::Symbol {
+                name,
+                kind: SemanticSymbolKind::UserDefined,
+                ..
+            } = value.as_ref()
+            else {
                 return None;
             };
             let pattern_type = self.resolve_match_pattern_type_name(type_name, &type_name.span);

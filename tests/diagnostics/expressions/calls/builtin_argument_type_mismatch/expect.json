@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "argument 1 to 'abort' must be string, got int64",
+            "span": {
+                "start": 37,
+                "end": 38,
+                "line": 2,
+                "column": 11
+            }
+        }
+    ]
+}

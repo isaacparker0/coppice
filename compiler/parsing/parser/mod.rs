@@ -388,7 +388,7 @@ impl ExpressionSpan for SyntaxExpression {
             | SyntaxExpression::NilLiteral { span, .. }
             | SyntaxExpression::BooleanLiteral { span, .. }
             | SyntaxExpression::StringLiteral { span, .. }
-            | SyntaxExpression::Identifier { span, .. }
+            | SyntaxExpression::Symbol { span, .. }
             | SyntaxExpression::StructLiteral { span, .. }
             | SyntaxExpression::FieldAccess { span, .. }
             | SyntaxExpression::Call { span, .. }

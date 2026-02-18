@@ -21,6 +21,7 @@ pub(crate) enum Keyword {
     Nil,
     Not,
     Or,
+    Print,
     Public,
     Return,
     Struct,
@@ -51,6 +52,7 @@ impl Keyword {
             Keyword::Nil => "nil",
             Keyword::Not => "not",
             Keyword::Or => "or",
+            Keyword::Print => "print",
             Keyword::Public => "public",
             Keyword::Return => "return",
             Keyword::Struct => "struct",
@@ -398,6 +400,7 @@ impl<'a> Lexer<'a> {
             "match" => TokenKind::Keyword(Keyword::Match),
             "and" => TokenKind::Keyword(Keyword::And),
             "or" => TokenKind::Keyword(Keyword::Or),
+            "print" => TokenKind::Keyword(Keyword::Print),
             "not" => TokenKind::Keyword(Keyword::Not),
             "nil" => TokenKind::Keyword(Keyword::Nil),
             "mut" => TokenKind::Keyword(Keyword::Mut),
@@ -582,7 +585,9 @@ fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
             | TokenKind::StringLiteral(_)
             | TokenKind::BooleanLiteral(_)
             | TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBrace)
-            | TokenKind::Keyword(Keyword::Return | Keyword::Break | Keyword::Continue)
+            | TokenKind::Keyword(
+                Keyword::Return | Keyword::Break | Keyword::Continue | Keyword::Print
+            )
     )
 }
 
@@ -599,6 +604,7 @@ fn is_statement_start(kind: &TokenKind) -> bool {
                     | Keyword::For
                     | Keyword::Mut
                     | Keyword::Match
+                    | Keyword::Print
                     | Keyword::Exports
                     | Keyword::Import
             )

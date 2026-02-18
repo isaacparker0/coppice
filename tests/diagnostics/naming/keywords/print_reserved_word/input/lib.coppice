@@ -1,0 +1,3 @@
+function print() -> int64 {
+    return 1
+}

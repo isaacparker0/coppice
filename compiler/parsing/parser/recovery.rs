@@ -108,6 +108,7 @@ impl Parser {
                 || self.peek_is_keyword(Keyword::Continue)
                 || self.peek_is_keyword(Keyword::If)
                 || self.peek_is_keyword(Keyword::For)
+                || self.peek_is_keyword(Keyword::Print)
             {
                 return;
             }

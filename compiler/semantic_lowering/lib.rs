@@ -264,10 +264,6 @@ fn lower_statement(statement: &syntax::SyntaxStatement) -> semantic::SemanticSta
             value: lower_expression(value),
             span: span.clone(),
         },
-        syntax::SyntaxStatement::Abort { message, span } => semantic::SemanticStatement::Abort {
-            message: lower_expression(message),
-            span: span.clone(),
-        },
         syntax::SyntaxStatement::Break { span } => {
             semantic::SemanticStatement::Break { span: span.clone() }
         }
@@ -326,9 +322,15 @@ fn lower_expression(expression: &syntax::SyntaxExpression) -> semantic::Semantic
                 span: span.clone(),
             }
         }
-        syntax::SyntaxExpression::Identifier { name, span } => {
-            semantic::SemanticExpression::Identifier {
+        syntax::SyntaxExpression::Symbol { name, kind, span } => {
+            semantic::SemanticExpression::Symbol {
                 name: name.clone(),
+                kind: match kind {
+                    syntax::SyntaxSymbolKind::UserDefined => {
+                        semantic::SemanticSymbolKind::UserDefined
+                    }
+                    syntax::SyntaxSymbolKind::Builtin => semantic::SemanticSymbolKind::Builtin,
+                },
                 span: span.clone(),
             }
         }

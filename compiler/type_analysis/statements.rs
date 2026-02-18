@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use compiler__semantic_program::{
     SemanticBlock, SemanticExpression, SemanticFunctionDeclaration, SemanticMethodDeclaration,
-    SemanticStatement, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
+    SemanticStatement, SemanticSymbolKind, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 
@@ -210,6 +210,12 @@ impl TypeChecker<'_> {
                         binding_type = annotated_type;
                     }
                 }
+                if binding_type == Type::Never {
+                    return StatementOutcome {
+                        terminates: true,
+                        fallthrough_narrowing: None,
+                    };
+                }
                 self.define_variable(name.clone(), binding_type, *mutable, span.clone());
                 StatementOutcome {
                     terminates: false,
@@ -257,6 +263,12 @@ impl TypeChecker<'_> {
                 } else {
                     self.error(format!("unknown name '{name}'"), name_span.clone());
                 }
+                if value_type == Type::Never {
+                    return StatementOutcome {
+                        terminates: true,
+                        fallthrough_narrowing: None,
+                    };
+                }
                 StatementOutcome {
                     terminates: false,
                     fallthrough_narrowing: None,
@@ -276,16 +288,6 @@ impl TypeChecker<'_> {
                         ),
                         value.span(),
                     );
-                }
-                StatementOutcome {
-                    terminates: true,
-                    fallthrough_narrowing: None,
-                }
-            }
-            SemanticStatement::Abort { message, .. } => {
-                let message_type = self.check_expression(message);
-                if message_type != Type::String && message_type != Type::Unknown {
-                    self.error("abort message must be string", message.span());
                 }
                 StatementOutcome {
                     terminates: true,
@@ -383,12 +385,22 @@ impl TypeChecker<'_> {
                 }
             }
             SemanticStatement::Expression { value, .. } => {
-                let _ = self.check_expression(value);
-                if !matches!(value, SemanticExpression::Call { .. }) {
+                let value_type = self.check_expression(value);
+                let is_callable_symbol = matches!(
+                    value,
+                    SemanticExpression::Symbol {
+                        name,
+                        kind,
+                        ..
+                    } if *kind == SemanticSymbolKind::Builtin
+                        || self.functions.contains_key(name)
+                        || self.imported_functions.contains_key(name)
+                );
+                if !matches!(value, SemanticExpression::Call { .. }) && !is_callable_symbol {
                     self.error("expression statements must be calls", value.span());
                 }
                 StatementOutcome {
-                    terminates: false,
+                    terminates: value_type == Type::Never,
                     fallthrough_narrowing: None,
                 }
             }
