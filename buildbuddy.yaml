@@ -1,5 +1,6 @@
 actions:
     - name: CI
+      container_image: "ubuntu-24.04"
       triggers:
         push:
             branches:
