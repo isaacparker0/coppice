@@ -3,8 +3,8 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::FileRole;
 use compiler__source::Span;
 use compiler__syntax::{
-    SyntaxDeclaration, SyntaxDocComment, SyntaxExpression, SyntaxFileItem, SyntaxParsedFile,
-    SyntaxVisibility,
+    SyntaxDeclaration, SyntaxDocComment, SyntaxExpression, SyntaxFileItem, SyntaxMemberVisibility,
+    SyntaxParsedFile, SyntaxTopLevelVisibility,
 };
 
 mod declarations;
@@ -37,7 +37,7 @@ pub(super) enum InvalidConstructKind {
 
 #[derive(Clone, Debug)]
 pub(super) enum RecoveredKind {
-    ExpectedDeclarationAfterPublic,
+    ExpectedDeclarationAfterVisible,
     ExpectedTypeKeywordBeforeTypeDeclaration,
     ExpectedDeclaration,
     MethodReceiverSelfMustNotHaveTypeAnnotation,
@@ -131,8 +131,8 @@ impl Parser {
     }
 
     fn parse_declaration(&mut self) -> ParseResult<SyntaxDeclaration> {
-        if self.peek_is_keyword(Keyword::Public) {
-            let visibility = self.parse_visibility();
+        if self.peek_is_keyword(Keyword::Visible) {
+            let visibility = self.parse_top_level_visibility();
             if self.peek_is_keyword(Keyword::Type) {
                 return self
                     .parse_type_declaration(visibility)
@@ -149,14 +149,14 @@ impl Parser {
                     .map(SyntaxDeclaration::Constant);
             }
             return Err(ParseError::Recovered {
-                kind: RecoveredKind::ExpectedDeclarationAfterPublic,
+                kind: RecoveredKind::ExpectedDeclarationAfterVisible,
                 span: self.peek_span(),
             });
         }
 
         if self.peek_is_keyword(Keyword::Type) {
             return self
-                .parse_type_declaration(SyntaxVisibility::Private)
+                .parse_type_declaration(SyntaxTopLevelVisibility::Private)
                 .map(SyntaxDeclaration::Type);
         }
         if self.peek_is_keyword(Keyword::Import) {
@@ -171,7 +171,7 @@ impl Parser {
         }
         if self.peek_is_keyword(Keyword::Function) {
             return self
-                .parse_function(SyntaxVisibility::Private)
+                .parse_function(SyntaxTopLevelVisibility::Private)
                 .map(SyntaxDeclaration::Function);
         }
         if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::DoubleColon) {
@@ -184,7 +184,7 @@ impl Parser {
         }
         if self.peek_is_identifier() {
             return self
-                .parse_constant_declaration(SyntaxVisibility::Private)
+                .parse_constant_declaration(SyntaxTopLevelVisibility::Private)
                 .map(SyntaxDeclaration::Constant);
         }
         Err(ParseError::Recovered {
@@ -193,12 +193,21 @@ impl Parser {
         })
     }
 
-    fn parse_visibility(&mut self) -> SyntaxVisibility {
+    fn parse_top_level_visibility(&mut self) -> SyntaxTopLevelVisibility {
+        if self.peek_is_keyword(Keyword::Visible) {
+            self.advance();
+            SyntaxTopLevelVisibility::Visible
+        } else {
+            SyntaxTopLevelVisibility::Private
+        }
+    }
+
+    fn parse_member_visibility(&mut self) -> SyntaxMemberVisibility {
         if self.peek_is_keyword(Keyword::Public) {
             self.advance();
-            SyntaxVisibility::Public
+            SyntaxMemberVisibility::Public
         } else {
-            SyntaxVisibility::Private
+            SyntaxMemberVisibility::Private
         }
     }
 
@@ -338,8 +347,8 @@ impl Parser {
             }
             ParseError::Recovered { kind, span } => {
                 let message = match kind {
-                    RecoveredKind::ExpectedDeclarationAfterPublic => {
-                        "expected declaration after 'public'".to_string()
+                    RecoveredKind::ExpectedDeclarationAfterVisible => {
+                        "expected declaration after 'visible'".to_string()
                     }
                     RecoveredKind::ExpectedTypeKeywordBeforeTypeDeclaration => {
                         "expected keyword 'type' before type declaration".to_string()

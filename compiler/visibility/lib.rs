@@ -110,7 +110,7 @@ fn resolve_import_declaration(
                 path: file.path.to_path_buf(),
                 diagnostic: PhaseDiagnostic::new(
                     format!(
-                        "imported symbol '{name}' in package '{}' must be declared public",
+                        "imported symbol '{name}' in package '{}' must be declared visible",
                         import_declaration.package_path
                     ),
                     member.span.clone(),

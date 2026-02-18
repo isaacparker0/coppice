@@ -1,5 +1,5 @@
 /// Public constant docs.
-public ANSWER: int64 := 42
+visible ANSWER: int64 := 42
 
 /// User docs.
 type User :: struct {

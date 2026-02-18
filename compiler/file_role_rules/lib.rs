@@ -2,8 +2,8 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::{FileRole, Span};
 use compiler__syntax::{
-    SyntaxDeclaration, SyntaxFunctionDeclaration, SyntaxParsedFile, SyntaxTypeName,
-    SyntaxVisibility,
+    SyntaxDeclaration, SyntaxFunctionDeclaration, SyntaxParsedFile, SyntaxTopLevelVisibility,
+    SyntaxTypeName,
 };
 
 /// Run file-role policy checks.
@@ -22,7 +22,7 @@ use compiler__syntax::{
 pub fn check_file(file: &SyntaxParsedFile) -> PhaseOutput<()> {
     let mut diagnostics = Vec::new();
     check_exports_declaration_roles(file, &mut diagnostics);
-    check_public_declaration_roles(file, &mut diagnostics);
+    check_visible_declaration_roles(file, &mut diagnostics);
     check_main_function_roles(file, &mut diagnostics);
 
     let status = if diagnostics.is_empty() {
@@ -75,27 +75,30 @@ fn is_main_function_declaration(declaration: &SyntaxDeclaration) -> bool {
     )
 }
 
-fn check_public_declaration_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
+fn check_visible_declaration_roles(
+    file: &SyntaxParsedFile,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) {
     if file.role != FileRole::BinaryEntrypoint && file.role != FileRole::Test {
         return;
     }
     let message = match file.role {
-        FileRole::BinaryEntrypoint => "public declarations are not allowed in .bin.coppice files",
-        FileRole::Test => "public declarations are not allowed in .test.coppice files",
+        FileRole::BinaryEntrypoint => "visible declarations are not allowed in .bin.coppice files",
+        FileRole::Test => "visible declarations are not allowed in .test.coppice files",
         FileRole::Library | FileRole::PackageManifest => {
-            unreachable!("public declaration role checks are only run for binary or test files")
+            unreachable!("visible declaration role checks are only run for binary or test files")
         }
     };
 
     for declaration in file.top_level_declarations() {
         match declaration {
             SyntaxDeclaration::Type(type_declaration) => {
-                if type_declaration.visibility == SyntaxVisibility::Public {
+                if type_declaration.visibility == SyntaxTopLevelVisibility::Visible {
                     diagnostics.push(PhaseDiagnostic::new(message, type_declaration.span.clone()));
                 }
             }
             SyntaxDeclaration::Constant(constant_declaration)
-                if constant_declaration.visibility == SyntaxVisibility::Public =>
+                if constant_declaration.visibility == SyntaxTopLevelVisibility::Visible =>
             {
                 diagnostics.push(PhaseDiagnostic::new(
                     message,
@@ -103,7 +106,7 @@ fn check_public_declaration_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec
                 ));
             }
             SyntaxDeclaration::Function(function_declaration)
-                if function_declaration.visibility == SyntaxVisibility::Public =>
+                if function_declaration.visibility == SyntaxTopLevelVisibility::Visible =>
             {
                 diagnostics.push(PhaseDiagnostic::new(
                     message,

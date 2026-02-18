@@ -25,6 +25,7 @@ pub(crate) enum Keyword {
     Return,
     Struct,
     Type,
+    Visible,
     // keep-sorted end
 }
 
@@ -54,6 +55,7 @@ impl Keyword {
             Keyword::Return => "return",
             Keyword::Struct => "struct",
             Keyword::Type => "type",
+            Keyword::Visible => "visible",
             // keep-sorted end
         }
     }
@@ -380,6 +382,7 @@ impl<'a> Lexer<'a> {
         let kind = match text {
             "public" => TokenKind::Keyword(Keyword::Public),
             "type" => TokenKind::Keyword(Keyword::Type),
+            "visible" => TokenKind::Keyword(Keyword::Visible),
             "function" => TokenKind::Keyword(Keyword::Function),
             "return" => TokenKind::Keyword(Keyword::Return),
             "abort" => TokenKind::Keyword(Keyword::Abort),

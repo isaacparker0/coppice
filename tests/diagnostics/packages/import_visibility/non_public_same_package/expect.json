@@ -4,7 +4,7 @@
         {
             "phase": "resolution",
             "path": "lib.coppice",
-            "message": "imported symbol 'helper' in package 'workspace' must be declared public",
+            "message": "imported symbol 'helper' in package 'workspace' must be declared visible",
             "span": {
                 "start": 19,
                 "end": 25,

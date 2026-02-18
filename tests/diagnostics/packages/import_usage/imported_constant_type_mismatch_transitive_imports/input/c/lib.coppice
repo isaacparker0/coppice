@@ -1,1 +1,1 @@
-public BASE: int64 := 1
+visible BASE: int64 := 1

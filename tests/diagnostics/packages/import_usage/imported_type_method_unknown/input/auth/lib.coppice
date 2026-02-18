@@ -1,4 +1,4 @@
-public type User :: struct {
+visible type User :: struct {
     id: int64,
     function plus(self, delta: int64) -> int64 {
         return self.id + delta

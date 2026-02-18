@@ -1,1 +1,1 @@
-public COUNT: int64 := 1
+visible COUNT: int64 := 1

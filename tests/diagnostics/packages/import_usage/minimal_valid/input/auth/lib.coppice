@@ -1,25 +1,25 @@
-public type Token :: struct {
+visible type Token :: struct {
     id: int64,
     function bump(self, delta: int64) -> int64 {
         return self.id + delta
     },
 }
 
-public type Box[T] :: struct {
+visible type Box[T] :: struct {
     value: T,
     function get(self) -> T {
         return self.value
     },
 }
 
-public type Maybe[T] :: T | nil
+visible type Maybe[T] :: T | nil
 
-public START_ID: int64 := 1
+visible START_ID: int64 := 1
 
-public function makeToken(id: int64) -> Token {
+visible function makeToken(id: int64) -> Token {
     return Token { id: id }
 }
 
-public function identity[T](value: T) -> T {
+visible function identity[T](value: T) -> T {
     return value
 }

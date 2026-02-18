@@ -4,12 +4,12 @@
         {
             "phase": "file_role_rules",
             "path": "main.bin.coppice",
-            "message": "public declarations are not allowed in .bin.coppice files",
+            "message": "visible declarations are not allowed in .bin.coppice files",
             "span": {
-                "start": 50,
-                "end": 93,
+                "start": 51,
+                "end": 94,
                 "line": 5,
-                "column": 8
+                "column": 9
             }
         }
     ]

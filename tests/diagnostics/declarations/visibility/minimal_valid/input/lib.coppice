@@ -1,10 +1,10 @@
-public type User :: struct {
+visible type User :: struct {
     public name: string,
     id: int64,
 }
 
-public NAME: int64 := 1
+visible NAME: int64 := 1
 
-public function getId(user: User) -> int64 {
+visible function getId(user: User) -> int64 {
     return user.id
 }

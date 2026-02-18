@@ -1,5 +1,5 @@
-public type Token :: struct {}
+visible type Token :: struct {}
 
-public function makeToken() -> Token {
+visible function makeToken() -> Token {
     return Token {}
 }

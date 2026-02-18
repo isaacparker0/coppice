@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use compiler__packages::PackageId;
 use compiler__semantic_program::{
-    SemanticDeclaration, SemanticFile, SemanticFunctionDeclaration, SemanticTypeDeclaration,
-    SemanticTypeDeclarationKind, SemanticTypeName, SemanticTypeParameter, SemanticVisibility,
+    SemanticDeclaration, SemanticFile, SemanticFunctionDeclaration, SemanticTopLevelVisibility,
+    SemanticTypeDeclaration, SemanticTypeDeclarationKind, SemanticTypeName, SemanticTypeParameter,
 };
 use compiler__semantic_types::{
     GenericTypeParameter, ImportedBinding, ImportedMethodSignature, ImportedSymbol,
@@ -118,15 +118,15 @@ fn collect_public_symbol_index(
             let (name, is_public) = match declaration {
                 SemanticDeclaration::Type(type_declaration) => (
                     &type_declaration.name,
-                    type_declaration.visibility == SemanticVisibility::Public,
+                    type_declaration.visibility == SemanticTopLevelVisibility::Visible,
                 ),
                 SemanticDeclaration::Function(function_declaration) => (
                     &function_declaration.name,
-                    function_declaration.visibility == SemanticVisibility::Public,
+                    function_declaration.visibility == SemanticTopLevelVisibility::Visible,
                 ),
                 SemanticDeclaration::Constant(constant_declaration) => (
                     &constant_declaration.name,
-                    constant_declaration.visibility == SemanticVisibility::Public,
+                    constant_declaration.visibility == SemanticTopLevelVisibility::Visible,
                 ),
             };
             if !is_public {

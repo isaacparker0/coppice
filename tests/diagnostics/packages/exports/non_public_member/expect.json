@@ -4,7 +4,7 @@
         {
             "phase": "resolution",
             "path": "PACKAGE.coppice",
-            "message": "exported symbol 'Token' must be declared public",
+            "message": "exported symbol 'Token' must be declared visible",
             "span": {
                 "start": 10,
                 "end": 15,

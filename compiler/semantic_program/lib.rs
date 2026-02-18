@@ -14,7 +14,13 @@ pub enum SemanticDeclaration {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SemanticVisibility {
+pub enum SemanticTopLevelVisibility {
+    Private,
+    Visible,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SemanticMemberVisibility {
     Private,
     Public,
 }
@@ -32,7 +38,7 @@ pub struct SemanticTypeDeclaration {
     pub type_parameters: Vec<SemanticTypeParameter>,
     pub kind: SemanticTypeDeclarationKind,
     pub doc: Option<SemanticDocComment>,
-    pub visibility: SemanticVisibility,
+    pub visibility: SemanticTopLevelVisibility,
     pub span: Span,
 }
 
@@ -61,7 +67,7 @@ pub struct SemanticFieldDeclaration {
     pub name: String,
     pub type_name: SemanticTypeName,
     pub doc: Option<SemanticDocComment>,
-    pub visibility: SemanticVisibility,
+    pub visibility: SemanticMemberVisibility,
     pub span: Span,
 }
 
@@ -75,7 +81,7 @@ pub struct SemanticMethodDeclaration {
     pub return_type: SemanticTypeName,
     pub body: SemanticBlock,
     pub doc: Option<SemanticDocComment>,
-    pub visibility: SemanticVisibility,
+    pub visibility: SemanticMemberVisibility,
     pub span: Span,
 }
 
@@ -85,7 +91,7 @@ pub struct SemanticConstantDeclaration {
     pub type_name: SemanticTypeName,
     pub expression: SemanticExpression,
     pub doc: Option<SemanticDocComment>,
-    pub visibility: SemanticVisibility,
+    pub visibility: SemanticTopLevelVisibility,
     pub span: Span,
 }
 
@@ -98,7 +104,7 @@ pub struct SemanticFunctionDeclaration {
     pub return_type: SemanticTypeName,
     pub body: SemanticBlock,
     pub doc: Option<SemanticDocComment>,
-    pub visibility: SemanticVisibility,
+    pub visibility: SemanticTopLevelVisibility,
     pub span: Span,
 }
 

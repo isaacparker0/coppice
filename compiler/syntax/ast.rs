@@ -65,7 +65,13 @@ pub struct SyntaxDocComment {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SyntaxVisibility {
+pub enum SyntaxTopLevelVisibility {
+    Private,
+    Visible,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SyntaxMemberVisibility {
     Private,
     Public,
 }
@@ -75,7 +81,7 @@ pub struct SyntaxTypeDeclaration {
     pub name: String,
     pub type_parameters: Vec<SyntaxTypeParameter>,
     pub kind: SyntaxTypeDeclarationKind,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxTopLevelVisibility,
     pub span: Span,
 }
 
@@ -103,7 +109,7 @@ pub struct SyntaxEnumVariant {
 pub struct SyntaxFieldDeclaration {
     pub name: String,
     pub type_name: SyntaxTypeName,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxMemberVisibility,
     pub span: Span,
 }
 
@@ -116,7 +122,7 @@ pub struct SyntaxMethodDeclaration {
     pub parameters: Vec<SyntaxParameterDeclaration>,
     pub return_type: SyntaxTypeName,
     pub body: SyntaxBlock,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxMemberVisibility,
     pub span: Span,
 }
 
@@ -125,7 +131,7 @@ pub struct SyntaxConstantDeclaration {
     pub name: String,
     pub type_name: SyntaxTypeName,
     pub expression: SyntaxExpression,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxTopLevelVisibility,
     pub span: Span,
 }
 
@@ -137,7 +143,7 @@ pub struct SyntaxFunctionDeclaration {
     pub parameters: Vec<SyntaxParameterDeclaration>,
     pub return_type: SyntaxTypeName,
     pub body: SyntaxBlock,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxTopLevelVisibility,
     pub span: Span,
 }
 

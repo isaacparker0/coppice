@@ -135,8 +135,8 @@ Rules for `*.bin.coppice`:
 1. Must be owned by a package (same ownership rule as all source files).
 2. Must declare exactly one `main` function.
 3. `main` must have no parameters and no return value.
-4. `main` must be file-private (not `public`).
-5. No `public` declarations are allowed in a binary entrypoint file.
+4. `main` must be file-private (not `visible`).
+5. No `visible` declarations are allowed in a binary entrypoint file.
 6. A binary entrypoint file may not be imported by any other file.
 
 Violations are compile errors anchored to the offending declaration or import.
@@ -158,7 +158,7 @@ Rules for `*.test.coppice`:
 
 1. Must be owned by a package (same ownership rule as all source files).
 2. Must not declare `main`.
-3. No `public` declarations are allowed.
+3. No `visible` declarations are allowed.
 4. A test file may not be imported by any other file.
 5. Tests may import library symbols per normal visibility rules.
 
@@ -209,26 +209,33 @@ There is exactly one way to bring cross-file symbols into scope.
 
 ## Visibility Model
 
-Visibility is split across two declaration kinds with one keyword:
+Visibility is split across two declaration kinds with scope-specific keywords:
 
 1. **Top-level declarations** (`type`, `function`, constants):
    - default: file-private
-   - `public`: package-visible (eligible to be imported from other files in the
+   - `visible`: package-visible (eligible to be imported from other files in the
      same package)
-   - externally visible only if `public` and listed in `PACKAGE.coppice` via
+   - externally visible only if `visible` and listed in `PACKAGE.coppice` via
      `exports`
    - constants must include explicit type annotations
 2. **Struct members** (fields, methods):
    - default: type-private (accessible only inside methods on that type)
    - `public`: accessible anywhere the type is accessible
 
-`public` is intentionally contextual by declaration kind:
+Keywords are intentionally split by declaration kind:
 
-1. On top-level declarations it means import-eligible from other files in the
-   same package.
-2. On struct members it means accessible wherever values of that type are
+1. `visible` on top-level declarations means import-eligible from other files in
+   the same package.
+2. `public` on struct members means accessible wherever values of that type are
    accessible.
-3. Diagnostics must state which contextual meaning applies.
+3. Diagnostics must state which scope meaning applies.
+
+Keyword rationale:
+
+1. `visible` describes top-level file -> package visibility directly.
+2. `public` remains the member-access keyword for struct fields/methods.
+3. This avoids overloading one keyword across unrelated scope boundaries.
+4. External package API remains explicit via `exports { ... }`.
 
 No file has implicit cross-file name visibility. Accessing declarations from
 another file always requires an explicit `import`.
@@ -247,10 +254,10 @@ For `import P { X }` in file `f`:
 
 1. Resolver locates package `P`.
 2. If `f` is in package `P`:
-   - `X` must be package-visible (`public`) in some file of `P`.
+   - `X` must be package-visible (`visible`) in some file of `P`.
    - file-private symbols are not importable.
 3. If `f` is in a different package:
-   - `X` must be `public`.
+   - `X` must be `visible`.
    - `X` must be listed by `exports` in the target package manifest.
 4. Missing or inaccessible symbols are compile errors with source span.
 
@@ -268,13 +275,13 @@ Semantics:
 
 1. Listed symbols are resolved in the current package symbol table.
 2. Listed symbols become part of the package external API.
-3. Listing a non-`public` declaration is a compile error.
+3. Listing a non-`visible` declaration is a compile error.
 4. Duplicate exported members are compile errors.
 5. Unknown symbols are compile errors.
 
 Note: `exports` is only valid in `PACKAGE.coppice`. `PACKAGE.coppice` is a
 declarative manifest and does not use imports; exported members resolve against
-package-level `public` declarations. The keyword `export` is invalid.
+package-level `visible` declarations. The keyword `export` is invalid.
 
 Keyword intent: `exports` is plural by design to emphasize that
 `PACKAGE.coppice` is a declarative package API table, not a file-local export
@@ -288,9 +295,9 @@ statement or a barrel forwarding file.
    aliased.
 2. Ambiguous local names between imports and local declarations are compile
    errors.
-3. `public` top-level declarations share one package import namespace across
-   kinds (`type`, `function`, constant). Duplicate `public` names in one package
-   are compile errors, including cross-file duplicates.
+3. `visible` top-level declarations share one package import namespace across
+   kinds (`type`, `function`, constant). Duplicate `visible` names in one
+   package are compile errors, including cross-file duplicates.
 4. File-private top-level declarations may reuse names across files because they
    are not importable.
 5. Multiple packages with same trailing segment are irrelevant; identity is full
@@ -360,7 +367,7 @@ Rejected for Coppice goals:
 2. Hidden cross-file dependencies.
 3. Weak alignment with "explicit over implicit."
 
-### B) `public` alone controls external API
+### B) `visible` alone controls external API
 
 Rejected:
 

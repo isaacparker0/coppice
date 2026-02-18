@@ -16,8 +16,9 @@ fast compilation, simple mental model, and minimal annotation burden.
 
 ## Principles
 
-1. **Explicit over implicit.** Visibility uses `public`, not naming conventions.
-   Mutation uses `mut`, not default. Sharing uses `shared`, not default.
+1. **Explicit over implicit.** Top-level visibility uses `visible`, struct
+   member visibility uses `public`, not naming conventions. Mutation uses `mut`,
+   not default. Sharing uses `shared`, not default.
 2. **One canonical construct per intent.** No syntax aliases, no overlapping
    control-flow models. If two forms solve the same job, keep one and enforce
    it.
@@ -100,7 +101,7 @@ Rationale:
 
 1. Constants are long-lived declarations and commonly part of package contracts;
    explicit types keep API intent stable and obvious at declaration sites.
-2. Requiring annotations on all constants avoids split style rules (`public`
+2. Requiring annotations on all constants avoids split style rules (`visible`
    annotated vs private inferred) and preserves one canonical way to write
    constants.
 3. This removes cross-file constant type-inference complexity from package
@@ -109,7 +110,7 @@ Rationale:
 ### Functions
 
 ```
-public function authenticate(username: string, password: string) -> Session | AuthError {
+visible function authenticate(username: string, password: string) -> Session | AuthError {
     user := find_user(username)?
     if not password.verify(user.hash) {
         return AuthError { message: "invalid credentials" }
@@ -138,7 +139,7 @@ Same semantics as functions, shorter syntax for inline use.
 ### Types
 
 ```
-public type User :: struct {
+visible type User :: struct {
     public name: string
     public email: string
     password_hash: string       // type-private field
@@ -150,7 +151,7 @@ Type declarations use the `type` keyword.
 ### Methods
 
 ```
-public type User :: struct {
+visible type User :: struct {
     name: string
 
     public function display_name(self) -> string {
@@ -205,7 +206,7 @@ Design rule:
 Square brackets. No turbofish problem.
 
 ```
-public function max[T: Ord](a: T, b: T) -> T {
+visible function max[T: Ord](a: T, b: T) -> T {
     if a > b { return a }
     return b
 }
@@ -487,7 +488,7 @@ shared data). No lifetime annotations. No `'a`. No borrow checker fights.
 Errors are values, expressed as union return types.
 
 ```
-public function read_file(path: string) -> string | IOError {
+visible function read_file(path: string) -> string | IOError {
     data := fs.read(path)?      // propagate on error
     return data.to_string()
 }
@@ -617,48 +618,59 @@ Two visibility axes:
 
 - Top-level declarations:
   - No modifier — file-private.
-  - `public` — package-visible (importable by other files in the same package).
-  - External visibility — requires `public` plus `exports` in `PACKAGE.coppice`.
+  - `visible` — package-visible (importable by other files in the same package).
+  - External visibility — requires `visible` plus `exports` in
+    `PACKAGE.coppice`.
 - Struct members:
   - No modifier — type-private (accessible only inside methods on that type).
   - `public` — accessible anywhere the type itself is accessible.
 
-`public` is contextual by declaration kind:
+Keywords are scope-specific by declaration kind:
 
-- On top-level declarations: eligible to be imported from other files in the
-  same package.
-- On struct members: accessible wherever values of that type are accessible.
-- Diagnostics must name the contextual meaning in each error.
+- `visible` on top-level declarations means eligible to be imported from other
+  files in the same package.
+- `public` on struct members means accessible wherever values of that type are
+  accessible.
+- Diagnostics must name the relevant scope boundary in each error.
+
+Keyword rationale:
+
+- Use `visible` for top-level file -> package visibility.
+- Keep `public` for struct member visibility, matching common member-access
+  terminology.
+- Avoid overloading one keyword across unrelated scope boundaries.
+- Keep external API selection explicit and centralized in `PACKAGE.coppice` via
+  `exports`.
 
 ```
 // auth/token.coppice
 
-public type Token :: struct {        // package-visible, can be listed in exports
-    public user_id: i64         // visible on the struct externally
+visible type Token :: struct {        // package-visible, can be listed in exports
+    public user_id: i64          // visible on the struct externally
     signature: string           // type-private field
 }
 
-public function validate(t: Token) -> bool {   // package-visible function
+visible function validate(t: Token) -> bool {   // package-visible function
     ...
 }
 ```
 
 Test files (`*.test.coppice`) may import library symbols per normal visibility
-rules, but may not declare `public` symbols and are not importable.
+rules, but may not declare `visible` symbols and are not importable.
 
 ### Intra-Package Access
 
 Intra-package usage is explicit for code files. Files do not see sibling
-declarations implicitly; they import package-visible (`public`) symbols
+declarations implicitly; they import package-visible (`visible`) symbols
 explicitly using the same import form as other code files.
 
 `PACKAGE.coppice` is a declarative manifest, not a normal code scope. It does
 not import symbols; `exports { ... }` resolves members against package-level
-`public` declarations.
+`visible` declarations.
 
 ```
 // auth/token.coppice
-public function validate(t: Token) -> bool { ... }
+visible function validate(t: Token) -> bool { ... }
 
 // auth/password.coppice
 import workspace/platform/auth { validate, Token }
@@ -679,7 +691,7 @@ function encrypt(data: string) -> string { ... }   // file-private
 ### Test Files
 
 Tests live in separate `*.test.coppice` files. Same directory as the source.
-`public` declarations are forbidden in test files, and test files are not
+`visible` declarations are forbidden in test files, and test files are not
 importable.
 
 ```
@@ -744,7 +756,7 @@ Functions. No framework, no decorators, no dependency injection.
 ```
 // testutil/auth.coppice (with PACKAGE.coppice listing these in exports)
 
-public function make_token(user_id: i64) -> Token {
+visible function make_token(user_id: i64) -> Token {
     return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)
 }
 ```
@@ -1012,7 +1024,8 @@ coppice_test(
 
 ### Why the Language Design Helps Bazel
 
-- File-level compilation units → granular action caching.
+- Package-target build actions with file-level internal parallelism → simple,
+  deterministic caching.
 - Deterministic output → remote cache hits across machines.
 - No hidden dependencies → build graph is correct by construction.
 - `PACKAGE.coppice` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
@@ -1115,7 +1128,7 @@ message := json.decode[Message](request.body, validate: true)
 Validation constraints are part of the type definition via `where` clauses:
 
 ```
-public type SignupRequest :: struct {
+visible type SignupRequest :: struct {
     email: string where match("[^@]+@[^@]+")
     age: u32 where 13 <= self <= 150
     username: string where 3 <= self.length <= 20

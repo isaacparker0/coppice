@@ -73,7 +73,7 @@ pub fn build_exports(
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
                         diagnostic: PhaseDiagnostic::new(
-                            format!("exported symbol '{name}' must be declared public"),
+                            format!("exported symbol '{name}' must be declared visible"),
                             member.span.clone(),
                         ),
                     });

@@ -57,10 +57,21 @@ fn lower_doc_comment(doc_comment: &syntax::SyntaxDocComment) -> semantic::Semant
     }
 }
 
-fn lower_visibility(visibility: syntax::SyntaxVisibility) -> semantic::SemanticVisibility {
+fn lower_top_level_visibility(
+    visibility: syntax::SyntaxTopLevelVisibility,
+) -> semantic::SemanticTopLevelVisibility {
     match visibility {
-        syntax::SyntaxVisibility::Private => semantic::SemanticVisibility::Private,
-        syntax::SyntaxVisibility::Public => semantic::SemanticVisibility::Public,
+        syntax::SyntaxTopLevelVisibility::Private => semantic::SemanticTopLevelVisibility::Private,
+        syntax::SyntaxTopLevelVisibility::Visible => semantic::SemanticTopLevelVisibility::Visible,
+    }
+}
+
+fn lower_member_visibility(
+    visibility: syntax::SyntaxMemberVisibility,
+) -> semantic::SemanticMemberVisibility {
+    match visibility {
+        syntax::SyntaxMemberVisibility::Private => semantic::SemanticMemberVisibility::Private,
+        syntax::SyntaxMemberVisibility::Public => semantic::SemanticMemberVisibility::Public,
     }
 }
 
@@ -77,7 +88,7 @@ fn lower_type_declaration(
             .collect(),
         kind: lower_type_declaration_kind(&type_declaration.kind),
         doc,
-        visibility: lower_visibility(type_declaration.visibility),
+        visibility: lower_top_level_visibility(type_declaration.visibility),
         span: type_declaration.span.clone(),
     }
 }
@@ -133,7 +144,7 @@ fn lower_field_declaration(
         name: field.name.clone(),
         type_name: lower_type_name(&field.type_name),
         doc,
-        visibility: lower_visibility(field.visibility),
+        visibility: lower_member_visibility(field.visibility),
         span: field.span.clone(),
     }
 }
@@ -155,7 +166,7 @@ fn lower_method_declaration(
         return_type: lower_type_name(&method.return_type),
         body: lower_block(&method.body),
         doc,
-        visibility: lower_visibility(method.visibility),
+        visibility: lower_member_visibility(method.visibility),
         span: method.span.clone(),
     }
 }
@@ -169,7 +180,7 @@ fn lower_constant_declaration(
         type_name: lower_type_name(&constant.type_name),
         expression: lower_expression(&constant.expression),
         doc,
-        visibility: lower_visibility(constant.visibility),
+        visibility: lower_top_level_visibility(constant.visibility),
         span: constant.span.clone(),
     }
 }
@@ -194,7 +205,7 @@ fn lower_function_declaration(
         return_type: lower_type_name(&function.return_type),
         body: lower_block(&function.body),
         doc,
-        visibility: lower_visibility(function.visibility),
+        visibility: lower_top_level_visibility(function.visibility),
         span: function.span.clone(),
     }
 }

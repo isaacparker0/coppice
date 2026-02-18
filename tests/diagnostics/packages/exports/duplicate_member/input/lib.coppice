@@ -1,1 +1,1 @@
-public type Token :: struct {}
+visible type Token :: struct {}

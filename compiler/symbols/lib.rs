@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__source::{FileRole, Span};
-use compiler__syntax::{SyntaxDeclaration, SyntaxParsedFile, SyntaxVisibility};
+use compiler__syntax::{SyntaxDeclaration, SyntaxParsedFile, SyntaxTopLevelVisibility};
 
 pub struct PackageFile<'a> {
     pub package_path: &'a str,
@@ -18,7 +18,7 @@ pub struct PackageDiagnostic {
 
 pub struct TopLevelSymbol {
     pub name: String,
-    pub visibility: SyntaxVisibility,
+    pub visibility: SyntaxTopLevelVisibility,
     pub span: Span,
 }
 
@@ -56,7 +56,7 @@ pub fn collect_symbols(
                 continue;
             };
             package_symbols.declared.insert(symbol.name.clone());
-            if symbol.visibility == SyntaxVisibility::Public
+            if symbol.visibility == SyntaxTopLevelVisibility::Visible
                 && !package_symbols.package_visible.insert(symbol.name.clone())
             {
                 diagnostics.push(PackageDiagnostic {

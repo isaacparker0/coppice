@@ -1,10 +1,10 @@
-public type Token :: struct {
+visible type Token :: struct {
     id: int64,
     function id(self) -> int64 {
         return self.id
     },
 }
 
-public function makeToken() -> Token {
+visible function makeToken() -> Token {
     return Token { id: 1 }
 }

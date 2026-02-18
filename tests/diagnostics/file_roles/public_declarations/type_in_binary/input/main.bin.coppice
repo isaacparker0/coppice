@@ -2,6 +2,6 @@ function main() -> nil {
     return nil
 }
 
-public type Helper :: struct {
+visible type Helper :: struct {
     value: int64,
 }

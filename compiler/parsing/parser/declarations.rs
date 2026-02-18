@@ -2,8 +2,9 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxConstantDeclaration, SyntaxFieldDeclaration, SyntaxFunctionDeclaration,
-    SyntaxMethodDeclaration, SyntaxParameterDeclaration, SyntaxStructMemberItem,
-    SyntaxTypeDeclaration, SyntaxTypeDeclarationKind, SyntaxVisibility,
+    SyntaxMemberVisibility, SyntaxMethodDeclaration, SyntaxParameterDeclaration,
+    SyntaxStructMemberItem, SyntaxTopLevelVisibility, SyntaxTypeDeclaration,
+    SyntaxTypeDeclarationKind,
 };
 
 use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind};
@@ -11,7 +12,7 @@ use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parse
 impl Parser {
     pub(super) fn parse_type_declaration(
         &mut self,
-        visibility: SyntaxVisibility,
+        visibility: SyntaxTopLevelVisibility,
     ) -> ParseResult<SyntaxTypeDeclaration> {
         self.expect_keyword(Keyword::Type)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -94,7 +95,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
             }
-            let visibility = self.parse_visibility();
+            let visibility = self.parse_member_visibility();
             if self.peek_is_keyword(Keyword::Function) {
                 match self.parse_method_declaration(visibility) {
                     Ok(method) => {
@@ -142,7 +143,7 @@ impl Parser {
 
     pub(super) fn parse_field_declaration(
         &mut self,
-        visibility: SyntaxVisibility,
+        visibility: SyntaxMemberVisibility,
     ) -> ParseResult<SyntaxFieldDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
@@ -163,7 +164,7 @@ impl Parser {
 
     pub(super) fn parse_method_declaration(
         &mut self,
-        visibility: SyntaxVisibility,
+        visibility: SyntaxMemberVisibility,
     ) -> ParseResult<SyntaxMethodDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -259,7 +260,7 @@ impl Parser {
 
     pub(super) fn parse_function(
         &mut self,
-        visibility: SyntaxVisibility,
+        visibility: SyntaxTopLevelVisibility,
     ) -> ParseResult<SyntaxFunctionDeclaration> {
         let start = self.expect_keyword(Keyword::Function)?;
         let (name, name_span) = self.expect_identifier()?;
@@ -293,7 +294,7 @@ impl Parser {
 
     pub(super) fn parse_constant_declaration(
         &mut self,
-        visibility: SyntaxVisibility,
+        visibility: SyntaxTopLevelVisibility,
     ) -> ParseResult<SyntaxConstantDeclaration> {
         let (name, name_span) = self.expect_identifier()?;
         if self.peek_is_symbol(Symbol::Assign) {

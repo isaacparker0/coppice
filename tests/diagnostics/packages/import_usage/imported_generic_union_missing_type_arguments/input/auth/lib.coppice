@@ -1,1 +1,1 @@
-public type Maybe[T] :: T | nil
+visible type Maybe[T] :: T | nil

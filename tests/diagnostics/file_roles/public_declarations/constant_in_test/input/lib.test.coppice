@@ -1,1 +1,1 @@
-public ANSWER: int64 := 42
+visible ANSWER: int64 := 42
