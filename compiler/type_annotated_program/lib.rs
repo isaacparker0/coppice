@@ -36,6 +36,7 @@ pub struct TypeAnnotatedParameterDeclaration {
 pub struct TypeAnnotatedStructDeclaration {
     pub name: String,
     pub fields: Vec<TypeAnnotatedStructFieldDeclaration>,
+    pub methods: Vec<TypeAnnotatedMethodDeclaration>,
     pub span: Span,
 }
 
@@ -44,6 +45,16 @@ pub struct TypeAnnotatedStructFieldDeclaration {
     pub name: String,
     pub type_name: TypeAnnotatedTypeName,
     pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedMethodDeclaration {
+    pub name: String,
+    pub self_mutable: bool,
+    pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
+    pub return_type: TypeAnnotatedTypeName,
+    pub span: Span,
+    pub statements: Vec<TypeAnnotatedStatement>,
 }
 
 #[derive(Clone)]

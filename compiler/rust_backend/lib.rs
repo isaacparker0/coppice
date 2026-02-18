@@ -4,7 +4,8 @@ use std::process::Command;
 
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableProgram, ExecutableStatement, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableMethodDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use compiler__runtime_interface::{
@@ -67,17 +68,8 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
     let mut output = String::new();
     emit_runtime_support(&mut output);
     for struct_declaration in &program.struct_declarations {
-        output.push_str("struct ");
-        output.push_str(&struct_declaration.name);
-        output.push_str(" {\n");
-        for field in &struct_declaration.fields {
-            output.push_str("    ");
-            output.push_str(&field.name);
-            output.push_str(": ");
-            output.push_str(type_reference_source(&field.type_reference));
-            output.push_str(",\n");
-        }
-        output.push_str("}\n\n");
+        emit_struct_declaration(struct_declaration, &mut output)?;
+        output.push('\n');
     }
 
     for function_declaration in &program.function_declarations {
@@ -91,6 +83,37 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
     output.push_str("();\n");
     output.push_str("}\n");
     Ok(output)
+}
+
+fn emit_struct_declaration(
+    struct_declaration: &ExecutableStructDeclaration,
+    output: &mut String,
+) -> Result<(), CompilerFailure> {
+    output.push_str("struct ");
+    output.push_str(&struct_declaration.name);
+    output.push_str(" {\n");
+    for field in &struct_declaration.fields {
+        output.push_str("    ");
+        output.push_str(&field.name);
+        output.push_str(": ");
+        output.push_str(type_reference_source(&field.type_reference));
+        output.push_str(",\n");
+    }
+    output.push_str("}\n");
+
+    if struct_declaration.methods.is_empty() {
+        return Ok(());
+    }
+
+    output.push('\n');
+    output.push_str("impl ");
+    output.push_str(&struct_declaration.name);
+    output.push_str(" {\n");
+    for method_declaration in &struct_declaration.methods {
+        emit_method_declaration(method_declaration, output)?;
+    }
+    output.push_str("}\n");
+    Ok(())
 }
 
 fn emit_runtime_support(output: &mut String) {
@@ -118,6 +141,34 @@ fn emit_runtime_support(output: &mut String) {
     output.push_str("    eprintln!(\"{}\", message);\n");
     output.push_str("    std::process::exit(1);\n");
     output.push_str("}\n\n");
+}
+
+fn emit_method_declaration(
+    method_declaration: &ExecutableMethodDeclaration,
+    output: &mut String,
+) -> Result<(), CompilerFailure> {
+    output.push_str("    fn ");
+    output.push_str(&method_declaration.name);
+    output.push('(');
+    if method_declaration.self_mutable {
+        output.push_str("&mut self");
+    } else {
+        output.push_str("&self");
+    }
+    for parameter in &method_declaration.parameters {
+        output.push_str(", ");
+        output.push_str(&parameter.name);
+        output.push_str(": ");
+        output.push_str(type_reference_source(&parameter.type_reference));
+    }
+    output.push_str(") -> ");
+    output.push_str(type_reference_source(&method_declaration.return_type));
+    output.push_str(" {\n");
+    for statement in &method_declaration.statements {
+        emit_statement(statement, output, 2)?;
+    }
+    output.push_str("    }\n");
+    Ok(())
 }
 
 fn emit_function_declaration(
@@ -302,57 +353,66 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
             };
             Ok(format!("({left_source} {operator_source} {right_source})"))
         }
-        ExecutableExpression::Call { callee, arguments } => {
-            let ExecutableExpression::Identifier { name } = callee.as_ref() else {
-                return Err(CompilerFailure {
-                    kind: CompilerFailureKind::BuildFailed,
-                    message: "build mode currently supports calls to named functions only"
-                        .to_string(),
-                    path: None,
-                    details: Vec::new(),
-                });
-            };
-            if name == PRINT_FUNCTION_CONTRACT.language_name {
-                if arguments.len() != PRINT_FUNCTION_CONTRACT.parameter_types.len() {
-                    return Err(CompilerFailure {
-                        kind: CompilerFailureKind::BuildFailed,
-                        message:
-                            "build mode currently supports print(...) with exactly one argument"
-                                .to_string(),
-                        path: None,
-                        details: Vec::new(),
-                    });
+        ExecutableExpression::Call { callee, arguments } => match callee.as_ref() {
+            ExecutableExpression::Identifier { name } => {
+                if name == PRINT_FUNCTION_CONTRACT.language_name {
+                    if arguments.len() != PRINT_FUNCTION_CONTRACT.parameter_types.len() {
+                        return Err(CompilerFailure {
+                            kind: CompilerFailureKind::BuildFailed,
+                            message:
+                                "build mode currently supports print(...) with exactly one argument"
+                                    .to_string(),
+                            path: None,
+                            details: Vec::new(),
+                        });
+                    }
+                    let argument_source = emit_expression(&arguments[0])?;
+                    return Ok(format!(
+                        "{}({argument_source})",
+                        PRINT_FUNCTION_CONTRACT.lowered_symbol_name
+                    ));
                 }
-                let argument_source = emit_expression(&arguments[0])?;
-                return Ok(format!(
-                    "{}({argument_source})",
-                    PRINT_FUNCTION_CONTRACT.lowered_symbol_name
-                ));
-            }
-            if name == ABORT_FUNCTION_CONTRACT.language_name {
-                if arguments.len() != ABORT_FUNCTION_CONTRACT.parameter_types.len() {
-                    return Err(CompilerFailure {
-                        kind: CompilerFailureKind::BuildFailed,
-                        message:
-                            "build mode currently supports abort(...) with exactly one argument"
-                                .to_string(),
-                        path: None,
-                        details: Vec::new(),
-                    });
+                if name == ABORT_FUNCTION_CONTRACT.language_name {
+                    if arguments.len() != ABORT_FUNCTION_CONTRACT.parameter_types.len() {
+                        return Err(CompilerFailure {
+                            kind: CompilerFailureKind::BuildFailed,
+                            message:
+                                "build mode currently supports abort(...) with exactly one argument"
+                                    .to_string(),
+                            path: None,
+                            details: Vec::new(),
+                        });
+                    }
+                    let argument_source = emit_expression(&arguments[0])?;
+                    return Ok(format!(
+                        "{}({argument_source})",
+                        ABORT_FUNCTION_CONTRACT.lowered_symbol_name
+                    ));
                 }
-                let argument_source = emit_expression(&arguments[0])?;
-                return Ok(format!(
-                    "{}({argument_source})",
-                    ABORT_FUNCTION_CONTRACT.lowered_symbol_name
-                ));
+                let argument_source = arguments
+                    .iter()
+                    .map(emit_expression)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ");
+                Ok(format!("{}({argument_source})", callable_identifier(name)))
             }
-            let argument_source = arguments
-                .iter()
-                .map(emit_expression)
-                .collect::<Result<Vec<_>, _>>()?
-                .join(", ");
-            Ok(format!("{}({argument_source})", callable_identifier(name)))
-        }
+            ExecutableExpression::FieldAccess { target, field } => {
+                let target_source = emit_expression(target)?;
+                let argument_source = arguments
+                    .iter()
+                    .map(emit_expression)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ");
+                Ok(format!("({target_source}).{field}({argument_source})"))
+            }
+            _ => Err(CompilerFailure {
+                kind: CompilerFailureKind::BuildFailed,
+                message: "build mode currently supports calls to named functions and methods only"
+                    .to_string(),
+                path: None,
+                details: Vec::new(),
+            }),
+        },
     }
 }
 

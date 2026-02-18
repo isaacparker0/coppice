@@ -1,0 +1,19 @@
+type Counter :: struct {
+    value: int64,
+    function next(mut self) -> Counter {
+        return Counter { value: self.value + 1 }
+    },
+    function describe(self) -> string {
+        if self.value == 1 {
+            return "one"
+        }
+        return "two"
+    },
+}
+
+function main() -> nil {
+    mut counter := Counter { value: 1 }
+    counter = counter.next()
+    print(counter.describe())
+    return nil
+}

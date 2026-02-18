@@ -1,0 +1,18 @@
+type Message :: struct {
+    text: string,
+    function read(self) -> string {
+        return self.text
+    },
+    function choose(self, fallback: string) -> string {
+        if self.text == "" {
+            return fallback
+        }
+        return self.text
+    },
+}
+
+function main() -> nil {
+    message := Message { text: "hello" }
+    print(message.choose("fallback"))
+    return nil
+}

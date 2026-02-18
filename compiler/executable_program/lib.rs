@@ -22,12 +22,22 @@ pub struct ExecutableParameterDeclaration {
 pub struct ExecutableStructDeclaration {
     pub name: String,
     pub fields: Vec<ExecutableStructFieldDeclaration>,
+    pub methods: Vec<ExecutableMethodDeclaration>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ExecutableStructFieldDeclaration {
     pub name: String,
     pub type_reference: ExecutableTypeReference,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutableMethodDeclaration {
+    pub name: String,
+    pub self_mutable: bool,
+    pub parameters: Vec<ExecutableParameterDeclaration>,
+    pub return_type: ExecutableTypeReference,
+    pub statements: Vec<ExecutableStatement>,
 }
 
 #[derive(Clone, Debug)]

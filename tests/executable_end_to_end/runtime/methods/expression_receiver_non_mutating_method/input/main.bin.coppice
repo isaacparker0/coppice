@@ -1,0 +1,11 @@
+type Word :: struct {
+    text: string,
+    function textValue(self) -> string {
+        return self.text
+    },
+}
+
+function main() -> nil {
+    print(Word { text: "inline" }.textValue())
+    return nil
+}

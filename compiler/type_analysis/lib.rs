@@ -17,10 +17,10 @@ use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
-    TypeAnnotatedNameReferenceKind, TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
-    TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
-    TypeAnnotatedUnaryOperator,
+    TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
+    TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName,
+    TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -129,7 +129,7 @@ fn build_struct_declaration_annotations(
             _ => None,
         })
         .filter_map(|type_declaration| match &type_declaration.kind {
-            compiler__semantic_program::SemanticTypeDeclarationKind::Struct { fields, .. } => {
+            compiler__semantic_program::SemanticTypeDeclarationKind::Struct { fields, methods } => {
                 Some(TypeAnnotatedStructDeclaration {
                     name: type_declaration.name.clone(),
                     fields: fields
@@ -140,6 +140,34 @@ fn build_struct_declaration_annotations(
                                 &field.type_name,
                             ),
                             span: field.span.clone(),
+                        })
+                        .collect(),
+                    methods: methods
+                        .iter()
+                        .map(|method| TypeAnnotatedMethodDeclaration {
+                            name: method.name.clone(),
+                            self_mutable: method.self_mutable,
+                            parameters: method
+                                .parameters
+                                .iter()
+                                .map(|parameter| TypeAnnotatedParameterDeclaration {
+                                    name: parameter.name.clone(),
+                                    type_name: type_annotated_type_name_from_semantic_type_name(
+                                        &parameter.type_name,
+                                    ),
+                                    span: parameter.span.clone(),
+                                })
+                                .collect(),
+                            return_type: type_annotated_type_name_from_semantic_type_name(
+                                &method.return_type,
+                            ),
+                            span: method.span.clone(),
+                            statements: method
+                                .body
+                                .statements
+                                .iter()
+                                .map(type_annotated_statement_from_semantic_statement)
+                                .collect(),
                         })
                         .collect(),
                     span: type_declaration.span.clone(),

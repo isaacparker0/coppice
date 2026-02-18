@@ -1,16 +1,16 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
-    ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableMethodDeclaration, ExecutableParameterDeclaration, ExecutableProgram,
+    ExecutableStatement, ExecutableStructDeclaration, ExecutableStructFieldDeclaration,
+    ExecutableStructLiteralField, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedMethodDeclaration, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -103,8 +103,48 @@ fn lower_struct_declarations(
             lowered.push(ExecutableStructDeclaration {
                 name: struct_declaration.name.clone(),
                 fields: executable_fields,
+                methods: lower_method_declarations(&struct_declaration.methods, diagnostics),
             });
         }
+    }
+    lowered
+}
+
+fn lower_method_declarations(
+    method_declarations: &[TypeAnnotatedMethodDeclaration],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Vec<ExecutableMethodDeclaration> {
+    let mut lowered = Vec::new();
+    for method_declaration in method_declarations {
+        let mut method_supported = true;
+        let mut executable_parameters = Vec::new();
+        for parameter in &method_declaration.parameters {
+            let Some(type_reference) =
+                lower_type_name_to_type_reference(&parameter.type_name, true, diagnostics)
+            else {
+                method_supported = false;
+                continue;
+            };
+            executable_parameters.push(ExecutableParameterDeclaration {
+                name: parameter.name.clone(),
+                type_reference,
+            });
+        }
+        let Some(return_type) =
+            lower_type_name_to_type_reference(&method_declaration.return_type, true, diagnostics)
+        else {
+            continue;
+        };
+        if !method_supported {
+            continue;
+        }
+        lowered.push(ExecutableMethodDeclaration {
+            name: method_declaration.name.clone(),
+            self_mutable: method_declaration.self_mutable,
+            parameters: executable_parameters,
+            return_type,
+            statements: lower_statements(&method_declaration.statements, diagnostics),
+        });
     }
     lowered
 }
