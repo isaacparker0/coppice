@@ -6,7 +6,7 @@ use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
     SemanticFile, SemanticFunctionDeclaration, SemanticStatement, SemanticTypeDeclaration,
-    SemanticTypeName,
+    SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -19,7 +19,7 @@ use compiler__type_annotated_program::{
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
     TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
     TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName,
-    TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -283,6 +283,20 @@ fn type_annotated_expression_from_semantic_expression(
             field: field.clone(),
             span: span.clone(),
         },
+        SemanticExpression::Unary {
+            operator,
+            expression,
+            span,
+        } => TypeAnnotatedExpression::Unary {
+            operator: match operator {
+                SemanticUnaryOperator::Not => TypeAnnotatedUnaryOperator::Not,
+                SemanticUnaryOperator::Negate => TypeAnnotatedUnaryOperator::Negate,
+            },
+            expression: Box::new(type_annotated_expression_from_semantic_expression(
+                expression,
+            )),
+            span: span.clone(),
+        },
         SemanticExpression::Binary {
             operator,
             left,
@@ -291,6 +305,24 @@ fn type_annotated_expression_from_semantic_expression(
         } => match operator {
             SemanticBinaryOperator::Add => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Add,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::Subtract => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Subtract,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::Multiply => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Multiply,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::Divide => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Divide,
                 left: Box::new(type_annotated_expression_from_semantic_expression(left)),
                 right: Box::new(type_annotated_expression_from_semantic_expression(right)),
                 span: span.clone(),
@@ -331,7 +363,18 @@ fn type_annotated_expression_from_semantic_expression(
                 right: Box::new(type_annotated_expression_from_semantic_expression(right)),
                 span: span.clone(),
             },
-            _ => TypeAnnotatedExpression::Unsupported { span: span.clone() },
+            SemanticBinaryOperator::And => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::And,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
+            SemanticBinaryOperator::Or => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Or,
+                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
+                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                span: span.clone(),
+            },
         },
         SemanticExpression::Call {
             callee,

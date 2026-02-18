@@ -1,5 +1,5 @@
 function main() -> nil {
-    if not false {
+    if 1 matches int64 {
         print("ok")
     }
     return nil

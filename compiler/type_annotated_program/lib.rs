@@ -124,6 +124,11 @@ pub enum TypeAnnotatedExpression {
         field: String,
         span: Span,
     },
+    Unary {
+        operator: TypeAnnotatedUnaryOperator,
+        expression: Box<TypeAnnotatedExpression>,
+        span: Span,
+    },
     Binary {
         operator: TypeAnnotatedBinaryOperator,
         left: Box<TypeAnnotatedExpression>,
@@ -144,12 +149,23 @@ pub enum TypeAnnotatedExpression {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeAnnotatedBinaryOperator {
     Add,
+    Subtract,
+    Multiply,
+    Divide,
     EqualEqual,
     NotEqual,
     LessThan,
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+    And,
+    Or,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypeAnnotatedUnaryOperator {
+    Not,
+    Negate,
 }
 
 #[derive(Clone)]

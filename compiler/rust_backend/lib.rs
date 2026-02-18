@@ -4,7 +4,7 @@ use std::process::Command;
 
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableProgram, ExecutableStatement, ExecutableTypeReference,
+    ExecutableProgram, ExecutableStatement, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
@@ -244,6 +244,17 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
             let target_source = emit_expression(target)?;
             Ok(format!("({target_source}).{field}"))
         }
+        ExecutableExpression::Unary {
+            operator,
+            expression,
+        } => {
+            let expression_source = emit_expression(expression)?;
+            let operator_source = match operator {
+                ExecutableUnaryOperator::Not => "!",
+                ExecutableUnaryOperator::Negate => "-",
+            };
+            Ok(format!("({operator_source}{expression_source})"))
+        }
         ExecutableExpression::Binary {
             operator,
             left,
@@ -253,12 +264,17 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
             let right_source = emit_expression(right)?;
             let operator_source = match operator {
                 ExecutableBinaryOperator::Add => "+",
+                ExecutableBinaryOperator::Subtract => "-",
+                ExecutableBinaryOperator::Multiply => "*",
+                ExecutableBinaryOperator::Divide => "/",
                 ExecutableBinaryOperator::EqualEqual => "==",
                 ExecutableBinaryOperator::NotEqual => "!=",
                 ExecutableBinaryOperator::LessThan => "<",
                 ExecutableBinaryOperator::LessThanOrEqual => "<=",
                 ExecutableBinaryOperator::GreaterThan => ">",
                 ExecutableBinaryOperator::GreaterThanOrEqual => ">=",
+                ExecutableBinaryOperator::And => "&&",
+                ExecutableBinaryOperator::Or => "||",
             };
             Ok(format!("({left_source} {operator_source} {right_source})"))
         }

@@ -95,6 +95,10 @@ pub enum ExecutableExpression {
         target: Box<ExecutableExpression>,
         field: String,
     },
+    Unary {
+        operator: ExecutableUnaryOperator,
+        expression: Box<ExecutableExpression>,
+    },
     Binary {
         operator: ExecutableBinaryOperator,
         left: Box<ExecutableExpression>,
@@ -109,12 +113,23 @@ pub enum ExecutableExpression {
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutableBinaryOperator {
     Add,
+    Subtract,
+    Multiply,
+    Divide,
     EqualEqual,
     NotEqual,
     LessThan,
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+    And,
+    Or,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExecutableUnaryOperator {
+    Not,
+    Negate,
 }
 
 #[derive(Clone, Debug)]

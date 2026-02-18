@@ -3,14 +3,14 @@ use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
     ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
     ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
-    ExecutableTypeReference,
+    ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedTypeName,
+    TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -279,6 +279,17 @@ fn lower_expression(
                 field: field.clone(),
             }
         }
+        TypeAnnotatedExpression::Unary {
+            operator,
+            expression,
+            ..
+        } => ExecutableExpression::Unary {
+            operator: match operator {
+                TypeAnnotatedUnaryOperator::Not => ExecutableUnaryOperator::Not,
+                TypeAnnotatedUnaryOperator::Negate => ExecutableUnaryOperator::Negate,
+            },
+            expression: Box::new(lower_expression(expression, diagnostics)),
+        },
         TypeAnnotatedExpression::Binary {
             operator,
             left,
@@ -287,6 +298,9 @@ fn lower_expression(
         } => ExecutableExpression::Binary {
             operator: match operator {
                 TypeAnnotatedBinaryOperator::Add => ExecutableBinaryOperator::Add,
+                TypeAnnotatedBinaryOperator::Subtract => ExecutableBinaryOperator::Subtract,
+                TypeAnnotatedBinaryOperator::Multiply => ExecutableBinaryOperator::Multiply,
+                TypeAnnotatedBinaryOperator::Divide => ExecutableBinaryOperator::Divide,
                 TypeAnnotatedBinaryOperator::EqualEqual => ExecutableBinaryOperator::EqualEqual,
                 TypeAnnotatedBinaryOperator::NotEqual => ExecutableBinaryOperator::NotEqual,
                 TypeAnnotatedBinaryOperator::LessThan => ExecutableBinaryOperator::LessThan,
@@ -297,6 +311,8 @@ fn lower_expression(
                 TypeAnnotatedBinaryOperator::GreaterThanOrEqual => {
                     ExecutableBinaryOperator::GreaterThanOrEqual
                 }
+                TypeAnnotatedBinaryOperator::And => ExecutableBinaryOperator::And,
+                TypeAnnotatedBinaryOperator::Or => ExecutableBinaryOperator::Or,
             },
             left: Box::new(lower_expression(left, diagnostics)),
             right: Box::new(lower_expression(right, diagnostics)),
