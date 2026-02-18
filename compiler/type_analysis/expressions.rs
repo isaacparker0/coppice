@@ -83,6 +83,10 @@ impl TypeChecker<'_> {
                 arguments,
                 span,
             } => {
+                let argument_types = arguments
+                    .iter()
+                    .map(|argument| self.check_expression(argument))
+                    .collect::<Vec<_>>();
                 let resolved_target = if let SemanticExpression::NameReference {
                     name, span, ..
                 } = callee.as_ref()
@@ -96,6 +100,7 @@ impl TypeChecker<'_> {
                             &info.parameter_types,
                             &info.return_type,
                             type_arguments,
+                            &argument_types,
                             span,
                         );
                         Some(ResolvedCallTarget {
@@ -111,6 +116,7 @@ impl TypeChecker<'_> {
                             &info.parameter_types,
                             &info.return_type,
                             type_arguments,
+                            &argument_types,
                             span,
                         );
                         Some(ResolvedCallTarget {
@@ -123,9 +129,6 @@ impl TypeChecker<'_> {
                             self.mark_import_used(name);
                         }
                         self.error(format!("unknown function '{name}'"), span.clone());
-                        for argument in arguments {
-                            self.check_expression(argument);
-                        }
                         return Type::Unknown;
                     }
                 } else if let SemanticExpression::FieldAccess {
@@ -157,9 +160,6 @@ impl TypeChecker<'_> {
                                         ),
                                         field_span.clone(),
                                     );
-                                }
-                                for argument in arguments {
-                                    self.check_expression(argument);
                                 }
                                 return Type::Unknown;
                             }
@@ -204,9 +204,6 @@ impl TypeChecker<'_> {
                                             field_span.clone(),
                                         );
                                     }
-                                    for argument in arguments {
-                                        self.check_expression(argument);
-                                    }
                                     return Type::Unknown;
                                 }
                             } else {
@@ -216,9 +213,6 @@ impl TypeChecker<'_> {
                                     ),
                                     field_span.clone(),
                                 );
-                                for argument in arguments {
-                                    self.check_expression(argument);
-                                }
                                 return Type::Unknown;
                             }
                         }
@@ -232,9 +226,6 @@ impl TypeChecker<'_> {
                             format!("unknown method '{receiver_type_name}.{field}'"),
                             field_span.clone(),
                         );
-                        for argument in arguments {
-                            self.check_expression(argument);
-                        }
                         return Type::Unknown;
                     }
                 } else {
@@ -262,9 +253,6 @@ impl TypeChecker<'_> {
                                 callee.span(),
                             );
                         }
-                        for argument in arguments {
-                            self.check_expression(argument);
-                        }
                         return Type::Unknown;
                     };
                     ResolvedCallTarget {
@@ -287,7 +275,7 @@ impl TypeChecker<'_> {
 
                 let callee_name = resolved_target.display_name.clone();
                 for (index, argument) in arguments.iter().enumerate() {
-                    let argument_type = self.check_expression(argument);
+                    let argument_type = argument_types.get(index).cloned().unwrap_or(Type::Unknown);
                     if let Some(expected_type) = resolved_target.parameter_types.get(index)
                         && *expected_type != Type::Unknown
                         && argument_type != Type::Unknown
@@ -706,6 +694,7 @@ impl TypeChecker<'_> {
         parameter_types: &[Type],
         return_type: &Type,
         type_arguments: &[SemanticTypeName],
+        argument_types: &[Type],
         span: &Span,
     ) -> InstantiatedFunctionSignature {
         if type_parameters.is_empty() {
@@ -721,13 +710,34 @@ impl TypeChecker<'_> {
             };
         }
         if type_arguments.is_empty() {
-            self.error(
-                format!(
-                    "generic function '{function_name}' requires {} explicit type arguments",
-                    type_parameters.len()
-                ),
-                span.clone(),
-            );
+            if let Some(inferred_type_arguments) = self.infer_function_type_arguments_from_call(
+                function_name,
+                type_parameters,
+                parameter_types,
+                argument_types,
+                span,
+            ) {
+                self.check_type_argument_constraints(
+                    function_name,
+                    type_parameters,
+                    &inferred_type_arguments,
+                    span,
+                );
+                let substitutions: HashMap<String, Type> = type_parameters
+                    .iter()
+                    .map(|parameter| parameter.name.clone())
+                    .zip(inferred_type_arguments)
+                    .collect();
+                let instantiated_parameters = parameter_types
+                    .iter()
+                    .map(|parameter_type| Self::instantiate_type(parameter_type, &substitutions))
+                    .collect();
+                let instantiated_return = Self::instantiate_type(return_type, &substitutions);
+                return InstantiatedFunctionSignature {
+                    parameter_types: instantiated_parameters,
+                    return_type: instantiated_return,
+                };
+            }
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
@@ -876,6 +886,192 @@ impl TypeChecker<'_> {
                 })
             }
             _ => None,
+        }
+    }
+
+    fn infer_function_type_arguments_from_call(
+        &mut self,
+        function_name: &str,
+        type_parameters: &[GenericTypeParameter],
+        parameter_types: &[Type],
+        argument_types: &[Type],
+        span: &Span,
+    ) -> Option<Vec<Type>> {
+        if parameter_types.len() != argument_types.len() {
+            return None;
+        }
+
+        let mut inferred_by_type_parameter_name: HashMap<String, Type> = HashMap::new();
+        let mut inconsistent_type_parameter_names = std::collections::BTreeSet::new();
+        for (parameter_type, argument_type) in parameter_types.iter().zip(argument_types) {
+            self.collect_type_parameter_inference_from_argument(
+                parameter_type,
+                argument_type,
+                &mut inferred_by_type_parameter_name,
+                &mut inconsistent_type_parameter_names,
+            );
+        }
+
+        if !inconsistent_type_parameter_names.is_empty() {
+            let inconsistent_names = inconsistent_type_parameter_names
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.error(
+                format!(
+                    "cannot infer consistent type arguments for generic function '{function_name}' (conflicting inferences for: {inconsistent_names})"
+                ),
+                span.clone(),
+            );
+            return Some(vec![Type::Unknown; type_parameters.len()]);
+        }
+
+        let missing_type_parameter_names = type_parameters
+            .iter()
+            .filter_map(|parameter| {
+                if inferred_by_type_parameter_name.contains_key(&parameter.name) {
+                    None
+                } else {
+                    Some(parameter.name.clone())
+                }
+            })
+            .collect::<Vec<_>>();
+        if !missing_type_parameter_names.is_empty() {
+            self.error(
+                format!(
+                    "generic function '{function_name}' requires {} explicit type arguments",
+                    type_parameters.len()
+                ),
+                span.clone(),
+            );
+            return None;
+        }
+
+        Some(
+            type_parameters
+                .iter()
+                .map(|parameter| {
+                    inferred_by_type_parameter_name
+                        .get(&parameter.name)
+                        .cloned()
+                        .unwrap_or(Type::Unknown)
+                })
+                .collect(),
+        )
+    }
+
+    fn collect_type_parameter_inference_from_argument(
+        &self,
+        parameter_type: &Type,
+        argument_type: &Type,
+        inferred_by_type_parameter_name: &mut HashMap<String, Type>,
+        inconsistent_type_parameter_names: &mut std::collections::BTreeSet<String>,
+    ) {
+        match parameter_type {
+            Type::TypeParameter(type_parameter_name) => {
+                let Some(previous_inference) = inferred_by_type_parameter_name
+                    .get(type_parameter_name)
+                    .cloned()
+                else {
+                    inferred_by_type_parameter_name
+                        .insert(type_parameter_name.clone(), argument_type.clone());
+                    return;
+                };
+                if previous_inference == *argument_type {
+                    return;
+                }
+                if self.is_assignable(&previous_inference, argument_type)
+                    && self.is_assignable(argument_type, &previous_inference)
+                {
+                    return;
+                }
+                inconsistent_type_parameter_names.insert(type_parameter_name.clone());
+            }
+            Type::Applied {
+                base: parameter_base,
+                arguments: parameter_type_arguments,
+            } => {
+                let Type::Applied {
+                    base: argument_base,
+                    arguments: argument_type_arguments,
+                } = argument_type
+                else {
+                    return;
+                };
+                if parameter_base.id != argument_base.id
+                    || parameter_type_arguments.len() != argument_type_arguments.len()
+                {
+                    return;
+                }
+                for (nested_parameter_type, nested_argument_type) in
+                    parameter_type_arguments.iter().zip(argument_type_arguments)
+                {
+                    self.collect_type_parameter_inference_from_argument(
+                        nested_parameter_type,
+                        nested_argument_type,
+                        inferred_by_type_parameter_name,
+                        inconsistent_type_parameter_names,
+                    );
+                }
+            }
+            Type::Function {
+                parameter_types: parameter_parameter_types,
+                return_type: parameter_return_type,
+            } => {
+                let Type::Function {
+                    parameter_types: argument_parameter_types,
+                    return_type: argument_return_type,
+                } = argument_type
+                else {
+                    return;
+                };
+                if parameter_parameter_types.len() != argument_parameter_types.len() {
+                    return;
+                }
+                for (nested_parameter_type, nested_argument_type) in parameter_parameter_types
+                    .iter()
+                    .zip(argument_parameter_types)
+                {
+                    self.collect_type_parameter_inference_from_argument(
+                        nested_parameter_type,
+                        nested_argument_type,
+                        inferred_by_type_parameter_name,
+                        inconsistent_type_parameter_names,
+                    );
+                }
+                self.collect_type_parameter_inference_from_argument(
+                    parameter_return_type,
+                    argument_return_type,
+                    inferred_by_type_parameter_name,
+                    inconsistent_type_parameter_names,
+                );
+            }
+            Type::Union(parameter_union_members) => {
+                let Type::Union(argument_union_members) = argument_type else {
+                    return;
+                };
+                if parameter_union_members.len() != argument_union_members.len() {
+                    return;
+                }
+                for (nested_parameter_type, nested_argument_type) in
+                    parameter_union_members.iter().zip(argument_union_members)
+                {
+                    self.collect_type_parameter_inference_from_argument(
+                        nested_parameter_type,
+                        nested_argument_type,
+                        inferred_by_type_parameter_name,
+                        inconsistent_type_parameter_names,
+                    );
+                }
+            }
+            Type::Integer64
+            | Type::Boolean
+            | Type::String
+            | Type::Nil
+            | Type::Never
+            | Type::Named(_)
+            | Type::Unknown => {}
         }
     }
 }

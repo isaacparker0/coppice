@@ -31,9 +31,10 @@ function plusOne(value: int64) -> int64 {
 
 function run() -> int64 {
     result := add(1, 2)
-    genericResult := identity[int64](result)
-    constrainedResult := identityConstrained[Number](Number { value: genericResult })
+    explicitGenericResult := identity[int64](result)
+    inferredGenericResult := identity(result)
+    constrainedResult := identityConstrained(Number { value: inferredGenericResult })
     mappedResult := applyMapper(plusOne, constrainedResult.score())
     print("ok")
-    return mappedResult
+    return mappedResult + explicitGenericResult
 }

@@ -1,0 +1,11 @@
+function pair[T](left: T, right: T) -> T {
+    if true {
+        return left
+    }
+    return right
+}
+
+function run() -> nil {
+    pair(1, true)
+    return nil
+}
