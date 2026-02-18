@@ -1,3 +1,18 @@
-visible function requireInt[T: int64](value: T) -> T {
+visible type Printable :: interface {
+    function toString(self) -> string,
+}
+
+visible type User :: struct {
+    id: int64,
+    function toString(self) -> string {
+        return "{self.id}"
+    },
+}
+
+visible function makeUser() -> User {
+    return User { id: 1 }
+}
+
+visible function requirePrintable[T: Printable](value: T) -> T {
     return value
 }

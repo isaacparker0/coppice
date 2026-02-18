@@ -1,8 +1,18 @@
-function requireInt[T: int64](value: T) -> T {
+type Printable :: interface {
+    function toString(self) -> string,
+}
+
+type User :: struct {
+    function toString(self) -> string {
+        return "user"
+    },
+}
+
+function requirePrintable[T: Printable](value: T) -> T {
     return value
 }
 
 function run() -> nil {
-    requireInt[string]("text")
+    requirePrintable[User](User {})
     return nil
 }

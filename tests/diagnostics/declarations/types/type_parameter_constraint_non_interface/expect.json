@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "constraint for type parameter 'T' must be an interface type",
+            "span": {
+                "start": 12,
+                "end": 17,
+                "line": 1,
+                "column": 13
+            }
+        }
+    ]
+}

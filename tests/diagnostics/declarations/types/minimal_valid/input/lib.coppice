@@ -16,7 +16,11 @@ type Box[T] :: struct {
     value: T,
 }
 
-type ConstrainedBox[T: int64] :: struct {
+type Boxable :: interface {
+    function score(self) -> int64,
+}
+
+type ConstrainedBox[T: Boxable] :: struct {
     value: T,
 }
 

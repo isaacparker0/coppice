@@ -1,1 +1,1 @@
-exports { requireInt }
+exports { Printable, User, makeUser, requirePrintable }

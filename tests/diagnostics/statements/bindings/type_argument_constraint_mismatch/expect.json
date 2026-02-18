@@ -4,11 +4,11 @@
         {
             "phase": "type_analysis",
             "path": "lib.coppice",
-            "message": "type argument 'string' does not satisfy constraint 'int64' for type parameter 'T' on 'Box'",
+            "message": "type argument 'User' does not satisfy constraint 'Named' for type parameter 'T' on 'Box'",
             "span": {
-                "start": 86,
-                "end": 97,
-                "line": 6,
+                "start": 263,
+                "end": 272,
+                "line": 17,
                 "column": 12
             }
         }

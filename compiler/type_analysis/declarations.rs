@@ -254,10 +254,12 @@ impl TypeChecker<'_> {
                 .iter()
                 .map(|parameter| GenericTypeParameter {
                     name: parameter.name.clone(),
-                    constraint: parameter
-                        .constraint
-                        .as_ref()
-                        .map(|constraint| self.resolve_type_name(constraint)),
+                    constraint: parameter.constraint.as_ref().map(|constraint| {
+                        self.resolve_type_parameter_constraint_as_interface(
+                            constraint,
+                            &parameter.name,
+                        )
+                    }),
                 })
                 .collect::<Vec<_>>();
             let resolved_implemented_interface_entries = type_declaration
@@ -435,10 +437,12 @@ impl TypeChecker<'_> {
                 .iter()
                 .map(|parameter| GenericTypeParameter {
                     name: parameter.name.clone(),
-                    constraint: parameter
-                        .constraint
-                        .as_ref()
-                        .map(|constraint| self.resolve_type_name(constraint)),
+                    constraint: parameter.constraint.as_ref().map(|constraint| {
+                        self.resolve_type_parameter_constraint_as_interface(
+                            constraint,
+                            &parameter.name,
+                        )
+                    }),
                 })
                 .collect::<Vec<_>>();
             self.pop_type_parameters();
@@ -699,5 +703,39 @@ impl TypeChecker<'_> {
                 }
             }
         }
+    }
+
+    fn resolve_type_parameter_constraint_as_interface(
+        &mut self,
+        constraint: &compiler__semantic_program::SemanticTypeName,
+        type_parameter_name: &str,
+    ) -> super::Type {
+        let resolved_constraint = self.resolve_type_name(constraint);
+        if resolved_constraint == super::Type::Unknown {
+            return super::Type::Unknown;
+        }
+        let Some(constraint_type_id) = Self::nominal_type_id_for_type(&resolved_constraint) else {
+            self.error(
+                format!(
+                    "constraint for type parameter '{type_parameter_name}' must be an interface type"
+                ),
+                constraint.span.clone(),
+            );
+            return super::Type::Unknown;
+        };
+        let Some(constraint_type_info) = self.type_info_by_nominal_type_id(&constraint_type_id)
+        else {
+            return super::Type::Unknown;
+        };
+        if !matches!(constraint_type_info.kind, TypeKind::Interface { .. }) {
+            self.error(
+                format!(
+                    "constraint for type parameter '{type_parameter_name}' must be an interface type"
+                ),
+                constraint.span.clone(),
+            );
+            return super::Type::Unknown;
+        }
+        resolved_constraint
     }
 }

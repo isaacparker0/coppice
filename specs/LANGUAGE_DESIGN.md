@@ -216,6 +216,40 @@ type Map[K: Hash + Eq, V] :: struct {
 }
 ```
 
+#### Generic Constraints Are Interface Contracts
+
+Generic constraints are for capability contracts only.
+
+Canonical rule:
+
+1. In `T: Constraint`, `Constraint` must resolve to an interface type.
+2. Constraints express required operations/capabilities, not value-domain type
+   membership.
+3. Built-in, concrete, and union constraints are invalid.
+
+Invalid examples:
+
+```
+function f[T: int64](x: T) -> T { ... }         // invalid
+function g[T: User](x: T) -> T { ... }          // invalid
+function h[T: User | nil](x: T) -> T { ... }    // invalid
+```
+
+Canonical alternatives:
+
+1. If only one concrete type is intended, use a non-generic annotation
+   (`x: int64`).
+2. If type membership over alternatives is intended, use union types in normal
+   parameter/return positions (`x: User | nil`).
+3. If no capability is needed, leave the type parameter unconstrained.
+
+Rationale:
+
+1. Preserves one canonical construct per intent.
+2. Keeps generic constraints explicit and predictable as capability contracts.
+3. Avoids overlapping `:` semantics between capability contracts and type-set
+   filters.
+
 ### Pattern Matching
 
 ```
@@ -298,6 +332,9 @@ Canonical rule:
 2. canonical placement is after type name (and optional type parameters) and
    before `::`
 3. standalone conformance statements do not exist
+
+`implements` declarations and generic constraints (`T: InterfaceName`) use the
+same nominal interface conformance model.
 
 Why nominal explicit conformance:
 

@@ -1,8 +1,19 @@
-type Box[T: int64] :: struct {
+type Named :: interface {
+    function name(self) -> string,
+}
+
+type User :: struct {
+    value: string,
+    function name(self) -> string {
+        return self.value
+    },
+}
+
+type Box[T: Named] :: struct {
     value: T,
 }
 
 function run() -> string {
-    box := Box[string] { value: "text" }
-    return box.value
+    box := Box[User] { value: User { value: "text" } }
+    return box.value.name()
 }

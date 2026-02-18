@@ -4,11 +4,11 @@
         {
             "phase": "type_analysis",
             "path": "lib.coppice",
-            "message": "type argument 'string' does not satisfy constraint 'int64' for type parameter 'T' on 'requireInt'",
+            "message": "type argument 'User' does not satisfy constraint 'Printable' for type parameter 'T' on 'requirePrintable'",
             "span": {
-                "start": 95,
-                "end": 105,
-                "line": 6,
+                "start": 271,
+                "end": 287,
+                "line": 16,
                 "column": 5
             }
         }

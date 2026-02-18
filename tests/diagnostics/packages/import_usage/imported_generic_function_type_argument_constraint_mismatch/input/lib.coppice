@@ -1,6 +1,6 @@
-import workspace/auth { requireInt }
+import workspace/auth { User, makeUser, requirePrintable }
 
 function run() -> nil {
-    requireInt[string]("text")
+    requirePrintable[User](makeUser())
     return nil
 }
