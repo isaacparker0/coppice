@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.coppice",
+            "message": "type 'User' does not implement interface 'Printable': missing method 'toString'",
+            "span": {
+                "start": 93,
+                "end": 102,
+                "line": 5,
+                "column": 22
+            }
+        }
+    ]
+}

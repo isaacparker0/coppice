@@ -1,0 +1,7 @@
+type NotInterface :: struct {
+    value: string,
+}
+
+type User implements NotInterface :: struct {
+    value: string,
+}

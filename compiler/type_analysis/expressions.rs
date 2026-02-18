@@ -291,7 +291,7 @@ impl TypeChecker<'_> {
                     if let Some(expected_type) = resolved_target.parameter_types.get(index)
                         && *expected_type != Type::Unknown
                         && argument_type != Type::Unknown
-                        && !Self::is_assignable(&argument_type, expected_type)
+                        && !self.is_assignable(&argument_type, expected_type)
                     {
                         self.error(
                             format!(
@@ -328,7 +328,7 @@ impl TypeChecker<'_> {
                         Type::Integer64
                     }
                     SemanticBinaryOperator::EqualEqual | SemanticBinaryOperator::NotEqual => {
-                        if !Self::are_comparable_for_equality(&left_type, &right_type)
+                        if !self.are_comparable_for_equality(&left_type, &right_type)
                             && left_type != Type::Unknown
                             && right_type != Type::Unknown
                         {
@@ -506,7 +506,7 @@ impl TypeChecker<'_> {
             if let Some(expected_type) = &result_type {
                 if *expected_type != Type::Unknown
                     && arm_type != Type::Unknown
-                    && !Self::is_assignable(&arm_type, expected_type)
+                    && !self.is_assignable(&arm_type, expected_type)
                 {
                     self.error(
                         format!(

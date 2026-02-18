@@ -9,8 +9,8 @@ use compiler__semantic_types::{
 };
 
 use super::{
-    FunctionInfo, ImportedTypeDeclaration, MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind,
-    TypedFunctionSignature,
+    FunctionInfo, ImportedTypeDeclaration, InterfaceMethodSignature, MethodInfo, MethodKey,
+    TypeChecker, TypeInfo, TypeKind, TypedFunctionSignature,
 };
 
 struct ImportedTypeBinding {
@@ -43,6 +43,9 @@ impl TypeChecker<'_> {
             }
             let kind = match &imported_binding.type_declaration.kind {
                 ImportedTypeShape::Struct { .. } => TypeKind::Struct { fields: Vec::new() },
+                ImportedTypeShape::Interface { .. } => TypeKind::Interface {
+                    methods: Vec::new(),
+                },
                 ImportedTypeShape::Union { .. } => TypeKind::Union {
                     variants: Vec::new(),
                 },
@@ -52,6 +55,10 @@ impl TypeChecker<'_> {
                 TypeInfo {
                     nominal_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
                     type_parameters: imported_binding.type_declaration.type_parameters.clone(),
+                    implemented_interfaces: imported_binding
+                        .type_declaration
+                        .implemented_interfaces
+                        .clone(),
                     kind,
                 },
             );
@@ -71,6 +78,26 @@ impl TypeChecker<'_> {
                     if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
+                        };
+                    }
+                }
+                ImportedTypeShape::Interface { methods } => {
+                    let mut resolved_methods = Vec::new();
+                    let mut seen = HashSet::new();
+                    for method in methods {
+                        if !seen.insert(method.name.clone()) {
+                            continue;
+                        }
+                        resolved_methods.push(InterfaceMethodSignature {
+                            name: method.name.clone(),
+                            self_mutable: method.self_mutable,
+                            parameter_types: method.parameter_types.clone(),
+                            return_type: method.return_type.clone(),
+                        });
+                    }
+                    if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
+                        info.kind = TypeKind::Interface {
+                            methods: resolved_methods,
                         };
                     }
                 }
@@ -133,9 +160,10 @@ impl TypeChecker<'_> {
             .collect();
 
         for imported_binding in imported_type_bindings {
-            let ImportedTypeShape::Struct { methods, .. } = &imported_binding.type_declaration.kind
-            else {
-                continue;
+            let methods = match &imported_binding.type_declaration.kind {
+                ImportedTypeShape::Struct { methods, .. }
+                | ImportedTypeShape::Interface { methods } => methods,
+                ImportedTypeShape::Union { .. } => continue,
             };
 
             for method in methods {
@@ -173,6 +201,9 @@ impl TypeChecker<'_> {
                 SemanticTypeDeclarationKind::Struct { .. } => {
                     TypeKind::Struct { fields: Vec::new() }
                 }
+                SemanticTypeDeclarationKind::Interface { .. } => TypeKind::Interface {
+                    methods: Vec::new(),
+                },
                 SemanticTypeDeclarationKind::Enum { .. }
                 | SemanticTypeDeclarationKind::Union { .. } => TypeKind::Union {
                     variants: Vec::new(),
@@ -193,6 +224,7 @@ impl TypeChecker<'_> {
                             constraint: None,
                         })
                         .collect(),
+                    implemented_interfaces: Vec::new(),
                     kind,
                 },
             );
@@ -216,8 +248,14 @@ impl TypeChecker<'_> {
                         .map(|constraint| self.resolve_type_name(constraint)),
                 })
                 .collect::<Vec<_>>();
+            let resolved_implemented_interfaces = type_declaration
+                .implemented_interfaces
+                .iter()
+                .map(|implemented_interface| self.resolve_type_name(implemented_interface))
+                .collect::<Vec<_>>();
             if let Some(info) = self.types.get_mut(&type_declaration.name) {
                 info.type_parameters = resolved_type_parameters;
+                info.implemented_interfaces = resolved_implemented_interfaces;
             }
 
             match &type_declaration.kind {
@@ -241,6 +279,40 @@ impl TypeChecker<'_> {
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
                         info.kind = TypeKind::Struct {
                             fields: resolved_fields,
+                        };
+                    }
+                }
+                SemanticTypeDeclarationKind::Interface { methods } => {
+                    let mut resolved_methods = Vec::new();
+                    let mut seen = HashSet::new();
+                    for method in methods {
+                        self.check_function_name(&method.name, &method.name_span);
+                        if !seen.insert(method.name.clone()) {
+                            self.error(
+                                format!(
+                                    "duplicate method '{}.{}'",
+                                    type_declaration.name, method.name
+                                ),
+                                method.name_span.clone(),
+                            );
+                            continue;
+                        }
+                        let return_type = self.resolve_type_name(&method.return_type);
+                        let parameter_types = method
+                            .parameters
+                            .iter()
+                            .map(|parameter| self.resolve_type_name(&parameter.type_name))
+                            .collect::<Vec<_>>();
+                        resolved_methods.push(InterfaceMethodSignature {
+                            name: method.name.clone(),
+                            self_mutable: method.self_mutable,
+                            parameter_types,
+                            return_type,
+                        });
+                    }
+                    if let Some(info) = self.types.get_mut(&type_declaration.name) {
+                        info.kind = TypeKind::Interface {
+                            methods: resolved_methods,
                         };
                     }
                 }
@@ -369,53 +441,102 @@ impl TypeChecker<'_> {
 
     pub(super) fn collect_method_signatures(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
-            let SemanticTypeDeclarationKind::Struct { methods, .. } = &type_declaration.kind else {
-                continue;
-            };
-            let names_and_spans = type_declaration
-                .type_parameters
-                .iter()
-                .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
-                .collect::<Vec<_>>();
-            self.push_type_parameters(&names_and_spans);
+            match &type_declaration.kind {
+                SemanticTypeDeclarationKind::Struct { methods, .. } => {
+                    let names_and_spans = type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                        .collect::<Vec<_>>();
+                    self.push_type_parameters(&names_and_spans);
 
-            for method in methods {
-                self.check_function_name(&method.name, &method.name_span);
-                let method_key = MethodKey {
-                    receiver_type_id: NominalTypeId {
-                        package_id: self.package_id,
-                        symbol_name: type_declaration.name.clone(),
-                    },
-                    method_name: method.name.clone(),
-                };
-                if self.methods.contains_key(&method_key) {
-                    self.error(
-                        format!(
-                            "duplicate method '{}.{}'",
-                            type_declaration.name, method.name
-                        ),
-                        method.name_span.clone(),
-                    );
-                    continue;
+                    for method in methods {
+                        self.check_function_name(&method.name, &method.name_span);
+                        let method_key = MethodKey {
+                            receiver_type_id: NominalTypeId {
+                                package_id: self.package_id,
+                                symbol_name: type_declaration.name.clone(),
+                            },
+                            method_name: method.name.clone(),
+                        };
+                        if self.methods.contains_key(&method_key) {
+                            self.error(
+                                format!(
+                                    "duplicate method '{}.{}'",
+                                    type_declaration.name, method.name
+                                ),
+                                method.name_span.clone(),
+                            );
+                            continue;
+                        }
+
+                        let return_type = self.resolve_type_name(&method.return_type);
+                        let mut parameter_types = Vec::new();
+                        for parameter in &method.parameters {
+                            let value_type = self.resolve_type_name(&parameter.type_name);
+                            parameter_types.push(value_type);
+                        }
+
+                        self.methods.insert(
+                            method_key,
+                            MethodInfo {
+                                self_mutable: method.self_mutable,
+                                parameter_types,
+                                return_type,
+                            },
+                        );
+                    }
+                    self.pop_type_parameters();
                 }
+                SemanticTypeDeclarationKind::Interface { methods } => {
+                    let names_and_spans = type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| (parameter.name.clone(), parameter.span.clone()))
+                        .collect::<Vec<_>>();
+                    self.push_type_parameters(&names_and_spans);
 
-                let return_type = self.resolve_type_name(&method.return_type);
-                let mut parameter_types = Vec::new();
-                for parameter in &method.parameters {
-                    let value_type = self.resolve_type_name(&parameter.type_name);
-                    parameter_types.push(value_type);
+                    for method in methods {
+                        self.check_function_name(&method.name, &method.name_span);
+                        let method_key = MethodKey {
+                            receiver_type_id: NominalTypeId {
+                                package_id: self.package_id,
+                                symbol_name: type_declaration.name.clone(),
+                            },
+                            method_name: method.name.clone(),
+                        };
+                        if self.methods.contains_key(&method_key) {
+                            self.error(
+                                format!(
+                                    "duplicate method '{}.{}'",
+                                    type_declaration.name, method.name
+                                ),
+                                method.name_span.clone(),
+                            );
+                            continue;
+                        }
+
+                        let return_type = self.resolve_type_name(&method.return_type);
+                        let mut parameter_types = Vec::new();
+                        for parameter in &method.parameters {
+                            let value_type = self.resolve_type_name(&parameter.type_name);
+                            parameter_types.push(value_type);
+                        }
+
+                        self.methods.insert(
+                            method_key,
+                            MethodInfo {
+                                self_mutable: method.self_mutable,
+                                parameter_types,
+                                return_type,
+                            },
+                        );
+                    }
+                    self.pop_type_parameters();
                 }
-
-                self.methods.insert(
-                    method_key,
-                    MethodInfo {
-                        self_mutable: method.self_mutable,
-                        parameter_types,
-                        return_type,
-                    },
-                );
+                SemanticTypeDeclarationKind::Enum { .. }
+                | SemanticTypeDeclarationKind::Union { .. } => {}
             }
-            self.pop_type_parameters();
         }
     }
 
@@ -436,7 +557,7 @@ impl TypeChecker<'_> {
             }
             if declared_type != super::Type::Unknown
                 && value_type != super::Type::Unknown
-                && !Self::is_assignable(&value_type, &declared_type)
+                && !self.is_assignable(&value_type, &declared_type)
             {
                 self.error(
                     format!(
@@ -457,6 +578,106 @@ impl TypeChecker<'_> {
                     },
                 },
             );
+        }
+    }
+
+    pub(super) fn check_type_interface_conformance(&mut self, types: &[SemanticTypeDeclaration]) {
+        for type_declaration in types {
+            if !matches!(
+                type_declaration.kind,
+                SemanticTypeDeclarationKind::Struct { .. }
+            ) && !type_declaration.implemented_interfaces.is_empty()
+            {
+                self.error(
+                    format!(
+                        "only struct types can declare implements clauses; '{}' is not a struct",
+                        type_declaration.name
+                    ),
+                    type_declaration.implemented_interfaces[0].span.clone(),
+                );
+                continue;
+            }
+            if !matches!(
+                type_declaration.kind,
+                SemanticTypeDeclarationKind::Struct { .. }
+            ) {
+                continue;
+            }
+            self.check_struct_interface_conformance(type_declaration);
+        }
+    }
+
+    fn check_struct_interface_conformance(&mut self, type_declaration: &SemanticTypeDeclaration) {
+        let struct_type_info = self.types.get(&type_declaration.name).cloned();
+        let Some(struct_type_info) = struct_type_info else {
+            return;
+        };
+        let struct_type_id = struct_type_info.nominal_type_id;
+        let mut seen_interface_names = HashSet::new();
+        for implemented_interface in &type_declaration.implemented_interfaces {
+            let implemented_interface_type = self.resolve_type_name(implemented_interface);
+            if implemented_interface_type == super::Type::Unknown {
+                continue;
+            }
+            let interface_name = implemented_interface_type.display();
+            if !seen_interface_names.insert(interface_name.clone()) {
+                self.error(
+                    format!("duplicate implements entry '{interface_name}'"),
+                    implemented_interface.span.clone(),
+                );
+                continue;
+            }
+
+            let Some(interface_type_id) =
+                Self::nominal_type_id_for_type(&implemented_interface_type)
+            else {
+                self.error(
+                    format!("implemented type '{interface_name}' must be an interface declaration"),
+                    implemented_interface.span.clone(),
+                );
+                continue;
+            };
+            let Some(interface_type_info) = self.type_info_by_nominal_type_id(&interface_type_id)
+            else {
+                continue;
+            };
+            let TypeKind::Interface { methods } = &interface_type_info.kind else {
+                self.error(
+                    format!("implemented type '{interface_name}' must be an interface declaration"),
+                    implemented_interface.span.clone(),
+                );
+                continue;
+            };
+            let methods = methods.clone();
+
+            for interface_method in methods {
+                let method_key = MethodKey {
+                    receiver_type_id: struct_type_id.clone(),
+                    method_name: interface_method.name.clone(),
+                };
+                let Some(struct_method) = self.methods.get(&method_key) else {
+                    self.error(
+                        format!(
+                            "type '{}' does not implement interface '{}': missing method '{}'",
+                            type_declaration.name, interface_name, interface_method.name
+                        ),
+                        implemented_interface.span.clone(),
+                    );
+                    continue;
+                };
+                if struct_method.self_mutable != interface_method.self_mutable
+                    || struct_method.parameter_types != interface_method.parameter_types
+                    || struct_method.return_type != interface_method.return_type
+                {
+                    self.error(
+                        format!(
+                            "type '{}' method '{}' does not match interface '{}'",
+                            type_declaration.name, interface_method.name, interface_name
+                        ),
+                        implemented_interface.span.clone(),
+                    );
+                }
+            }
         }
     }
 }

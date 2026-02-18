@@ -134,6 +134,9 @@ pub enum ImportedTypeShape {
         fields: Vec<(String, Type)>,
         methods: Vec<ImportedMethodSignature>,
     },
+    Interface {
+        methods: Vec<ImportedMethodSignature>,
+    },
     Union {
         variants: Vec<Type>,
     },
@@ -143,6 +146,7 @@ pub enum ImportedTypeShape {
 pub struct ImportedTypeDeclaration {
     pub nominal_type_id: NominalTypeId,
     pub type_parameters: Vec<GenericTypeParameter>,
+    pub implemented_interfaces: Vec<Type>,
     pub kind: ImportedTypeShape,
 }
 

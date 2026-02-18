@@ -1,0 +1,19 @@
+type Printable :: interface {
+    function toString(self) -> string,
+}
+
+type User implements Printable :: struct {
+    name: string,
+    function toString(self) -> string {
+        return self.name
+    },
+}
+
+function render(value: Printable) -> string {
+    return value.toString()
+}
+
+function run() -> string {
+    user := User { name: "Ada" }
+    return render(user)
+}

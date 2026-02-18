@@ -146,6 +146,7 @@ fn build_struct_declaration_annotations(
                 })
             }
             compiler__semantic_program::SemanticTypeDeclarationKind::Enum { .. }
+            | compiler__semantic_program::SemanticTypeDeclarationKind::Interface { .. }
             | compiler__semantic_program::SemanticTypeDeclarationKind::Union { .. } => None,
         })
         .collect()
@@ -475,6 +476,7 @@ fn check_declarations(
     type_checker.collect_function_signatures(function_declarations);
     type_checker.collect_imported_method_signatures();
     type_checker.collect_method_signatures(type_declarations);
+    type_checker.check_type_interface_conformance(type_declarations);
     type_checker.check_constant_declarations(constant_declarations);
     for function in function_declarations {
         type_checker.check_function(function);
@@ -505,16 +507,33 @@ struct ImportedBindingInfo {
     used: bool,
 }
 
+#[derive(Clone)]
 struct TypeInfo {
     nominal_type_id: NominalTypeId,
     type_parameters: Vec<GenericTypeParameter>,
+    implemented_interfaces: Vec<Type>,
     kind: TypeKind,
 }
 
 #[derive(Clone)]
 enum TypeKind {
-    Struct { fields: Vec<(String, Type)> },
-    Union { variants: Vec<Type> },
+    Struct {
+        fields: Vec<(String, Type)>,
+    },
+    Interface {
+        methods: Vec<InterfaceMethodSignature>,
+    },
+    Union {
+        variants: Vec<Type>,
+    },
+}
+
+#[derive(Clone)]
+struct InterfaceMethodSignature {
+    name: String,
+    self_mutable: bool,
+    parameter_types: Vec<Type>,
+    return_type: Type,
 }
 
 #[derive(Clone)]
@@ -650,6 +669,20 @@ impl<'a> TypeChecker<'a> {
         match &binding.symbol {
             ImportedSymbol::Constant(value_type) => Some(value_type.clone()),
             ImportedSymbol::Type(_) | ImportedSymbol::Function(_) => None,
+        }
+    }
+
+    fn type_info_by_nominal_type_id(&self, nominal_type_id: &NominalTypeId) -> Option<&TypeInfo> {
+        self.types
+            .values()
+            .find(|info| info.nominal_type_id == *nominal_type_id)
+    }
+
+    fn nominal_type_id_for_type(value_type: &Type) -> Option<NominalTypeId> {
+        match value_type {
+            Type::Named(named) => Some(named.id.clone()),
+            Type::Applied { base, .. } => Some(base.id.clone()),
+            _ => None,
         }
     }
 
@@ -838,7 +871,7 @@ impl<'a> TypeChecker<'a> {
             if *type_argument == Type::Unknown || *constraint == Type::Unknown {
                 continue;
             }
-            if !Self::is_assignable(type_argument, constraint) {
+            if !self.is_assignable(type_argument, constraint) {
                 self.error(
                     format!(
                         "type argument '{}' does not satisfy constraint '{}' for type parameter '{}' on '{}'",
@@ -958,7 +991,7 @@ impl<'a> TypeChecker<'a> {
                     display_name: name.to_string(),
                 };
                 match kind {
-                    TypeKind::Struct { .. } => {
+                    TypeKind::Struct { .. } | TypeKind::Interface { .. } => {
                         if type_parameter_count == 0 {
                             resolved.push(Type::Named(nominal));
                         } else {

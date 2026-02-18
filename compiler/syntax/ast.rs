@@ -80,6 +80,7 @@ pub enum SyntaxMemberVisibility {
 pub struct SyntaxTypeDeclaration {
     pub name: String,
     pub type_parameters: Vec<SyntaxTypeParameter>,
+    pub implemented_interfaces: Vec<SyntaxTypeName>,
     pub kind: SyntaxTypeDeclarationKind,
     pub visibility: SyntaxTopLevelVisibility,
     pub span: Span,
@@ -87,9 +88,18 @@ pub struct SyntaxTypeDeclaration {
 
 #[derive(Clone, Debug)]
 pub enum SyntaxTypeDeclarationKind {
-    Struct { items: Vec<SyntaxStructMemberItem> },
-    Enum { variants: Vec<SyntaxEnumVariant> },
-    Union { variants: Vec<SyntaxTypeName> },
+    Struct {
+        items: Vec<SyntaxStructMemberItem>,
+    },
+    Enum {
+        variants: Vec<SyntaxEnumVariant>,
+    },
+    Interface {
+        methods: Vec<SyntaxInterfaceMethodDeclaration>,
+    },
+    Union {
+        variants: Vec<SyntaxTypeName>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -123,6 +133,17 @@ pub struct SyntaxMethodDeclaration {
     pub return_type: SyntaxTypeName,
     pub body: SyntaxBlock,
     pub visibility: SyntaxMemberVisibility,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct SyntaxInterfaceMethodDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub self_span: Span,
+    pub self_mutable: bool,
+    pub parameters: Vec<SyntaxParameterDeclaration>,
+    pub return_type: SyntaxTypeName,
     pub span: Span,
 }
 

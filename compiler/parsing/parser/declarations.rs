@@ -2,9 +2,9 @@ use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxConstantDeclaration, SyntaxFieldDeclaration, SyntaxFunctionDeclaration,
-    SyntaxMemberVisibility, SyntaxMethodDeclaration, SyntaxParameterDeclaration,
-    SyntaxStructMemberItem, SyntaxTopLevelVisibility, SyntaxTypeDeclaration,
-    SyntaxTypeDeclarationKind,
+    SyntaxInterfaceMethodDeclaration, SyntaxMemberVisibility, SyntaxMethodDeclaration,
+    SyntaxParameterDeclaration, SyntaxStructMemberItem, SyntaxTopLevelVisibility,
+    SyntaxTypeDeclaration, SyntaxTypeDeclarationKind, SyntaxTypeName,
 };
 
 use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind};
@@ -20,6 +20,7 @@ impl Parser {
         for recovery in recoveries {
             self.report_parse_error(&recovery);
         }
+        let implemented_interfaces = self.parse_implemented_interfaces()?;
         self.expect_symbol(Symbol::DoubleColon)?;
         let start = name_span.clone();
         if self.peek_is_keyword(Keyword::Struct) {
@@ -36,6 +37,7 @@ impl Parser {
             return Ok(SyntaxTypeDeclaration {
                 name,
                 type_parameters,
+                implemented_interfaces,
                 kind: SyntaxTypeDeclarationKind::Struct { items },
                 visibility,
                 span,
@@ -57,7 +59,27 @@ impl Parser {
             return Ok(SyntaxTypeDeclaration {
                 name,
                 type_parameters,
+                implemented_interfaces,
                 kind: SyntaxTypeDeclarationKind::Enum { variants },
+                visibility,
+                span,
+            });
+        }
+        if self.peek_is_keyword(Keyword::Interface) {
+            self.expect_keyword(Keyword::Interface)?;
+            let methods = self.parse_interface_methods()?;
+            let right_brace = self.expect_symbol(Symbol::RightBrace)?;
+            let span = Span {
+                start: start.start,
+                end: right_brace.end,
+                line: start.line,
+                column: start.column,
+            };
+            return Ok(SyntaxTypeDeclaration {
+                name,
+                type_parameters,
+                implemented_interfaces,
+                kind: SyntaxTypeDeclarationKind::Interface { methods },
                 visibility,
                 span,
             });
@@ -75,9 +97,95 @@ impl Parser {
         Ok(SyntaxTypeDeclaration {
             name,
             type_parameters,
+            implemented_interfaces,
             kind: SyntaxTypeDeclarationKind::Union { variants },
             visibility,
             span,
+        })
+    }
+
+    pub(super) fn parse_implemented_interfaces(&mut self) -> ParseResult<Vec<SyntaxTypeName>> {
+        if !self.peek_is_keyword(Keyword::Implements) {
+            return Ok(Vec::new());
+        }
+        self.expect_keyword(Keyword::Implements)?;
+        let mut implemented_interfaces = Vec::new();
+        loop {
+            implemented_interfaces.push(self.parse_type_name()?);
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Ok(implemented_interfaces)
+    }
+
+    pub(super) fn parse_interface_methods(
+        &mut self,
+    ) -> ParseResult<Vec<SyntaxInterfaceMethodDeclaration>> {
+        self.expect_symbol(Symbol::LeftBrace)?;
+        let mut methods = Vec::new();
+        self.skip_statement_terminators();
+        if self.peek_is_symbol(Symbol::RightBrace) {
+            return Ok(methods);
+        }
+        loop {
+            self.skip_statement_terminators();
+            match self.parse_interface_method_declaration() {
+                Ok(method) => methods.push(method),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
+                }
+            }
+
+            self.skip_statement_terminators();
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::RightBrace) {
+                    break;
+                }
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
+            }
+            break;
+        }
+        Ok(methods)
+    }
+
+    pub(super) fn parse_interface_method_declaration(
+        &mut self,
+    ) -> ParseResult<SyntaxInterfaceMethodDeclaration> {
+        let start = self.expect_keyword(Keyword::Function)?;
+        let (name, name_span) = self.expect_identifier()?;
+        self.expect_symbol(Symbol::LeftParenthesis)?;
+        let (self_span, self_mutable, parameters, recoveries) = self.parse_method_parameters()?;
+        for recovery in recoveries {
+            self.report_parse_error(&recovery);
+        }
+        self.expect_symbol(Symbol::RightParenthesis)?;
+        self.expect_symbol(Symbol::Arrow)?;
+        let return_type = self.parse_type_name()?;
+        Ok(SyntaxInterfaceMethodDeclaration {
+            name,
+            name_span,
+            self_span,
+            self_mutable,
+            parameters,
+            return_type: return_type.clone(),
+            span: Span {
+                start: start.start,
+                end: return_type.span.end,
+                line: start.line,
+                column: start.column,
+            },
         })
     }
 

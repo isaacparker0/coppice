@@ -194,7 +194,7 @@ impl TypeChecker<'_> {
                     let annotated_type = self.resolve_type_name(type_name);
                     if annotated_type != Type::Unknown
                         && value_type != Type::Unknown
-                        && !Self::is_assignable(&value_type, &annotated_type)
+                        && !self.is_assignable(&value_type, &annotated_type)
                     {
                         self.error(
                             format!(
@@ -238,7 +238,7 @@ impl TypeChecker<'_> {
                         );
                     } else if variable_type != Type::Unknown
                         && value_type != Type::Unknown
-                        && !Self::is_assignable(&value_type, &variable_type)
+                        && !self.is_assignable(&value_type, &variable_type)
                     {
                         self.error(
                             format!(
@@ -278,7 +278,7 @@ impl TypeChecker<'_> {
                 let value_type = self.check_expression(value);
                 if self.current_return_type != Type::Unknown
                     && value_type != Type::Unknown
-                    && !Self::is_assignable(&value_type, &self.current_return_type)
+                    && !self.is_assignable(&value_type, &self.current_return_type)
                 {
                     self.error(
                         format!(

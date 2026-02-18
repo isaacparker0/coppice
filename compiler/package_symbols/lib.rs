@@ -353,6 +353,41 @@ fn imported_type_declaration(
                 methods: typed_methods,
             }
         }
+        SemanticTypeDeclarationKind::Interface { methods } => ImportedTypeShape::Interface {
+            methods: methods
+                .iter()
+                .map(|method| ImportedMethodSignature {
+                    name: method.name.clone(),
+                    self_mutable: method.self_mutable,
+                    parameter_types: method
+                        .parameters
+                        .iter()
+                        .map(|parameter| {
+                            resolve_type_name_to_semantic_type(
+                                &parameter.type_name,
+                                target_package_id,
+                                nominal_type_id_by_lookup_key,
+                                &type_declaration
+                                    .type_parameters
+                                    .iter()
+                                    .map(|parameter| parameter.name.as_str())
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect(),
+                    return_type: resolve_type_name_to_semantic_type(
+                        &method.return_type,
+                        target_package_id,
+                        nominal_type_id_by_lookup_key,
+                        &type_declaration
+                            .type_parameters
+                            .iter()
+                            .map(|parameter| parameter.name.as_str())
+                            .collect::<Vec<_>>(),
+                    ),
+                })
+                .collect(),
+        },
         SemanticTypeDeclarationKind::Enum { variants } => ImportedTypeShape::Union {
             variants: variants
                 .iter()
@@ -406,6 +441,22 @@ fn imported_type_declaration(
                 .map(|parameter| parameter.name.as_str())
                 .collect::<Vec<_>>(),
         ),
+        implemented_interfaces: type_declaration
+            .implemented_interfaces
+            .iter()
+            .map(|implemented_interface| {
+                resolve_type_name_to_semantic_type(
+                    implemented_interface,
+                    target_package_id,
+                    nominal_type_id_by_lookup_key,
+                    &type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|parameter| parameter.name.as_str())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect(),
         kind,
     }
 }

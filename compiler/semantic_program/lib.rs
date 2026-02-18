@@ -36,6 +36,7 @@ pub struct SemanticDocComment {
 pub struct SemanticTypeDeclaration {
     pub name: String,
     pub type_parameters: Vec<SemanticTypeParameter>,
+    pub implemented_interfaces: Vec<SemanticTypeName>,
     pub kind: SemanticTypeDeclarationKind,
     pub doc: Option<SemanticDocComment>,
     pub visibility: SemanticTopLevelVisibility,
@@ -50,6 +51,9 @@ pub enum SemanticTypeDeclarationKind {
     },
     Enum {
         variants: Vec<SemanticEnumVariant>,
+    },
+    Interface {
+        methods: Vec<SemanticInterfaceMethodDeclaration>,
     },
     Union {
         variants: Vec<SemanticTypeName>,
@@ -82,6 +86,17 @@ pub struct SemanticMethodDeclaration {
     pub body: SemanticBlock,
     pub doc: Option<SemanticDocComment>,
     pub visibility: SemanticMemberVisibility,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct SemanticInterfaceMethodDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub self_span: Span,
+    pub self_mutable: bool,
+    pub parameters: Vec<SemanticParameterDeclaration>,
+    pub return_type: SemanticTypeName,
     pub span: Span,
 }
 

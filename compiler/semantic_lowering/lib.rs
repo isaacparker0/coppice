@@ -86,6 +86,11 @@ fn lower_type_declaration(
             .iter()
             .map(lower_type_parameter)
             .collect(),
+        implemented_interfaces: type_declaration
+            .implemented_interfaces
+            .iter()
+            .map(lower_type_name)
+            .collect(),
         kind: lower_type_declaration_kind(&type_declaration.kind),
         doc,
         visibility: lower_top_level_visibility(type_declaration.visibility),
@@ -119,6 +124,14 @@ fn lower_type_declaration_kind(
         syntax::SyntaxTypeDeclarationKind::Enum { variants } => {
             semantic::SemanticTypeDeclarationKind::Enum {
                 variants: variants.iter().map(lower_enum_variant).collect(),
+            }
+        }
+        syntax::SyntaxTypeDeclarationKind::Interface { methods } => {
+            semantic::SemanticTypeDeclarationKind::Interface {
+                methods: methods
+                    .iter()
+                    .map(lower_interface_method_declaration)
+                    .collect(),
             }
         }
         syntax::SyntaxTypeDeclarationKind::Union { variants } => {
@@ -167,6 +180,24 @@ fn lower_method_declaration(
         body: lower_block(&method.body),
         doc,
         visibility: lower_member_visibility(method.visibility),
+        span: method.span.clone(),
+    }
+}
+
+fn lower_interface_method_declaration(
+    method: &syntax::SyntaxInterfaceMethodDeclaration,
+) -> semantic::SemanticInterfaceMethodDeclaration {
+    semantic::SemanticInterfaceMethodDeclaration {
+        name: method.name.clone(),
+        name_span: method.name_span.clone(),
+        self_span: method.self_span.clone(),
+        self_mutable: method.self_mutable,
+        parameters: method
+            .parameters
+            .iter()
+            .map(lower_parameter_declaration)
+            .collect(),
+        return_type: lower_type_name(&method.return_type),
         span: method.span.clone(),
     }
 }
