@@ -1,0 +1,16 @@
+actions:
+    - name: CI
+      triggers:
+        push:
+            branches:
+                - main
+        pull_request:
+            branches:
+                - "*"
+      steps:
+        - run: bazel run //:gazelle
+        - run: bazel run //:format
+        - run: bazel build //...
+        - run: bazel test //...
+        - run: bazel run --run_in_cwd @multitool//tools/typos
+        - run: bazel run //tools/filename_linter:main
