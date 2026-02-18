@@ -241,9 +241,14 @@ Supported for first runnable milestone:
 Deferred with explicit build diagnostics:
 
 1. Advanced async semantics
-2. Interfaces/intersections
-3. Advanced generics corners
-4. Full shared mutable synchronization surface
+2. Interface types (explicit nominal conformance)
+3. General intersection types
+4. Polymorphic function values
+5. Advanced generics corners
+6. Full shared mutable synchronization surface
+
+Detailed semantics and feature-admission criteria for these deferred language
+features are defined in `specs/LANGUAGE_DESIGN.md`.
 
 ---
 
@@ -307,3 +312,5 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 2. Artifact format and workspace output location policy.
 3. Debug info policy for generated artifacts in early phases.
 4. Exact strictness for unsupported-in-build diagnostics vs fallback behavior.
+5. Rollout order after runnable MVP: function types first, then explicit nominal
+   interfaces.

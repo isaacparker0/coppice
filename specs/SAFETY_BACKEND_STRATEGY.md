@@ -231,6 +231,18 @@ Rationale:
 2. Lower immediate unlock value for runnable backend milestone.
 3. Re-evaluate based on real code pressure after runnable iteration.
 
+### 8) Function-Type Scope For Backend Readiness
+
+Direction:
+
+- Support first-class function types with monomorphic signatures in v1 and defer
+  polymorphic function values.
+
+Scope note:
+
+- Detailed language semantics, examples, and future-admission criteria are
+  tracked in `specs/LANGUAGE_DESIGN.md`.
+
 ---
 
 ## V1 Semantic Contract (Proposed)
@@ -258,6 +270,7 @@ Non-goals for v1:
 1. Full parity with Rust borrow-checker strength on all programs.
 2. Fully specified advanced async runtime semantics.
 3. General intersection types.
+4. Polymorphic function values.
 
 ---
 
@@ -299,7 +312,5 @@ Suggested immediate deliverables:
 
 1. Exact ARC/shared surface syntax and synchronization primitives.
 2. Numeric overflow policy (trap/wrap/checked by operator family).
-3. Explicit strategy for interface introduction timeline.
-4. Criteria for re-evaluating intersection-type admission.
-5. Whether first backend target should be Rust emitter or direct Cranelift,
+3. Whether first backend target should be Rust emitter or direct Cranelift,
    given team velocity and debugging preferences.

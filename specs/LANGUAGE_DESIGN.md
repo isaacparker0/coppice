@@ -269,17 +269,16 @@ greeting := "hello, {name}"
 
 ## Type System
 
-### Structural Typing
+### Interface Types (Nominal Conformance)
 
-Interfaces are structural. No explicit `implements` declaration. If a type has
-the required methods, it satisfies the interface.
+Interfaces are nominal. A type satisfies an interface only through explicit
+conformance declaration, not implicit structural matching.
 
 ```
 type Printable :: interface {
     function to_string(self) -> string
 }
 
-// User satisfies Printable because it has to_string. No declaration needed.
 type User :: struct {
     name: string
 
@@ -288,12 +287,52 @@ type User :: struct {
     }
 }
 
-function print_it(thing: Printable) {
-    print(thing.to_string())
+// Explicit conformance declaration required (exact syntax is an open decision).
+// User does not satisfy Printable implicitly.
+```
+
+Why nominal explicit conformance:
+
+1. aligns with explicit-over-implicit language policy
+2. avoids accidental conformance
+3. yields clearer diagnostics and dependency intent
+
+Tradeoffs (intentional):
+
+1. requires explicit declarations and imports instead of ad hoc structural reuse
+2. can force deliberate interface placement to preserve clean dependency
+   direction
+3. increases boundary ceremony, but this aligns with hermetic-build mapping,
+   compiler-enforced organization, and one-canonical-way governance
+
+Semantic traits (for example Hash/Eq/Serialize-style capabilities) are not yet
+specified as a language feature in v1 and remain an open design area.
+
+### First-Class Function Types (Monomorphic In v1)
+
+Function values are first-class, with explicit function type syntax:
+
+```
+type IntMapper :: function(int64) -> int64
+
+function apply_twice(f: function(int64) -> int64, x: int64) -> int64 {
+    return f(f(x))
 }
 ```
 
-Semantic traits (Hash, Eq, Serialize) use explicit `derives` for opt-in.
+v1 scope:
+
+1. first-class function values are supported for monomorphic signatures
+2. polymorphic function values are deferred
+3. generic functions may still be declared and called normally
+
+Deferred example (not in v1):
+
+```
+// f := id
+// a := f[int64](1)
+// b := f[string]("x")
+```
 
 ### Union Types
 
@@ -307,20 +346,21 @@ Tagged unions under the hood. Composable at the use site.
 `|` is composition, not enum declaration syntax. Union members must resolve to
 existing named types or builtins.
 
-### Intersection Types
+### Intersection Types (Deferred)
 
-```
-type Timestamped :: interface {
-    created_at: Time
-    updated_at: Time
-}
+General intersection types are deferred in v1.
 
-type Authored :: interface {
-    author: string
-}
+Preferred v1 alternatives:
 
-function fetch_posts() -> List[Timestamped & Authored] { ... }
-```
+1. named composed interfaces
+2. multi-constraint generic bounds (`T: A + B`)
+
+Rationale:
+
+1. general intersections add substantial assignability/inference complexity
+2. immediate unlock value is lower than interfaces + function types
+3. can be introduced later as an additive extension if real code pressure
+   appears
 
 ### No Literal Singleton Types
 
@@ -848,6 +888,8 @@ No syntax alternatives. No feature overlaps.
 - No operator overloading (or very limited).
 - No variadic arguments (pass a list).
 - No literal singleton types (`"foo"`, `1`, `true` as types).
+- No general intersection types (`A & B`) in v1.
+- No polymorphic function values in v1.
 - No implicit enum-variant synthesis from unresolved union members.
 - No implicit returns.
 - No single-statement braceless `if`.
@@ -1196,13 +1238,13 @@ dogfooding is a means, not an end.
 
 ## Prior Art and Influences
 
-| Influence      | What's borrowed                                                                 |
-| -------------- | ------------------------------------------------------------------------------- |
-| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`            |
-| **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting |
-| **TypeScript** | Structural typing, union/intersection types, control-flow narrowing             |
-| **Swift**      | Witness table generics, ARC memory model, value semantics                       |
-| **Kotlin**     | `val`/`var` distinction (our `:=`/`mut :=`), null safety                        |
+| Influence      | What's borrowed                                                                  |
+| -------------- | -------------------------------------------------------------------------------- |
+| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`             |
+| **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting  |
+| **TypeScript** | Union-heavy modeling and control-flow narrowing (influence, not direct adoption) |
+| **Swift**      | Witness table generics, ARC memory model, value semantics                        |
+| **Kotlin**     | `val`/`var` distinction (our `:=`/`mut :=`), null safety                         |
 
 ---
 
@@ -1215,3 +1257,26 @@ dogfooding is a means, not an end.
 - Macros or metaprogramming (at least initially).
 - Redundant expressivity: multiple interchangeable ways to encode the same
   intent.
+
+---
+
+## Deferred But Possible
+
+The following are intentionally deferred, not permanently rejected:
+
+1. Polymorphic first-class function values.
+2. General intersection types (`A & B`).
+
+Admission criteria:
+
+1. Demonstrated code pressure that cannot be solved cleanly with canonical v1
+   constructs.
+2. Deterministic diagnostics and clear phase ownership remain intact.
+3. Complexity cost is proportional to language value.
+
+## Open Questions
+
+1. Exact syntax for explicit interface conformance declarations.
+2. Package-boundary policy for interface ownership to avoid dependency cycles.
+3. Trigger criteria for introducing polymorphic function values.
+4. Trigger criteria and scope limits for introducing intersection types.

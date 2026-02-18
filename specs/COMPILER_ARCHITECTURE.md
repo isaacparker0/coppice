@@ -153,6 +153,11 @@ Output: `FileScopedPhaseOutput<ResolutionArtifacts>`.
 
 Owns type, flow, and semantic usage checks (for example unused imports).
 
+When introduced, this phase also owns:
+
+1. function-type assignability and callability checks
+2. explicit interface conformance and interface-based assignability checks
+
 Output: `PhaseOutput<type_annotated_program::TypeAnnotatedFile>`.
 
 ### `compiler/driver`
