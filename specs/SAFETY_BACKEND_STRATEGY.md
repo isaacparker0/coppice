@@ -210,11 +210,16 @@ Options considered for interfaces:
 Direction:
 
 - Prefer **explicit conformance model** when interfaces are introduced.
+- Use inline `implements` on type declarations as the canonical conformance
+  form.
+- Do not introduce standalone conformance statements.
 
 Rationale:
 
 1. Aligns with explicit-over-implicit philosophy.
 2. Reduces accidental conformance and improves diagnostics.
+3. Preserves one canonical construct per intent.
+4. Avoids additional coherence/orphan-style policy complexity.
 
 Options considered for intersections:
 
@@ -295,16 +300,9 @@ Required before broad backend implementation:
 1. Safety contract section accepted.
 2. Ownership/mutation/shared semantic rules accepted.
 3. Minimal async ownership rules accepted.
-4. Runtime interface v0 documented.
+4. Runtime interface contract finalized.
 5. Executable program invariants documented.
 6. Runnable MVP feature cut documented.
-
-Suggested immediate deliverables:
-
-1. `specs/OWNERSHIP_AND_SAFETY.md` (normative semantics).
-2. `specs/RUNTIME_INTERFACE_V0.md` (runtime interface contract).
-3. `specs/EXECUTABLE_PROGRAM_V0.md` (ownership and typing invariants).
-4. `specs/ASYNC_SEMANTICS_V0.md` (minimum async contract).
 
 ---
 

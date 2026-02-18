@@ -241,7 +241,7 @@ Supported for first runnable milestone:
 Deferred with explicit build diagnostics:
 
 1. Advanced async semantics
-2. Interface types (explicit nominal conformance)
+2. Interface types (explicit nominal conformance via inline `implements`)
 3. General intersection types
 4. Polymorphic function values
 5. Advanced generics corners
@@ -264,6 +264,7 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 - `compiler/executable_program`
 - `compiler/executable_lowering`
 - `compiler/type_annotated_program`
+- `compiler/runtime_interface`
 - `compiler/rust_backend`
 
 2. CLI supports runnable flow:
@@ -277,11 +278,15 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 - compiler resolves tool binaries from Bazel-provided runfiles/runtime data.
 - compiler does not shell out to host `rustc`/`clang`.
 
-4. Minimal runnable language subset is enabled for now:
+4. Runnable subset coverage extends beyond the original minimal slice:
 
 - `main() -> nil`
-- `print("...")`
-- `return nil`
+- local bindings/assignment
+- function calls and returns
+- `if`/`for`/`break`/`continue`
+- operators
+- struct literals and field access
+- `print(...)` and `abort(...)`
 
 ### Where this is aligned
 
@@ -298,7 +303,7 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 
 ### Critical gaps to address next
 
-1. `runtime_interface` crate is still planned and not yet introduced.
+1. Runtime interface v0 contract details are still being finalized.
 2. Cross-backend parity testing is still planned (single backend currently).
 3. Executable lowering and type-annotated artifact coverage is intentionally
    narrow and should expand with language feature support.
@@ -312,5 +317,5 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 2. Artifact format and workspace output location policy.
 3. Debug info policy for generated artifacts in early phases.
 4. Exact strictness for unsupported-in-build diagnostics vs fallback behavior.
-5. Rollout order after runnable MVP: function types first, then explicit nominal
-   interfaces.
+5. Interface rollout sequencing after current runnable subset expansion
+   (`implements` in frontend first vs backend coverage in same phase).

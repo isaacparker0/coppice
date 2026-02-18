@@ -279,7 +279,7 @@ type Printable :: interface {
     function to_string(self) -> string
 }
 
-type User :: struct {
+type User implements Printable :: struct {
     name: string
 
     function to_string(self) -> string {
@@ -287,15 +287,24 @@ type User :: struct {
     }
 }
 
-// Explicit conformance declaration required (exact syntax is an open decision).
-// User does not satisfy Printable implicitly.
+type AuditEvent implements Printable, JsonEncodable :: struct {
+    ...
+}
 ```
+
+Canonical rule:
+
+1. conformance is declared inline on the type declaration using `implements`
+2. canonical placement is after type name (and optional type parameters) and
+   before `::`
+3. standalone conformance statements do not exist
 
 Why nominal explicit conformance:
 
 1. aligns with explicit-over-implicit language policy
 2. avoids accidental conformance
 3. yields clearer diagnostics and dependency intent
+4. keeps one declaration site for each conformance relationship
 
 Tradeoffs (intentional):
 
@@ -306,7 +315,9 @@ Tradeoffs (intentional):
    compiler-enforced organization, and one-canonical-way governance
 
 Semantic traits (for example Hash/Eq/Serialize-style capabilities) are not yet
-specified as a language feature in v1 and remain an open design area.
+specified as a language feature in v1 and remain an open design area. If
+compiler-provided auto-implementation is introduced later, it should use a
+dedicated keyword (for example `autoimpl`) rather than overloading `implements`.
 
 ### First-Class Function Types (Monomorphic In v1)
 
@@ -1266,6 +1277,8 @@ The following are intentionally deferred, not permanently rejected:
 
 1. Polymorphic first-class function values.
 2. General intersection types (`A & B`).
+3. Compiler-owned closed-set auto-implementation of selected interfaces (for
+   example via `autoimpl`).
 
 Admission criteria:
 
@@ -1276,7 +1289,6 @@ Admission criteria:
 
 ## Open Questions
 
-1. Exact syntax for explicit interface conformance declarations.
-2. Package-boundary policy for interface ownership to avoid dependency cycles.
-3. Trigger criteria for introducing polymorphic function values.
-4. Trigger criteria and scope limits for introducing intersection types.
+1. Trigger criteria for introducing polymorphic function values.
+2. Trigger criteria and scope limits for introducing intersection types.
+3. If `autoimpl` is introduced, which interfaces are in the initial closed set.
