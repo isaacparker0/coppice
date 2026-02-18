@@ -949,8 +949,8 @@ Gazelle plugin logic:
    - `*.coppice` excluding `*.bin.coppice`, `*.test.coppice`, and
      `PACKAGE.coppice` as library source files.
    - include `PACKAGE.coppice` manifest in package metadata.
-3. Collect `*.bin.coppice` files → `lang0_binary` targets.
-4. Collect `*.test.coppice` files → `lang0_test` targets.
+3. Collect `*.bin.coppice` files → `coppice_binary` targets.
+4. Collect `*.test.coppice` files → `coppice_test` targets.
 5. Parse `import` statements and map import-origin-prefixed import path to
    target deps.
 
@@ -959,9 +959,9 @@ No heuristics. No configuration file. No import resolution algorithm.
 ### Target Mapping
 
 ```
-# One package root (with PACKAGE.coppice) = one lang0_library target
+# One package root (with PACKAGE.coppice) = one coppice_library target
 
-lang0_library(
+coppice_library(
     name = "auth",
     srcs = [
         "token.coppice",
@@ -972,18 +972,18 @@ lang0_library(
     manifest = "PACKAGE.coppice",
     deps = [
         "//platform/auth/oauth",
-        "@lang0_std//time",
+        "@coppice_std//time",
     ],
     visibility = ["//visibility:public"],
 )
 
-lang0_binary(
+coppice_binary(
     name = "auth_server",
     src = "server.bin.coppice",
     deps = [":auth"],
 )
 
-lang0_test(
+coppice_test(
     name = "auth_test",
     srcs = [
         "token.test.coppice",

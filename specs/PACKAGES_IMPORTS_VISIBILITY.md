@@ -42,8 +42,9 @@ The model intentionally prefers explicitness over minimal boilerplate.
 File role is a first-class language decision. Using filename suffixes to define
 entrypoints and tests is a focused generalization of patterns already seen in Go
 (`_test.go`), Rust (`main.rs` vs `lib.rs`), and TypeScript (`.d.ts` files).
-Lang0 commits to this fully because it aligns with our constraints: no dual-use
-files, a single canonical structure, and deterministic build graph mapping.
+Coppice commits to this fully because it aligns with our constraints: no
+dual-use files, a single canonical structure, and deterministic build graph
+mapping.
 
 File roles:
 
@@ -309,7 +310,7 @@ Diagnostics should report at least one concrete cycle path.
 
 ## Bazel Mapping
 
-1. One package path maps to one `lang0_library` target.
+1. One package path maps to one `coppice_library` target.
 2. Import path maps to package target dependency edge.
 3. Import member list affects symbol resolution, not target identity.
 4. No hidden deps: if a file imports package `P`, its package target must depend
