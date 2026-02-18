@@ -1,0 +1,33 @@
+load("//tools/bazel/macros:rust.bzl", "rust_binary", "rust_library")
+
+rust_library(
+    name = "api",
+    srcs = [
+        "compiler_adapter.rs",
+        "lib.rs",
+        "models.rs",
+        "routes.rs",
+        "session_store.rs",
+    ],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/driver",
+        "//compiler/reports",
+        "@crates//:axum",
+        "@crates//:serde",
+        "@crates//:tokio",
+    ],
+)
+
+rust_binary(
+    name = "main",
+    srcs = ["main.rs"],
+    data = ["//playground/web:web_assets"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":api",
+        "@crates//:axum",
+        "@crates//:tokio",
+        "@rules_rust//tools/runfiles",
+    ],
+)

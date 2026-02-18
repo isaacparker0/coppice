@@ -1,0 +1,20 @@
+[Unit]
+Description=Coppice Playground API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/coppice
+Environment=PLAYGROUND_BIND=127.0.0.1:8080
+Environment=PLAYGROUND_SESSION_ROOT=/tmp/coppice-playground
+ExecStart=/usr/bin/env bazel run //playground/api:main
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

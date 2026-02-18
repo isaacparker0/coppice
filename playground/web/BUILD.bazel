@@ -1,0 +1,5 @@
+filegroup(
+    name = "web_assets",
+    srcs = glob(["*"]),
+    visibility = ["//:__subpackages__"],
+)
