@@ -16,9 +16,10 @@ use compiler__semantic_types::{
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
-    TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
+    TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName,
+    TypeAnnotatedTypeNameSegment,
 };
 
 mod assignability;
@@ -52,7 +53,7 @@ pub fn check_package_unit(
         value: TypeAnnotatedFile {
             function_signature_by_name: function_signature_by_name_from_summary(&summary),
             struct_declarations: build_struct_declaration_annotations(package_unit),
-            main_function_declaration: build_main_function_annotation(package_unit),
+            function_declarations: build_function_declaration_annotations(package_unit),
         },
         diagnostics,
         status,
@@ -79,29 +80,41 @@ fn function_signature_by_name_from_summary(
     function_signature_by_name
 }
 
-fn build_main_function_annotation(
+fn build_function_declaration_annotations(
     package_unit: &SemanticFile,
-) -> Option<TypeAnnotatedFunctionDeclaration> {
-    let main_function_declaration =
-        package_unit
-            .declarations
-            .iter()
-            .find_map(|declaration| match declaration {
-                SemanticDeclaration::Function(function) if function.name == "main" => {
-                    Some(function)
-                }
-                _ => None,
-            })?;
-    Some(TypeAnnotatedFunctionDeclaration {
-        name: main_function_declaration.name.clone(),
-        span: main_function_declaration.span.clone(),
-        statements: main_function_declaration
-            .body
-            .statements
-            .iter()
-            .map(type_annotated_statement_from_semantic_statement)
-            .collect(),
-    })
+) -> Vec<TypeAnnotatedFunctionDeclaration> {
+    package_unit
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            SemanticDeclaration::Function(function_declaration) => Some(function_declaration),
+            _ => None,
+        })
+        .map(|function_declaration| TypeAnnotatedFunctionDeclaration {
+            name: function_declaration.name.clone(),
+            parameters: function_declaration
+                .parameters
+                .iter()
+                .map(|parameter| TypeAnnotatedParameterDeclaration {
+                    name: parameter.name.clone(),
+                    type_name: type_annotated_type_name_from_semantic_type_name(
+                        &parameter.type_name,
+                    ),
+                    span: parameter.span.clone(),
+                })
+                .collect(),
+            return_type: type_annotated_type_name_from_semantic_type_name(
+                &function_declaration.return_type,
+            ),
+            span: function_declaration.span.clone(),
+            statements: function_declaration
+                .body
+                .statements
+                .iter()
+                .map(type_annotated_statement_from_semantic_statement)
+                .collect(),
+        })
+        .collect()
 }
 
 fn build_struct_declaration_annotations(

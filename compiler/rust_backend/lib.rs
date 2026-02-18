@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use compiler__executable_program::{
-    ExecutableBinaryOperator, ExecutableExpression, ExecutableProgram, ExecutableStatement,
-    ExecutableTypeReference,
+    ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
+    ExecutableProgram, ExecutableStatement, ExecutableTypeReference,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
@@ -70,22 +70,46 @@ fn emit_rust_source(program: &ExecutableProgram) -> Result<String, CompilerFailu
             output.push_str("    ");
             output.push_str(&field.name);
             output.push_str(": ");
-            output.push_str(match field.type_reference {
-                ExecutableTypeReference::Int64 => "i64",
-                ExecutableTypeReference::Boolean => "bool",
-                ExecutableTypeReference::String => "&'static str",
-                ExecutableTypeReference::Named { ref name } => name,
-            });
+            output.push_str(type_reference_source(&field.type_reference));
             output.push_str(",\n");
         }
         output.push_str("}\n\n");
     }
-    output.push_str("fn main() {\n");
-    for statement in &program.statements {
-        emit_statement(statement, &mut output, 1)?;
+
+    for function_declaration in &program.function_declarations {
+        emit_function_declaration(function_declaration, &mut output)?;
+        output.push('\n');
     }
+
+    output.push_str("fn main() {\n");
+    output.push_str("    coppice_main();\n");
     output.push_str("}\n");
     Ok(output)
+}
+
+fn emit_function_declaration(
+    function_declaration: &ExecutableFunctionDeclaration,
+    output: &mut String,
+) -> Result<(), CompilerFailure> {
+    output.push_str("fn ");
+    output.push_str(&callable_identifier(&function_declaration.name));
+    output.push('(');
+    for (index, parameter) in function_declaration.parameters.iter().enumerate() {
+        if index > 0 {
+            output.push_str(", ");
+        }
+        output.push_str(&parameter.name);
+        output.push_str(": ");
+        output.push_str(type_reference_source(&parameter.type_reference));
+    }
+    output.push_str(") -> ");
+    output.push_str(type_reference_source(&function_declaration.return_type));
+    output.push_str(" {\n");
+    for statement in &function_declaration.statements {
+        emit_statement(statement, output, 1)?;
+    }
+    output.push_str("}\n");
+    Ok(())
 }
 
 fn emit_statement(
@@ -189,16 +213,10 @@ fn emit_statement(
         }
         ExecutableStatement::Return { value } => {
             let value_source = emit_expression(value)?;
-            if value_source != "()" {
-                return Err(CompilerFailure {
-                    kind: CompilerFailureKind::BuildFailed,
-                    message: "build mode currently supports only return nil".to_string(),
-                    path: None,
-                    details: Vec::new(),
-                });
-            }
             output.push_str(&indent);
-            output.push_str("return;\n");
+            output.push_str("return ");
+            output.push_str(&value_source);
+            output.push_str(";\n");
         }
     }
     Ok(())
@@ -248,33 +266,47 @@ fn emit_expression(expression: &ExecutableExpression) -> Result<String, Compiler
             let ExecutableExpression::Identifier { name } = callee.as_ref() else {
                 return Err(CompilerFailure {
                     kind: CompilerFailureKind::BuildFailed,
-                    message: "build mode currently supports only print(...) calls".to_string(),
-                    path: None,
-                    details: Vec::new(),
-                });
-            };
-            if name != "print" {
-                return Err(CompilerFailure {
-                    kind: CompilerFailureKind::BuildFailed,
-                    message: format!(
-                        "build mode currently supports only 'print' calls, found '{name}(...)'"
-                    ),
-                    path: None,
-                    details: Vec::new(),
-                });
-            }
-            if arguments.len() != 1 {
-                return Err(CompilerFailure {
-                    kind: CompilerFailureKind::BuildFailed,
-                    message: "build mode currently supports print(...) with exactly one argument"
+                    message: "build mode currently supports calls to named functions only"
                         .to_string(),
                     path: None,
                     details: Vec::new(),
                 });
+            };
+            if name == "print" {
+                if arguments.len() != 1 {
+                    return Err(CompilerFailure {
+                        kind: CompilerFailureKind::BuildFailed,
+                        message:
+                            "build mode currently supports print(...) with exactly one argument"
+                                .to_string(),
+                        path: None,
+                        details: Vec::new(),
+                    });
+                }
+                let argument_source = emit_expression(&arguments[0])?;
+                return Ok(format!("println!(\"{{}}\", {argument_source})"));
             }
-            let argument_source = emit_expression(&arguments[0])?;
-            Ok(format!("println!(\"{{}}\", {argument_source})"))
+            let argument_source = arguments
+                .iter()
+                .map(emit_expression)
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ");
+            Ok(format!("{}({argument_source})", callable_identifier(name)))
         }
+    }
+}
+
+fn callable_identifier(name: &str) -> String {
+    format!("coppice_{name}")
+}
+
+fn type_reference_source(type_reference: &ExecutableTypeReference) -> &str {
+    match type_reference {
+        ExecutableTypeReference::Int64 => "i64",
+        ExecutableTypeReference::Boolean => "bool",
+        ExecutableTypeReference::String => "&'static str",
+        ExecutableTypeReference::Nil => "()",
+        ExecutableTypeReference::Named { name } => name,
     }
 }
 

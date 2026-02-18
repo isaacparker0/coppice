@@ -1,7 +1,21 @@
 #[derive(Clone, Debug)]
 pub struct ExecutableProgram {
     pub struct_declarations: Vec<ExecutableStructDeclaration>,
+    pub function_declarations: Vec<ExecutableFunctionDeclaration>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutableFunctionDeclaration {
+    pub name: String,
+    pub parameters: Vec<ExecutableParameterDeclaration>,
+    pub return_type: ExecutableTypeReference,
     pub statements: Vec<ExecutableStatement>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutableParameterDeclaration {
+    pub name: String,
+    pub type_reference: ExecutableTypeReference,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +35,7 @@ pub enum ExecutableTypeReference {
     Int64,
     Boolean,
     String,
+    Nil,
     Named { name: String },
 }
 
