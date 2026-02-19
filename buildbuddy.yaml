@@ -19,9 +19,9 @@ actions:
           # Authenticate to DOCR for rules_oci
           - run: |
                 set -euo pipefail
-                if [[ "${GIT_PR_NUMBER:-0}" -gt 0 ]]; then
-                  exit 0
-                fi
+                # if [[ "${GIT_PR_NUMBER:-0}" -gt 0 ]]; then
+                #   exit 0
+                # fi
                 : "${DOCR_TOKEN:?DOCR_TOKEN must be set}"
                 export DOCKER_CONFIG="${HOME}/.docker"
                 mkdir -p "${DOCKER_CONFIG}"
