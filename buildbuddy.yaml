@@ -1,6 +1,8 @@
 actions:
     - name: CI
       container_image: "ubuntu-24.04"
+      env:
+          DOCKER_CONFIG: "/root/.docker"
       triggers:
           push:
               branches:
@@ -17,4 +19,9 @@ actions:
           - run: bazel run --run_in_cwd @multitool//tools/typos
           - run: bazel run //tools/filename_linter:main
           - run: bazel run //playground/deploy:configure_docr_auth
-          - run: DOCKER_CONFIG="${HOME}/.docker" bazel run --stamp --define=push_deploy=true --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 //playground:playground_push
+          - run: |
+                bazel run \
+                  --stamp \
+                  --define=push_deploy=true \
+                  --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 \
+                  //playground:playground_push
