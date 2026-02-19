@@ -17,5 +17,4 @@ actions:
           - run: bazel run --run_in_cwd @multitool//tools/typos
           - run: bazel run //tools/filename_linter:main
           - run: bazel run //playground/deploy:configure_docr_auth
-          - run: DOCKER_CONFIG="${HOME}/.docker" bazel run --stamp --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 //playground:playground_push
-          - run: bazel run --stamp //playground/deploy:deploy
+          - run: DOCKER_CONFIG="${HOME}/.docker" bazel run --stamp --define=push_deploy=true --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 //playground:playground_push
