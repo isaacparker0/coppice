@@ -52,6 +52,12 @@ pub struct ExecutableStructReference {
     pub symbol_name: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ExecutableEnumVariantReference {
+    pub enum_name: String,
+    pub variant_name: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableStructFieldDeclaration {
     pub name: String,
@@ -126,6 +132,9 @@ pub enum ExecutableExpression {
     },
     Identifier {
         name: String,
+    },
+    EnumVariantLiteral {
+        enum_variant_reference: ExecutableEnumVariantReference,
     },
     StructLiteral {
         struct_reference: ExecutableStructReference,

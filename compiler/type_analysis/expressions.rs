@@ -9,8 +9,8 @@ use compiler__source::Span;
 use compiler__semantic_types::{GenericTypeParameter, NominalTypeId, Type};
 
 use super::{
-    ExpressionSpan, MethodKey, TypeAnnotatedCallTarget, TypeAnnotatedStructReference, TypeChecker,
-    TypeKind,
+    ExpressionSpan, MethodKey, TypeAnnotatedCallTarget, TypeAnnotatedEnumVariantReference,
+    TypeAnnotatedStructReference, TypeChecker, TypeKind,
 };
 
 struct InstantiatedFunctionSignature {
@@ -48,6 +48,7 @@ impl TypeChecker<'_> {
                 ..
             } => self.check_struct_literal(expression, type_name, fields),
             SemanticExpression::FieldAccess {
+                id,
                 target,
                 field,
                 field_span,
@@ -71,6 +72,13 @@ impl TypeChecker<'_> {
                     });
                     if is_enum_like_union {
                         if let Some(variant_type) = self.resolve_enum_variant_type(name, field) {
+                            self.enum_variant_reference_by_expression_id.insert(
+                                *id,
+                                TypeAnnotatedEnumVariantReference {
+                                    enum_name: name.clone(),
+                                    variant_name: field.clone(),
+                                },
+                            );
                             return variant_type;
                         }
                         self.error(

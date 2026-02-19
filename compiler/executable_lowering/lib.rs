@@ -1,11 +1,11 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
-    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableParameterDeclaration,
-    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
-    ExecutableStructFieldDeclaration, ExecutableStructLiteralField, ExecutableStructReference,
-    ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
+    ExecutableMatchArm, ExecutableMatchPattern, ExecutableMethodDeclaration,
+    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
+    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
@@ -333,6 +333,15 @@ fn lower_expression(
         TypeAnnotatedExpression::NameReference { name, .. } => {
             ExecutableExpression::Identifier { name: name.clone() }
         }
+        TypeAnnotatedExpression::EnumVariantLiteral {
+            enum_variant_reference,
+            ..
+        } => ExecutableExpression::EnumVariantLiteral {
+            enum_variant_reference: ExecutableEnumVariantReference {
+                enum_name: enum_variant_reference.enum_name.clone(),
+                variant_name: enum_variant_reference.variant_name.clone(),
+            },
+        },
         TypeAnnotatedExpression::StructLiteral {
             struct_reference,
             fields,

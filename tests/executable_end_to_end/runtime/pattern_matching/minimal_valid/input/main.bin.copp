@@ -1,3 +1,8 @@
+type Direction :: enum {
+    North,
+    South,
+}
+
 function describe(value: int64 | string) -> string {
     return match value {
         int64 => "int"
@@ -13,6 +18,16 @@ function main() -> nil {
     if probe matches int64 {
         print("is int64")
     }
+
+    heading: Direction := Direction.North
+    if heading matches Direction.North {
+        print("north? yes")
+    }
+    label := match heading {
+        Direction.North => "north"
+        Direction.South => "south"
+    }
+    print(label)
 
     return nil
 }

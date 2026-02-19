@@ -21,6 +21,12 @@ pub struct TypeAnnotatedStructReference {
     pub symbol_name: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedEnumVariantReference {
+    pub enum_name: String,
+    pub variant_name: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TypeAnnotatedCallTarget {
     BuiltinFunction {
@@ -144,6 +150,10 @@ pub enum TypeAnnotatedExpression {
     NameReference {
         name: String,
         kind: TypeAnnotatedNameReferenceKind,
+        span: Span,
+    },
+    EnumVariantLiteral {
+        enum_variant_reference: TypeAnnotatedEnumVariantReference,
         span: Span,
     },
     StructLiteral {

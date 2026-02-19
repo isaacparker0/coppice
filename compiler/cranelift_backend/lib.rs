@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
-    ExecutableMatchPattern, ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
-    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
+    ExecutableMatchArm, ExecutableMatchPattern, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructReference, ExecutableTypeReference,
+    ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
@@ -36,12 +37,18 @@ enum RuntimeValue {
     String(String),
     Nil,
     StructInstance(RuntimeStructInstance),
+    EnumVariant(RuntimeEnumVariantValue),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RuntimeStructInstance {
     struct_reference: ExecutableStructReference,
     field_value_by_name: BTreeMap<String, RuntimeValue>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RuntimeEnumVariantValue {
+    enum_variant_reference: ExecutableEnumVariantReference,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -614,6 +621,11 @@ fn evaluate_expression(
                 RuntimeExecutionError::Failure(run_failed(format!("unknown local '{name}'"), None))
             })
         }
+        ExecutableExpression::EnumVariantLiteral {
+            enum_variant_reference,
+        } => Ok(RuntimeValue::EnumVariant(RuntimeEnumVariantValue {
+            enum_variant_reference: enum_variant_reference.clone(),
+        })),
         ExecutableExpression::StructLiteral {
             struct_reference,
             fields,
@@ -1020,6 +1032,9 @@ fn runtime_value_matches_type_reference(
             if let RuntimeValue::StructInstance(struct_instance) = value {
                 return named_type_reference_matches_struct_instance(name, struct_instance);
             }
+            if let RuntimeValue::EnumVariant(enum_variant_value) = value {
+                return named_type_reference_matches_enum_variant(name, enum_variant_value);
+            }
             false
         }
     }
@@ -1055,6 +1070,18 @@ fn named_type_reference_matches_struct_instance(
         .package_path
         .replace('/', ".");
     normalized_struct_package_path == type_reference_prefix
+}
+
+fn named_type_reference_matches_enum_variant(
+    type_reference_name: &str,
+    enum_variant_value: &RuntimeEnumVariantValue,
+) -> bool {
+    let variant_full_name = format!(
+        "{}.{}",
+        enum_variant_value.enum_variant_reference.enum_name,
+        enum_variant_value.enum_variant_reference.variant_name
+    );
+    type_reference_name == variant_full_name
 }
 
 fn build_failed(message: String, path: Option<&Path>) -> CompilerFailure {
