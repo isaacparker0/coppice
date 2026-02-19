@@ -168,7 +168,7 @@ function renderDiagnostics(diagnostics) {
         const row = document.createElement("li");
         row.className = "error";
         row.textContent =
-            `${diagnostic.path}:${diagnostic.span.line}:${diagnostic.span.column} ${diagnostic.message} (${diagnostic.phase})`;
+            `${diagnostic.path}:${diagnostic.span.line}:${diagnostic.span.column} ${diagnostic.message}`;
 
         diagnosticsElement.appendChild(row);
     }

@@ -7,6 +7,7 @@ use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
 use tokio::process::Command;
 
+use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::ensure_workspace_manifest;
 
 pub struct RunExecution {
@@ -84,7 +85,7 @@ pub async fn check_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = sanitize_workspace_paths(
+    let stderr = sanitize_workspace_path(
         &truncate_utf8_lossy(&output.stderr, max_output_bytes),
         session_directory,
     );
@@ -130,7 +131,7 @@ pub async fn run_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = sanitize_workspace_paths(
+    let stderr = sanitize_workspace_path(
         &truncate_utf8_lossy(&output.stderr, max_output_bytes),
         session_directory,
     );
@@ -167,18 +168,4 @@ fn truncate_utf8_lossy(bytes: &[u8], max_output_bytes: usize) -> String {
     let mut output = String::from_utf8_lossy(&bytes[..max_output_bytes]).to_string();
     output.push_str("\n... output truncated ...");
     output
-}
-
-fn sanitize_workspace_paths(output: &str, session_directory: &Path) -> String {
-    let raw_prefix = session_directory.to_string_lossy();
-    if raw_prefix.is_empty() {
-        return output.to_string();
-    }
-
-    let mut sanitized = output.replace(raw_prefix.as_ref(), ".");
-    if std::path::MAIN_SEPARATOR != '/' {
-        let unix_prefix = raw_prefix.replace(std::path::MAIN_SEPARATOR, "/");
-        sanitized = sanitized.replace(&unix_prefix, ".");
-    }
-    sanitized
 }

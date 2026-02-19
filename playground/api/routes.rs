@@ -18,6 +18,7 @@ use crate::models::{
     CheckRequest, CheckResponse, ErrorResponse, HealthResponse, RunRequest, RunResponse,
     SessionResponse, failure_response,
 };
+use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::SessionStore;
 use compiler__reports::{CompilerCheckJsonOutput, CompilerFailure};
 
@@ -320,20 +321,6 @@ async fn check(
             }),
         ),
     }
-}
-
-fn sanitize_workspace_path(path: &str, session_directory: &Path) -> String {
-    let raw_prefix = session_directory.to_string_lossy();
-    if raw_prefix.is_empty() {
-        return path.to_string();
-    }
-
-    let mut sanitized = path.replace(raw_prefix.as_ref(), ".");
-    if std::path::MAIN_SEPARATOR != '/' {
-        let unix_prefix = raw_prefix.replace(std::path::MAIN_SEPARATOR, "/");
-        sanitized = sanitized.replace(&unix_prefix, ".");
-    }
-    sanitized
 }
 
 async fn run(
