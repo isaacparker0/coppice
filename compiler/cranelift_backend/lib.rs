@@ -279,7 +279,8 @@ fn cranelift_type_for(type_reference: &ExecutableTypeReference) -> types::Type {
         ExecutableTypeReference::Boolean
         | ExecutableTypeReference::Nil
         | ExecutableTypeReference::Never => types::I8,
-        ExecutableTypeReference::Int64
+        ExecutableTypeReference::Union { .. }
+        | ExecutableTypeReference::Int64
         | ExecutableTypeReference::String
         | ExecutableTypeReference::Named { .. } => types::I64,
     }
@@ -1012,13 +1013,48 @@ fn runtime_value_matches_type_reference(
         ExecutableTypeReference::String => matches!(value, RuntimeValue::String(_)),
         ExecutableTypeReference::Nil => matches!(value, RuntimeValue::Nil),
         ExecutableTypeReference::Never => false,
+        ExecutableTypeReference::Union { members } => members
+            .iter()
+            .any(|member| runtime_value_matches_type_reference(value, member)),
         ExecutableTypeReference::Named { name } => {
             if let RuntimeValue::StructInstance(struct_instance) = value {
-                return struct_instance.struct_reference.symbol_name == *name;
+                return named_type_reference_matches_struct_instance(name, struct_instance);
             }
             false
         }
     }
+}
+
+fn named_type_reference_matches_struct_instance(
+    type_reference_name: &str,
+    struct_instance: &RuntimeStructInstance,
+) -> bool {
+    if struct_instance.struct_reference.symbol_name == type_reference_name {
+        return true;
+    }
+
+    let Some(last_type_reference_segment) = type_reference_name.rsplit('.').next() else {
+        return false;
+    };
+    if struct_instance.struct_reference.symbol_name != last_type_reference_segment {
+        return false;
+    }
+
+    let Some(type_reference_prefix) = type_reference_name
+        .strip_suffix(last_type_reference_segment)
+        .and_then(|prefix| prefix.strip_suffix('.'))
+    else {
+        return false;
+    };
+    if type_reference_prefix.is_empty() {
+        return true;
+    }
+
+    let normalized_struct_package_path = struct_instance
+        .struct_reference
+        .package_path
+        .replace('/', ".");
+    normalized_struct_package_path == type_reference_prefix
 }
 
 fn build_failed(message: String, path: Option<&Path>) -> CompilerFailure {

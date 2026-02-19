@@ -479,8 +479,47 @@ fn lower_type_name_to_type_reference(
     allow_nil: bool,
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableTypeReference> {
-    let name = lower_type_name_to_identifier(type_name, diagnostics)?;
-    match name.as_str() {
+    if type_name.names.is_empty() {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode requires non-empty type names",
+            type_name.span.clone(),
+        ));
+        return None;
+    }
+
+    if type_name.names.len() == 1 {
+        return lower_type_name_segment_to_type_reference(
+            &type_name.names[0],
+            allow_nil,
+            diagnostics,
+        );
+    }
+
+    let mut union_members = Vec::new();
+    for type_name_segment in &type_name.names {
+        let member =
+            lower_type_name_segment_to_type_reference(type_name_segment, allow_nil, diagnostics)?;
+        union_members.push(member);
+    }
+    Some(ExecutableTypeReference::Union {
+        members: union_members,
+    })
+}
+
+fn lower_type_name_segment_to_type_reference(
+    type_name_segment: &compiler__type_annotated_program::TypeAnnotatedTypeNameSegment,
+    allow_nil: bool,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<ExecutableTypeReference> {
+    if type_name_segment.has_type_arguments {
+        diagnostics.push(PhaseDiagnostic::new(
+            "build mode currently supports only non-generic type names",
+            type_name_segment.span.clone(),
+        ));
+        return None;
+    }
+
+    match type_name_segment.name.as_str() {
         "int64" => Some(ExecutableTypeReference::Int64),
         "boolean" => Some(ExecutableTypeReference::Boolean),
         "string" => Some(ExecutableTypeReference::String),
@@ -490,36 +529,16 @@ fn lower_type_name_to_type_reference(
             } else {
                 diagnostics.push(PhaseDiagnostic::new(
                     "build mode does not support nil as a struct field type yet",
-                    type_name.span.clone(),
+                    type_name_segment.span.clone(),
                 ));
                 None
             }
         }
         "never" => Some(ExecutableTypeReference::Never),
-        _ => Some(ExecutableTypeReference::Named { name }),
+        _ => Some(ExecutableTypeReference::Named {
+            name: type_name_segment.name.clone(),
+        }),
     }
-}
-
-fn lower_type_name_to_identifier(
-    type_name: &TypeAnnotatedTypeName,
-    diagnostics: &mut Vec<PhaseDiagnostic>,
-) -> Option<String> {
-    if type_name.names.len() != 1 {
-        diagnostics.push(PhaseDiagnostic::new(
-            "build mode currently supports only single-segment type names",
-            type_name.span.clone(),
-        ));
-        return None;
-    }
-    let segment = &type_name.names[0];
-    if segment.has_type_arguments {
-        diagnostics.push(PhaseDiagnostic::new(
-            "build mode currently supports only non-generic type names",
-            segment.span.clone(),
-        ));
-        return None;
-    }
-    Some(segment.name.clone())
 }
 
 fn lower_match_arms(

@@ -74,7 +74,12 @@ pub enum ExecutableTypeReference {
     String,
     Nil,
     Never,
-    Named { name: String },
+    Union {
+        members: Vec<ExecutableTypeReference>,
+    },
+    Named {
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
