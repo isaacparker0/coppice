@@ -10,7 +10,8 @@ use compiler__semantic_types::{
 
 use super::{
     FunctionInfo, ImplementedInterfaceEntry, ImportedTypeDeclaration, InterfaceMethodSignature,
-    MethodInfo, MethodKey, TypeChecker, TypeInfo, TypeKind, TypedFunctionSignature,
+    MethodInfo, MethodKey, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference, TypeChecker,
+    TypeInfo, TypeKind, TypedFunctionSignature,
 };
 
 struct ImportedTypeBinding {
@@ -38,6 +39,11 @@ impl TypeChecker<'_> {
             .collect();
 
         for imported_binding in &imported_type_bindings {
+            let Some(imported_binding_info) =
+                self.imported_bindings.get(&imported_binding.local_name)
+            else {
+                continue;
+            };
             if self.types.contains_key(&imported_binding.local_name) {
                 continue;
             }
@@ -54,6 +60,7 @@ impl TypeChecker<'_> {
                 imported_binding.local_name.clone(),
                 TypeInfo {
                     nominal_type_id: imported_binding.type_declaration.nominal_type_id.clone(),
+                    package_path: imported_binding_info.imported_package_path.clone(),
                     type_parameters: imported_binding.type_declaration.type_parameters.clone(),
                     implemented_interface_entries: imported_binding
                         .type_declaration
@@ -140,12 +147,23 @@ impl TypeChecker<'_> {
             .collect();
 
         for imported_binding in imported_function_bindings {
+            let Some(imported_binding_info) =
+                self.imported_bindings.get(&imported_binding.local_name)
+            else {
+                continue;
+            };
             self.imported_functions.insert(
                 imported_binding.local_name,
                 FunctionInfo {
                     type_parameters: imported_binding.signature.type_parameters,
                     parameter_types: imported_binding.signature.parameter_types,
                     return_type: imported_binding.signature.return_type,
+                    call_target: TypeAnnotatedCallTarget::UserDefinedFunction {
+                        callable_reference: TypeAnnotatedCallableReference {
+                            package_path: imported_binding_info.imported_package_path.clone(),
+                            symbol_name: imported_binding_info.imported_symbol_name.clone(),
+                        },
+                    },
                 },
             );
         }
@@ -226,6 +244,7 @@ impl TypeChecker<'_> {
                         package_id: self.package_id,
                         symbol_name: type_declaration.name.clone(),
                     },
+                    package_path: self.package_path.clone(),
                     type_parameters: type_declaration
                         .type_parameters
                         .iter()
@@ -453,6 +472,12 @@ impl TypeChecker<'_> {
                     type_parameters: resolved_type_parameters,
                     parameter_types,
                     return_type,
+                    call_target: TypeAnnotatedCallTarget::UserDefinedFunction {
+                        callable_reference: TypeAnnotatedCallableReference {
+                            package_path: self.package_path.clone(),
+                            symbol_name: function.name.clone(),
+                        },
+                    },
                 },
             );
         }

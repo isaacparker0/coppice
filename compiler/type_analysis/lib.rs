@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
-    SemanticFile, SemanticFunctionDeclaration, SemanticNameReferenceKind, SemanticStatement,
-    SemanticTypeDeclaration, SemanticTypeName, SemanticUnaryOperator,
+    SemanticExpressionId, SemanticFile, SemanticFunctionDeclaration, SemanticNameReferenceKind,
+    SemanticStatement, SemanticTypeDeclaration, SemanticTypeName, SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -15,12 +15,13 @@ use compiler__semantic_types::{
 };
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
-    TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference,
+    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration,
+    TypeAnnotatedFunctionSignature, TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
     TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField, TypeAnnotatedTypeName,
-    TypeAnnotatedTypeNameSegment, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
+    TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -31,15 +32,25 @@ mod statements;
 mod type_narrowing;
 mod unused_bindings;
 
+struct TypeAnalysisSummary {
+    file_typecheck_summary: FileTypecheckSummary,
+    call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
+    type_declarations_for_annotations: Vec<SemanticTypeDeclaration>,
+    function_declarations_for_annotations: Vec<SemanticFunctionDeclaration>,
+}
+
 #[must_use]
 pub fn check_package_unit(
     package_id: PackageId,
+    package_path: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
 ) -> PhaseOutput<TypeAnnotatedFile> {
     let mut diagnostics = Vec::new();
     let summary = analyze_package_unit(
         package_id,
+        package_path,
         package_unit,
         imported_bindings,
         &mut diagnostics,
@@ -52,9 +63,21 @@ pub fn check_package_unit(
 
     PhaseOutput {
         value: TypeAnnotatedFile {
-            function_signature_by_name: function_signature_by_name_from_summary(&summary),
-            struct_declarations: build_struct_declaration_annotations(package_unit),
-            function_declarations: build_function_declaration_annotations(package_unit),
+            function_signature_by_name: function_signature_by_name_from_summary(
+                &summary.file_typecheck_summary,
+            ),
+            struct_declarations: build_struct_declaration_annotations(
+                package_path,
+                &summary.type_declarations_for_annotations,
+                &summary.call_target_by_expression_id,
+                &summary.struct_reference_by_expression_id,
+            ),
+            function_declarations: build_function_declaration_annotations(
+                package_path,
+                &summary.function_declarations_for_annotations,
+                &summary.call_target_by_expression_id,
+                &summary.struct_reference_by_expression_id,
+            ),
         },
         diagnostics,
         status,
@@ -82,17 +105,22 @@ fn function_signature_by_name_from_summary(
 }
 
 fn build_function_declaration_annotations(
-    package_unit: &SemanticFile,
+    package_path: &str,
+    function_declarations: &[SemanticFunctionDeclaration],
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
 ) -> Vec<TypeAnnotatedFunctionDeclaration> {
-    package_unit
-        .declarations
+    function_declarations
         .iter()
-        .filter_map(|declaration| match declaration {
-            SemanticDeclaration::Function(function_declaration) => Some(function_declaration),
-            _ => None,
-        })
         .map(|function_declaration| TypeAnnotatedFunctionDeclaration {
             name: function_declaration.name.clone(),
+            callable_reference: TypeAnnotatedCallableReference {
+                package_path: package_path.to_string(),
+                symbol_name: function_declaration.name.clone(),
+            },
             parameters: function_declaration
                 .parameters
                 .iter()
@@ -112,26 +140,37 @@ fn build_function_declaration_annotations(
                 .body
                 .statements
                 .iter()
-                .map(type_annotated_statement_from_semantic_statement)
+                .map(|statement| {
+                    type_annotated_statement_from_semantic_statement(
+                        statement,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    )
+                })
                 .collect(),
         })
         .collect()
 }
 
 fn build_struct_declaration_annotations(
-    package_unit: &SemanticFile,
+    package_path: &str,
+    type_declarations: &[SemanticTypeDeclaration],
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
 ) -> Vec<TypeAnnotatedStructDeclaration> {
-    package_unit
-        .declarations
+    type_declarations
         .iter()
-        .filter_map(|declaration| match declaration {
-            SemanticDeclaration::Type(type_declaration) => Some(type_declaration),
-            _ => None,
-        })
         .filter_map(|type_declaration| match &type_declaration.kind {
             compiler__semantic_program::SemanticTypeDeclarationKind::Struct { fields, methods } => {
                 Some(TypeAnnotatedStructDeclaration {
                     name: type_declaration.name.clone(),
+                    struct_reference: TypeAnnotatedStructReference {
+                        package_path: package_path.to_string(),
+                        symbol_name: type_declaration.name.clone(),
+                    },
                     fields: fields
                         .iter()
                         .map(|field| TypeAnnotatedStructFieldDeclaration {
@@ -166,7 +205,13 @@ fn build_struct_declaration_annotations(
                                 .body
                                 .statements
                                 .iter()
-                                .map(type_annotated_statement_from_semantic_statement)
+                                .map(|statement| {
+                                    type_annotated_statement_from_semantic_statement(
+                                        statement,
+                                        call_target_by_expression_id,
+                                        struct_reference_by_expression_id,
+                                    )
+                                })
                                 .collect(),
                         })
                         .collect(),
@@ -182,6 +227,11 @@ fn build_struct_declaration_annotations(
 
 fn type_annotated_statement_from_semantic_statement(
     statement: &SemanticStatement,
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
 ) -> TypeAnnotatedStatement {
     match statement {
         SemanticStatement::Binding {
@@ -193,14 +243,22 @@ fn type_annotated_statement_from_semantic_statement(
         } => TypeAnnotatedStatement::Binding {
             name: name.clone(),
             mutable: *mutable,
-            initializer: type_annotated_expression_from_semantic_expression(initializer),
+            initializer: type_annotated_expression_from_semantic_expression(
+                initializer,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            ),
             span: span.clone(),
         },
         SemanticStatement::Assign {
             name, value, span, ..
         } => TypeAnnotatedStatement::Assign {
             name: name.clone(),
-            value: type_annotated_expression_from_semantic_expression(value),
+            value: type_annotated_expression_from_semantic_expression(
+                value,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            ),
             span: span.clone(),
         },
         SemanticStatement::If {
@@ -209,17 +267,33 @@ fn type_annotated_statement_from_semantic_statement(
             else_block,
             span,
         } => TypeAnnotatedStatement::If {
-            condition: type_annotated_expression_from_semantic_expression(condition),
+            condition: type_annotated_expression_from_semantic_expression(
+                condition,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            ),
             then_statements: then_block
                 .statements
                 .iter()
-                .map(type_annotated_statement_from_semantic_statement)
+                .map(|statement| {
+                    type_annotated_statement_from_semantic_statement(
+                        statement,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    )
+                })
                 .collect(),
             else_statements: else_block.as_ref().map(|block| {
                 block
                     .statements
                     .iter()
-                    .map(type_annotated_statement_from_semantic_statement)
+                    .map(|statement| {
+                        type_annotated_statement_from_semantic_statement(
+                            statement,
+                            call_target_by_expression_id,
+                            struct_reference_by_expression_id,
+                        )
+                    })
                     .collect()
             }),
             span: span.clone(),
@@ -229,13 +303,23 @@ fn type_annotated_statement_from_semantic_statement(
             body,
             span,
         } => TypeAnnotatedStatement::For {
-            condition: condition
-                .as_ref()
-                .map(type_annotated_expression_from_semantic_expression),
+            condition: condition.as_ref().map(|expression| {
+                type_annotated_expression_from_semantic_expression(
+                    expression,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )
+            }),
             body_statements: body
                 .statements
                 .iter()
-                .map(type_annotated_statement_from_semantic_statement)
+                .map(|statement| {
+                    type_annotated_statement_from_semantic_statement(
+                        statement,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    )
+                })
                 .collect(),
             span: span.clone(),
         },
@@ -244,11 +328,19 @@ fn type_annotated_statement_from_semantic_statement(
             TypeAnnotatedStatement::Continue { span: span.clone() }
         }
         SemanticStatement::Expression { value, span } => TypeAnnotatedStatement::Expression {
-            value: type_annotated_expression_from_semantic_expression(value),
+            value: type_annotated_expression_from_semantic_expression(
+                value,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            ),
             span: span.clone(),
         },
         SemanticStatement::Return { value, span } => TypeAnnotatedStatement::Return {
-            value: type_annotated_expression_from_semantic_expression(value),
+            value: type_annotated_expression_from_semantic_expression(
+                value,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            ),
             span: span.clone(),
         },
     }
@@ -256,55 +348,68 @@ fn type_annotated_statement_from_semantic_statement(
 
 fn type_annotated_expression_from_semantic_expression(
     expression: &SemanticExpression,
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
 ) -> TypeAnnotatedExpression {
     match expression {
-        SemanticExpression::IntegerLiteral { value, span } => {
+        SemanticExpression::IntegerLiteral { value, span, .. } => {
             TypeAnnotatedExpression::IntegerLiteral {
                 value: *value,
                 span: span.clone(),
             }
         }
-        SemanticExpression::BooleanLiteral { value, span } => {
+        SemanticExpression::BooleanLiteral { value, span, .. } => {
             TypeAnnotatedExpression::BooleanLiteral {
                 value: *value,
                 span: span.clone(),
             }
         }
-        SemanticExpression::NilLiteral { span } => {
+        SemanticExpression::NilLiteral { span, .. } => {
             TypeAnnotatedExpression::NilLiteral { span: span.clone() }
         }
-        SemanticExpression::StringLiteral { value, span } => {
+        SemanticExpression::StringLiteral { value, span, .. } => {
             TypeAnnotatedExpression::StringLiteral {
                 value: value.clone(),
                 span: span.clone(),
             }
         }
-        SemanticExpression::NameReference { name, kind, span } => {
-            TypeAnnotatedExpression::NameReference {
-                name: name.clone(),
-                kind: match kind {
-                    SemanticNameReferenceKind::UserDefined => {
-                        TypeAnnotatedNameReferenceKind::UserDefined
-                    }
-                    SemanticNameReferenceKind::Builtin => TypeAnnotatedNameReferenceKind::Builtin,
-                },
-                span: span.clone(),
-            }
-        }
+        SemanticExpression::NameReference {
+            name, kind, span, ..
+        } => TypeAnnotatedExpression::NameReference {
+            name: name.clone(),
+            kind: match kind {
+                SemanticNameReferenceKind::UserDefined => {
+                    TypeAnnotatedNameReferenceKind::UserDefined
+                }
+                SemanticNameReferenceKind::Builtin => TypeAnnotatedNameReferenceKind::Builtin,
+            },
+            span: span.clone(),
+        },
         SemanticExpression::StructLiteral {
             type_name,
             fields,
             span,
+            ..
         } => TypeAnnotatedExpression::StructLiteral {
             type_name: type_annotated_type_name_from_semantic_type_name(type_name),
             fields: fields
                 .iter()
                 .map(|field| TypeAnnotatedStructLiteralField {
                     name: field.name.clone(),
-                    value: type_annotated_expression_from_semantic_expression(&field.value),
+                    value: type_annotated_expression_from_semantic_expression(
+                        &field.value,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    ),
                     span: field.span.clone(),
                 })
                 .collect(),
+            struct_reference: struct_reference_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .cloned(),
             span: span.clone(),
         },
         SemanticExpression::FieldAccess {
@@ -313,7 +418,11 @@ fn type_annotated_expression_from_semantic_expression(
             span,
             ..
         } => TypeAnnotatedExpression::FieldAccess {
-            target: Box::new(type_annotated_expression_from_semantic_expression(target)),
+            target: Box::new(type_annotated_expression_from_semantic_expression(
+                target,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            )),
             field: field.clone(),
             span: span.clone(),
         },
@@ -321,6 +430,7 @@ fn type_annotated_expression_from_semantic_expression(
             operator,
             expression,
             span,
+            ..
         } => TypeAnnotatedExpression::Unary {
             operator: match operator {
                 SemanticUnaryOperator::Not => TypeAnnotatedUnaryOperator::Not,
@@ -328,6 +438,8 @@ fn type_annotated_expression_from_semantic_expression(
             },
             expression: Box::new(type_annotated_expression_from_semantic_expression(
                 expression,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
             )),
             span: span.clone(),
         },
@@ -336,77 +448,174 @@ fn type_annotated_expression_from_semantic_expression(
             left,
             right,
             span,
+            ..
         } => match operator {
             SemanticBinaryOperator::Add => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Add,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::Subtract => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Subtract,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::Multiply => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Multiply,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::Divide => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Divide,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::EqualEqual => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::EqualEqual,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::NotEqual => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::NotEqual,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::LessThan => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::LessThan,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::LessThanOrEqual => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::LessThanOrEqual,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::GreaterThan => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::GreaterThan,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::GreaterThanOrEqual => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::GreaterThanOrEqual,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::And => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::And,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
             SemanticBinaryOperator::Or => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::Or,
-                left: Box::new(type_annotated_expression_from_semantic_expression(left)),
-                right: Box::new(type_annotated_expression_from_semantic_expression(right)),
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    struct_reference_by_expression_id,
+                )),
                 span: span.clone(),
             },
         },
@@ -415,11 +624,25 @@ fn type_annotated_expression_from_semantic_expression(
             type_arguments,
             arguments,
             span,
+            ..
         } => TypeAnnotatedExpression::Call {
-            callee: Box::new(type_annotated_expression_from_semantic_expression(callee)),
+            callee: Box::new(type_annotated_expression_from_semantic_expression(
+                callee,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            )),
+            call_target: call_target_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .cloned(),
             arguments: arguments
                 .iter()
-                .map(type_annotated_expression_from_semantic_expression)
+                .map(|argument| {
+                    type_annotated_expression_from_semantic_expression(
+                        argument,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    )
+                })
                 .collect(),
             has_type_arguments: !type_arguments.is_empty(),
             span: span.clone(),
@@ -427,6 +650,23 @@ fn type_annotated_expression_from_semantic_expression(
         _ => TypeAnnotatedExpression::Unsupported {
             span: expression.span(),
         },
+    }
+}
+
+fn semantic_expression_id(expression: &SemanticExpression) -> SemanticExpressionId {
+    match expression {
+        SemanticExpression::IntegerLiteral { id, .. }
+        | SemanticExpression::NilLiteral { id, .. }
+        | SemanticExpression::BooleanLiteral { id, .. }
+        | SemanticExpression::StringLiteral { id, .. }
+        | SemanticExpression::NameReference { id, .. }
+        | SemanticExpression::StructLiteral { id, .. }
+        | SemanticExpression::FieldAccess { id, .. }
+        | SemanticExpression::Call { id, .. }
+        | SemanticExpression::Unary { id, .. }
+        | SemanticExpression::Binary { id, .. }
+        | SemanticExpression::Match { id, .. }
+        | SemanticExpression::Matches { id, .. } => *id,
     }
 }
 
@@ -447,21 +687,29 @@ fn type_annotated_type_name_from_semantic_type_name(
     }
 }
 
-pub fn analyze_package_unit(
+fn analyze_package_unit(
     package_id: PackageId,
+    package_path: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
-) -> FileTypecheckSummary {
-    check_package_unit_declarations(package_id, package_unit, imported_bindings, diagnostics)
+) -> TypeAnalysisSummary {
+    check_package_unit_declarations(
+        package_id,
+        package_path,
+        package_unit,
+        imported_bindings,
+        diagnostics,
+    )
 }
 
 fn check_package_unit_declarations(
     package_id: PackageId,
+    package_path: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
-) -> FileTypecheckSummary {
+) -> TypeAnalysisSummary {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
     let mut function_declarations = Vec::new();
@@ -479,25 +727,31 @@ fn check_package_unit_declarations(
         }
     }
 
-    check_declarations(
+    let mut summary = check_declarations(
         package_id,
+        package_path,
         diagnostics,
         &type_declarations,
         &constant_declarations,
         &function_declarations,
         imported_bindings,
-    )
+    );
+    summary.type_declarations_for_annotations = type_declarations;
+    summary.function_declarations_for_annotations = function_declarations;
+    summary
 }
 
 fn check_declarations(
     package_id: PackageId,
+    package_path: &str,
     diagnostics: &mut Vec<PhaseDiagnostic>,
     type_declarations: &[SemanticTypeDeclaration],
     constant_declarations: &[SemanticConstantDeclaration],
     function_declarations: &[SemanticFunctionDeclaration],
     imported_bindings: &[ImportedBinding],
-) -> FileTypecheckSummary {
-    let mut type_checker = TypeChecker::new(package_id, imported_bindings, diagnostics);
+) -> TypeAnalysisSummary {
+    let mut type_checker =
+        TypeChecker::new(package_id, package_path, imported_bindings, diagnostics);
     type_checker.collect_imported_type_declarations();
     type_checker.collect_type_declarations(type_declarations);
     type_checker.collect_imported_function_signatures();
@@ -532,12 +786,15 @@ struct ConstantInfo {
 struct ImportedBindingInfo {
     symbol: ImportedSymbol,
     span: Span,
+    imported_package_path: String,
+    imported_symbol_name: String,
     used: bool,
 }
 
 #[derive(Clone)]
 struct TypeInfo {
     nominal_type_id: NominalTypeId,
+    package_path: String,
     type_parameters: Vec<GenericTypeParameter>,
     implemented_interface_entries: Vec<ImplementedInterfaceEntry>,
     kind: TypeKind,
@@ -575,6 +832,7 @@ struct FunctionInfo {
     type_parameters: Vec<GenericTypeParameter>,
     parameter_types: Vec<Type>,
     return_type: Type,
+    call_target: TypeAnnotatedCallTarget,
 }
 
 struct MethodInfo {
@@ -591,6 +849,7 @@ struct MethodKey {
 
 struct TypeChecker<'a> {
     package_id: PackageId,
+    package_path: String,
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
@@ -602,6 +861,8 @@ struct TypeChecker<'a> {
     diagnostics: &'a mut Vec<PhaseDiagnostic>,
     current_return_type: Type,
     loop_depth: usize,
+    call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
 }
 
 struct BranchNarrowing {
@@ -631,6 +892,7 @@ trait StatementSpan {
 impl<'a> TypeChecker<'a> {
     fn new(
         package_id: PackageId,
+        package_path: &str,
         imported_bindings: &[ImportedBinding],
         diagnostics: &'a mut Vec<PhaseDiagnostic>,
     ) -> Self {
@@ -641,12 +903,15 @@ impl<'a> TypeChecker<'a> {
                 ImportedBindingInfo {
                     symbol: imported.symbol.clone(),
                     span: imported.span.clone(),
+                    imported_package_path: imported.imported_package_path.clone(),
+                    imported_symbol_name: imported.imported_symbol_name.clone(),
                     used: false,
                 },
             );
         }
         Self {
             package_id,
+            package_path: package_path.to_string(),
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: builtin_functions(),
@@ -658,6 +923,8 @@ impl<'a> TypeChecker<'a> {
             diagnostics,
             current_return_type: Type::Unknown,
             loop_depth: 0,
+            call_target_by_expression_id: BTreeMap::new(),
+            struct_reference_by_expression_id: BTreeMap::new(),
         }
     }
 
@@ -666,7 +933,7 @@ impl<'a> TypeChecker<'a> {
         type_declarations: &[SemanticTypeDeclaration],
         function_declarations: &[SemanticFunctionDeclaration],
         constant_declarations: &[SemanticConstantDeclaration],
-    ) -> FileTypecheckSummary {
+    ) -> TypeAnalysisSummary {
         let mut typed_symbol_by_name = HashMap::new();
 
         for type_declaration in type_declarations {
@@ -693,8 +960,14 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        FileTypecheckSummary {
-            typed_symbol_by_name,
+        TypeAnalysisSummary {
+            file_typecheck_summary: FileTypecheckSummary {
+                typed_symbol_by_name,
+            },
+            call_target_by_expression_id: self.call_target_by_expression_id.clone(),
+            struct_reference_by_expression_id: self.struct_reference_by_expression_id.clone(),
+            type_declarations_for_annotations: Vec::new(),
+            function_declarations_for_annotations: Vec::new(),
         }
     }
 
@@ -1128,6 +1401,9 @@ fn builtin_functions() -> HashMap<String, FunctionInfo> {
             type_parameters: Vec::new(),
             parameter_types: vec![Type::String],
             return_type: Type::Never,
+            call_target: TypeAnnotatedCallTarget::BuiltinFunction {
+                function_name: "abort".to_string(),
+            },
         },
     );
     functions.insert(
@@ -1136,6 +1412,9 @@ fn builtin_functions() -> HashMap<String, FunctionInfo> {
             type_parameters: Vec::new(),
             parameter_types: vec![Type::String],
             return_type: Type::Nil,
+            call_target: TypeAnnotatedCallTarget::BuiltinFunction {
+                function_name: "print".to_string(),
+            },
         },
     );
     functions

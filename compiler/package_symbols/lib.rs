@@ -53,6 +53,7 @@ pub struct ResolvedImportBindingSummary {
 pub struct ResolvedImportSummary {
     pub source_path: PathBuf,
     pub target_package_id: PackageId,
+    pub target_package_path: String,
     pub bindings: Vec<ResolvedImportBindingSummary>,
 }
 
@@ -254,6 +255,8 @@ fn build_imported_bindings_by_file(
                 .or_default()
                 .push(ImportedBinding {
                     local_name: binding.local_name.clone(),
+                    imported_package_path: resolved_import.target_package_path.clone(),
+                    imported_symbol_name: binding.imported_name.clone(),
                     span: binding.span.clone(),
                     symbol,
                 });

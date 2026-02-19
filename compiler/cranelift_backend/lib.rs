@@ -3,14 +3,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use compiler__executable_program::{
-    ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration, ExecutableTypeReference,
+    ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructReference, ExecutableTypeReference,
     ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
-use compiler__runtime_interface::{
-    ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT, USER_ENTRYPOINT_FUNCTION_NAME,
-};
+use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
 use cranelift_codegen::ir::{AbiParam, InstBuilder, types};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::{JITBuilder, JITModule};
@@ -41,7 +40,7 @@ enum RuntimeValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RuntimeStructInstance {
-    type_name: String,
+    struct_reference: ExecutableStructReference,
     field_value_by_name: BTreeMap<String, RuntimeValue>,
 }
 
@@ -59,8 +58,10 @@ enum RuntimeExecutionError {
 }
 
 struct ProgramExecutionContext<'a> {
-    function_declaration_by_name: BTreeMap<&'a str, &'a ExecutableFunctionDeclaration>,
-    struct_declaration_by_name: BTreeMap<&'a str, &'a ExecutableStructDeclaration>,
+    function_declaration_by_callable_reference:
+        BTreeMap<ExecutableCallableReference, &'a ExecutableFunctionDeclaration>,
+    struct_declaration_by_reference:
+        BTreeMap<ExecutableStructReference, &'a ExecutableStructDeclaration>,
 }
 
 pub fn build_program(
@@ -115,7 +116,10 @@ pub fn run_program(binary_path: &Path) -> Result<i32, CompilerFailure> {
         })?;
 
     let program_execution_context = build_program_execution_context(&artifact.executable_program);
-    match execute_main_function(&program_execution_context) {
+    match execute_entrypoint_function(
+        &program_execution_context,
+        &artifact.executable_program.entrypoint_callable_reference,
+    ) {
         Ok(()) => Ok(0),
         Err(RuntimeExecutionError::Abort { exit_code }) => Ok(exit_code),
         Err(RuntimeExecutionError::Failure(failure)) => Err(failure),
@@ -134,7 +138,7 @@ fn validate_program_with_cranelift(program: &ExecutableProgram) -> Result<(), Co
     for function_declaration in &program.function_declarations {
         define_stub_function_for_validation(
             &mut jit_module,
-            &format!("coppice_{}", function_declaration.name),
+            &lowered_function_symbol_name(&function_declaration.callable_reference),
             &function_declaration
                 .parameters
                 .iter()
@@ -154,9 +158,9 @@ fn validate_program_with_cranelift(program: &ExecutableProgram) -> Result<(), Co
             }
             define_stub_function_for_validation(
                 &mut jit_module,
-                &format!(
-                    "coppice_{}_{}",
-                    struct_declaration.name, method_declaration.name
+                &lowered_method_symbol_name(
+                    &struct_declaration.struct_reference,
+                    &method_declaration.name,
                 ),
                 &parameter_types,
                 &method_declaration.return_type,
@@ -165,6 +169,41 @@ fn validate_program_with_cranelift(program: &ExecutableProgram) -> Result<(), Co
     }
 
     Ok(())
+}
+
+fn lowered_function_symbol_name(callable_reference: &ExecutableCallableReference) -> String {
+    if callable_reference.package_path.is_empty() {
+        return format!("coppice_{}", callable_reference.symbol_name);
+    }
+    format!(
+        "coppice_{}_{}",
+        callable_reference
+            .package_path
+            .replace(['/', '\\'], "_")
+            .replace("::", "_"),
+        callable_reference.symbol_name
+    )
+}
+
+fn lowered_method_symbol_name(
+    struct_reference: &ExecutableStructReference,
+    method_name: &str,
+) -> String {
+    let package_prefix = if struct_reference.package_path.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "{}_",
+            struct_reference
+                .package_path
+                .replace(['/', '\\'], "_")
+                .replace("::", "_")
+        )
+    };
+    format!(
+        "coppice_{package_prefix}{}_{}",
+        struct_reference.symbol_name, method_name
+    )
 }
 
 fn define_stub_function_for_validation(
@@ -256,31 +295,37 @@ fn zero_value_for_type(
 }
 
 fn build_program_execution_context(program: &ExecutableProgram) -> ProgramExecutionContext<'_> {
-    let mut function_declaration_by_name = BTreeMap::new();
+    let mut function_declaration_by_callable_reference = BTreeMap::new();
     for function_declaration in &program.function_declarations {
-        function_declaration_by_name
-            .insert(function_declaration.name.as_str(), function_declaration);
+        function_declaration_by_callable_reference.insert(
+            function_declaration.callable_reference.clone(),
+            function_declaration,
+        );
     }
 
-    let mut struct_declaration_by_name = BTreeMap::new();
+    let mut struct_declaration_by_reference = BTreeMap::new();
     for struct_declaration in &program.struct_declarations {
-        struct_declaration_by_name.insert(struct_declaration.name.as_str(), struct_declaration);
+        struct_declaration_by_reference.insert(
+            struct_declaration.struct_reference.clone(),
+            struct_declaration,
+        );
     }
 
     ProgramExecutionContext {
-        function_declaration_by_name,
-        struct_declaration_by_name,
+        function_declaration_by_callable_reference,
+        struct_declaration_by_reference,
     }
 }
 
-fn execute_main_function(
+fn execute_entrypoint_function(
     program_execution_context: &ProgramExecutionContext<'_>,
+    entrypoint_callable_reference: &ExecutableCallableReference,
 ) -> Result<(), RuntimeExecutionError> {
     let mut local_value_by_name = BTreeMap::new();
     let mut return_value = RuntimeValue::Nil;
-    execute_function_by_name(
+    execute_function_by_callable_reference(
         program_execution_context,
-        USER_ENTRYPOINT_FUNCTION_NAME,
+        entrypoint_callable_reference,
         &[],
         &mut local_value_by_name,
         &mut return_value,
@@ -288,19 +333,22 @@ fn execute_main_function(
     Ok(())
 }
 
-fn execute_function_by_name(
+fn execute_function_by_callable_reference(
     program_execution_context: &ProgramExecutionContext<'_>,
-    function_name: &str,
+    callable_reference: &ExecutableCallableReference,
     argument_values: &[RuntimeValue],
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
     return_value: &mut RuntimeValue,
 ) -> Result<(), RuntimeExecutionError> {
     let Some(function_declaration) = program_execution_context
-        .function_declaration_by_name
-        .get(function_name)
+        .function_declaration_by_callable_reference
+        .get(callable_reference)
     else {
         return Err(RuntimeExecutionError::Failure(run_failed(
-            format!("unknown function '{function_name}'"),
+            format!(
+                "unknown function '{}::{}'",
+                callable_reference.package_path, callable_reference.symbol_name
+            ),
             None,
         )));
     };
@@ -308,7 +356,9 @@ fn execute_function_by_name(
     if function_declaration.parameters.len() != argument_values.len() {
         return Err(RuntimeExecutionError::Failure(run_failed(
             format!(
-                "function '{function_name}' expected {} argument(s) but got {}",
+                "function '{}::{}' expected {} argument(s) but got {}",
+                callable_reference.package_path,
+                callable_reference.symbol_name,
                 function_declaration.parameters.len(),
                 argument_values.len()
             ),
@@ -332,7 +382,10 @@ fn execute_function_by_name(
         StatementExecutionSignal::Break | StatementExecutionSignal::Continue
     ) {
         return Err(RuntimeExecutionError::Failure(run_failed(
-            format!("function '{function_name}' contains invalid loop control flow"),
+            format!(
+                "function '{}::{}' contains invalid loop control flow",
+                callable_reference.package_path, callable_reference.symbol_name
+            ),
             None,
         )));
     }
@@ -348,11 +401,15 @@ fn execute_method(
     return_value: &mut RuntimeValue,
 ) -> Result<RuntimeStructInstance, RuntimeExecutionError> {
     let Some(struct_declaration) = program_execution_context
-        .struct_declaration_by_name
-        .get(struct_instance.type_name.as_str())
+        .struct_declaration_by_reference
+        .get(&struct_instance.struct_reference)
     else {
         return Err(RuntimeExecutionError::Failure(run_failed(
-            format!("unknown struct '{}'", struct_instance.type_name),
+            format!(
+                "unknown struct '{}::{}'",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name
+            ),
             None,
         )));
     };
@@ -364,8 +421,10 @@ fn execute_method(
     else {
         return Err(RuntimeExecutionError::Failure(run_failed(
             format!(
-                "unknown method '{}.{}'",
-                struct_instance.type_name, method_name
+                "unknown method '{}::{}.{}'",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name,
+                method_name
             ),
             None,
         )));
@@ -374,8 +433,9 @@ fn execute_method(
     if method_declaration.parameters.len() != argument_values.len() {
         return Err(RuntimeExecutionError::Failure(run_failed(
             format!(
-                "method '{}.{}' expected {} argument(s) but got {}",
-                struct_instance.type_name,
+                "method '{}::{}.{}' expected {} argument(s) but got {}",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name,
                 method_name,
                 method_declaration.parameters.len(),
                 argument_values.len()
@@ -406,8 +466,10 @@ fn execute_method(
     ) {
         return Err(RuntimeExecutionError::Failure(run_failed(
             format!(
-                "method '{}.{}' contains invalid loop control flow",
-                struct_instance.type_name, method_name
+                "method '{}::{}.{}' contains invalid loop control flow",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name,
+                method_name
             ),
             None,
         )));
@@ -418,8 +480,10 @@ fn execute_method(
     else {
         return Err(RuntimeExecutionError::Failure(run_failed(
             format!(
-                "method '{}.{}' did not preserve receiver value",
-                struct_instance.type_name, method_name
+                "method '{}::{}.{}' did not preserve receiver value",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name,
+                method_name
             ),
             None,
         )));
@@ -549,7 +613,10 @@ fn evaluate_expression(
                 RuntimeExecutionError::Failure(run_failed(format!("unknown local '{name}'"), None))
             })
         }
-        ExecutableExpression::StructLiteral { type_name, fields } => {
+        ExecutableExpression::StructLiteral {
+            struct_reference,
+            fields,
+        } => {
             let mut field_value_by_name = BTreeMap::new();
             for field in fields {
                 let field_value = evaluate_expression(
@@ -560,7 +627,7 @@ fn evaluate_expression(
                 field_value_by_name.insert(field.name.clone(), field_value);
             }
             Ok(RuntimeValue::StructInstance(RuntimeStructInstance {
-                type_name: type_name.clone(),
+                struct_reference: struct_reference.clone(),
                 field_value_by_name,
             }))
         }
@@ -579,7 +646,12 @@ fn evaluate_expression(
                 .cloned()
                 .ok_or_else(|| {
                     RuntimeExecutionError::Failure(run_failed(
-                        format!("unknown field '{}.{}'", struct_instance.type_name, field),
+                        format!(
+                            "unknown field '{}::{}.{}'",
+                            struct_instance.struct_reference.package_path,
+                            struct_instance.struct_reference.symbol_name,
+                            field
+                        ),
                         None,
                     ))
                 })
@@ -610,9 +682,14 @@ fn evaluate_expression(
             right,
             local_value_by_name,
         ),
-        ExecutableExpression::Call { callee, arguments } => evaluate_call_expression(
+        ExecutableExpression::Call {
+            callee,
+            call_target,
+            arguments,
+        } => evaluate_call_expression(
             program_execution_context,
             callee,
+            call_target.as_ref(),
             arguments,
             local_value_by_name,
         ),
@@ -704,6 +781,7 @@ fn evaluate_binary_expression(
 fn evaluate_call_expression(
     program_execution_context: &ProgramExecutionContext<'_>,
     callee: &ExecutableExpression,
+    call_target: Option<&ExecutableCallTarget>,
     arguments: &[ExecutableExpression],
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
 ) -> Result<RuntimeValue, RuntimeExecutionError> {
@@ -714,43 +792,58 @@ fn evaluate_call_expression(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    match callee {
-        ExecutableExpression::Identifier { name } => {
-            if name == PRINT_FUNCTION_CONTRACT.language_name {
-                if argument_values.len() != 1 {
-                    return Err(RuntimeExecutionError::Failure(run_failed(
-                        "print(...) requires exactly one argument".to_string(),
-                        None,
-                    )));
+    if let Some(call_target) = call_target {
+        match call_target {
+            ExecutableCallTarget::BuiltinFunction { function_name } => {
+                if function_name == PRINT_FUNCTION_CONTRACT.language_name {
+                    if argument_values.len() != 1 {
+                        return Err(RuntimeExecutionError::Failure(run_failed(
+                            "print(...) requires exactly one argument".to_string(),
+                            None,
+                        )));
+                    }
+                    let print_argument = runtime_string_from_value(&argument_values[0])?;
+                    println!("{print_argument}");
+                    return Ok(RuntimeValue::Nil);
                 }
-                let print_argument = runtime_string_from_value(&argument_values[0])?;
-                println!("{print_argument}");
-                return Ok(RuntimeValue::Nil);
-            }
 
-            if name == ABORT_FUNCTION_CONTRACT.language_name {
-                if argument_values.len() != 1 {
-                    return Err(RuntimeExecutionError::Failure(run_failed(
-                        "abort(...) requires exactly one argument".to_string(),
-                        None,
-                    )));
+                if function_name == ABORT_FUNCTION_CONTRACT.language_name {
+                    if argument_values.len() != 1 {
+                        return Err(RuntimeExecutionError::Failure(run_failed(
+                            "abort(...) requires exactly one argument".to_string(),
+                            None,
+                        )));
+                    }
+                    let abort_message = runtime_string_from_value(&argument_values[0])?;
+                    eprintln!("{abort_message}");
+                    return Err(RuntimeExecutionError::Abort { exit_code: 1 });
                 }
-                let abort_message = runtime_string_from_value(&argument_values[0])?;
-                eprintln!("{abort_message}");
-                return Err(RuntimeExecutionError::Abort { exit_code: 1 });
-            }
 
-            let mut function_local_value_by_name = BTreeMap::new();
-            let mut function_return_value = RuntimeValue::Nil;
-            execute_function_by_name(
-                program_execution_context,
-                name,
-                &argument_values,
-                &mut function_local_value_by_name,
-                &mut function_return_value,
-            )?;
-            Ok(function_return_value)
+                return Err(RuntimeExecutionError::Failure(run_failed(
+                    format!("unknown builtin function '{function_name}'"),
+                    None,
+                )));
+            }
+            ExecutableCallTarget::UserDefinedFunction { callable_reference } => {
+                let mut function_local_value_by_name = BTreeMap::new();
+                let mut function_return_value = RuntimeValue::Nil;
+                execute_function_by_callable_reference(
+                    program_execution_context,
+                    callable_reference,
+                    &argument_values,
+                    &mut function_local_value_by_name,
+                    &mut function_return_value,
+                )?;
+                return Ok(function_return_value);
+            }
         }
+    }
+
+    match callee {
+        ExecutableExpression::Identifier { .. } => Err(RuntimeExecutionError::Failure(run_failed(
+            "build mode requires resolved call target metadata for function calls".to_string(),
+            None,
+        ))),
         ExecutableExpression::FieldAccess { target, field } => {
             if let ExecutableExpression::Identifier {
                 name: target_variable_name,
@@ -777,27 +870,27 @@ fn evaluate_call_expression(
                     target_variable_name.clone(),
                     RuntimeValue::StructInstance(updated_struct_instance),
                 );
-                return Ok(method_return_value);
+                Ok(method_return_value)
+            } else {
+                let target_value =
+                    evaluate_expression(program_execution_context, target, local_value_by_name)?;
+                let RuntimeValue::StructInstance(target_struct_instance) = target_value else {
+                    return Err(RuntimeExecutionError::Failure(run_failed(
+                        "method call requires struct receiver".to_string(),
+                        None,
+                    )));
+                };
+
+                let mut method_return_value = RuntimeValue::Nil;
+                let _ = execute_method(
+                    program_execution_context,
+                    &target_struct_instance,
+                    field,
+                    &argument_values,
+                    &mut method_return_value,
+                )?;
+                Ok(method_return_value)
             }
-
-            let target_value =
-                evaluate_expression(program_execution_context, target, local_value_by_name)?;
-            let RuntimeValue::StructInstance(target_struct_instance) = target_value else {
-                return Err(RuntimeExecutionError::Failure(run_failed(
-                    "method call requires struct receiver".to_string(),
-                    None,
-                )));
-            };
-
-            let mut method_return_value = RuntimeValue::Nil;
-            let _ = execute_method(
-                program_execution_context,
-                &target_struct_instance,
-                field,
-                &argument_values,
-                &mut method_return_value,
-            )?;
-            Ok(method_return_value)
         }
         _ => Err(RuntimeExecutionError::Failure(run_failed(
             "build mode currently supports calls to named functions and methods only".to_string(),

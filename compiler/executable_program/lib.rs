@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableProgram {
+    pub entrypoint_callable_reference: ExecutableCallableReference,
     pub struct_declarations: Vec<ExecutableStructDeclaration>,
     pub function_declarations: Vec<ExecutableFunctionDeclaration>,
 }
@@ -9,9 +10,26 @@ pub struct ExecutableProgram {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableFunctionDeclaration {
     pub name: String,
+    pub callable_reference: ExecutableCallableReference,
     pub parameters: Vec<ExecutableParameterDeclaration>,
     pub return_type: ExecutableTypeReference,
     pub statements: Vec<ExecutableStatement>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ExecutableCallableReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ExecutableCallTarget {
+    BuiltinFunction {
+        function_name: String,
+    },
+    UserDefinedFunction {
+        callable_reference: ExecutableCallableReference,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,8 +41,15 @@ pub struct ExecutableParameterDeclaration {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableStructDeclaration {
     pub name: String,
+    pub struct_reference: ExecutableStructReference,
     pub fields: Vec<ExecutableStructFieldDeclaration>,
     pub methods: Vec<ExecutableMethodDeclaration>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ExecutableStructReference {
+    pub package_path: String,
+    pub symbol_name: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -98,7 +123,7 @@ pub enum ExecutableExpression {
         name: String,
     },
     StructLiteral {
-        type_name: String,
+        struct_reference: ExecutableStructReference,
         fields: Vec<ExecutableStructLiteralField>,
     },
     FieldAccess {
@@ -116,6 +141,7 @@ pub enum ExecutableExpression {
     },
     Call {
         callee: Box<ExecutableExpression>,
+        call_target: Option<ExecutableCallTarget>,
         arguments: Vec<ExecutableExpression>,
     },
 }

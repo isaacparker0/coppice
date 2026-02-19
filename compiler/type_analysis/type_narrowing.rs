@@ -127,6 +127,7 @@ impl TypeChecker<'_> {
             value,
             type_name,
             span: _,
+            ..
         } = condition
         {
             let SemanticExpression::NameReference {

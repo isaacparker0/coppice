@@ -9,6 +9,28 @@ pub struct TypeAnnotatedFile {
     pub function_declarations: Vec<TypeAnnotatedFunctionDeclaration>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedCallableReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedStructReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypeAnnotatedCallTarget {
+    BuiltinFunction {
+        function_name: String,
+    },
+    UserDefinedFunction {
+        callable_reference: TypeAnnotatedCallableReference,
+    },
+}
+
 #[derive(Clone)]
 pub struct TypeAnnotatedFunctionSignature {
     pub type_parameter_count: usize,
@@ -19,6 +41,7 @@ pub struct TypeAnnotatedFunctionSignature {
 #[derive(Clone)]
 pub struct TypeAnnotatedFunctionDeclaration {
     pub name: String,
+    pub callable_reference: TypeAnnotatedCallableReference,
     pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
     pub return_type: TypeAnnotatedTypeName,
     pub span: Span,
@@ -35,6 +58,7 @@ pub struct TypeAnnotatedParameterDeclaration {
 #[derive(Clone)]
 pub struct TypeAnnotatedStructDeclaration {
     pub name: String,
+    pub struct_reference: TypeAnnotatedStructReference,
     pub fields: Vec<TypeAnnotatedStructFieldDeclaration>,
     pub methods: Vec<TypeAnnotatedMethodDeclaration>,
     pub span: Span,
@@ -124,6 +148,7 @@ pub enum TypeAnnotatedExpression {
     },
     StructLiteral {
         type_name: TypeAnnotatedTypeName,
+        struct_reference: Option<TypeAnnotatedStructReference>,
         fields: Vec<TypeAnnotatedStructLiteralField>,
         span: Span,
     },
@@ -145,6 +170,7 @@ pub enum TypeAnnotatedExpression {
     },
     Call {
         callee: Box<TypeAnnotatedExpression>,
+        call_target: Option<TypeAnnotatedCallTarget>,
         arguments: Vec<TypeAnnotatedExpression>,
         has_type_arguments: bool,
         span: Span,

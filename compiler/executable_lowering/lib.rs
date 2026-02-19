@@ -1,29 +1,49 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
-    ExecutableBinaryOperator, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableMethodDeclaration, ExecutableParameterDeclaration, ExecutableProgram,
-    ExecutableStatement, ExecutableStructDeclaration, ExecutableStructFieldDeclaration,
-    ExecutableStructLiteralField, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMethodDeclaration,
+    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
+    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedMethodDeclaration, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedExpression,
+    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedMethodDeclaration,
+    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
+    TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
 pub fn lower_type_annotated_file(
     type_annotated_file: &TypeAnnotatedFile,
 ) -> PhaseOutput<ExecutableProgram> {
+    lower_type_annotated_build_unit(type_annotated_file, &[])
+}
+
+#[must_use]
+pub fn lower_type_annotated_build_unit(
+    binary_entrypoint_file: &TypeAnnotatedFile,
+    dependency_library_files: &[&TypeAnnotatedFile],
+) -> PhaseOutput<ExecutableProgram> {
     let mut diagnostics = Vec::new();
 
-    validate_main_signature_from_type_analysis(type_annotated_file, &mut diagnostics);
-    let struct_declarations =
-        lower_struct_declarations(&type_annotated_file.struct_declarations, &mut diagnostics);
+    let entrypoint_callable_reference =
+        validate_main_signature_from_type_analysis(binary_entrypoint_file, &mut diagnostics);
+
+    let mut all_struct_declarations = Vec::new();
+    let mut all_function_declarations = Vec::new();
+    all_struct_declarations.extend(binary_entrypoint_file.struct_declarations.iter().cloned());
+    all_function_declarations.extend(binary_entrypoint_file.function_declarations.iter().cloned());
+    for dependency_file in dependency_library_files {
+        all_struct_declarations.extend(dependency_file.struct_declarations.iter().cloned());
+        all_function_declarations.extend(dependency_file.function_declarations.iter().cloned());
+    }
+
+    let struct_declarations = lower_struct_declarations(&all_struct_declarations, &mut diagnostics);
     let function_declarations =
-        lower_function_declarations(&type_annotated_file.function_declarations, &mut diagnostics);
+        lower_function_declarations(&all_function_declarations, &mut diagnostics);
 
     let status = if diagnostics.is_empty() {
         PhaseStatus::Ok
@@ -31,8 +51,15 @@ pub fn lower_type_annotated_file(
         PhaseStatus::PreventsDownstreamExecution
     };
 
+    let entrypoint_callable_reference =
+        entrypoint_callable_reference.unwrap_or_else(|| ExecutableCallableReference {
+            package_path: String::new(),
+            symbol_name: "main".to_string(),
+        });
+
     PhaseOutput {
         value: ExecutableProgram {
+            entrypoint_callable_reference,
             struct_declarations,
             function_declarations,
         },
@@ -71,6 +98,10 @@ fn lower_function_declarations(
         }
         lowered.push(ExecutableFunctionDeclaration {
             name: function_declaration.name.clone(),
+            callable_reference: ExecutableCallableReference {
+                package_path: function_declaration.callable_reference.package_path.clone(),
+                symbol_name: function_declaration.callable_reference.symbol_name.clone(),
+            },
             parameters: executable_parameters,
             return_type,
             statements: lower_statements(&function_declaration.statements, diagnostics),
@@ -102,6 +133,10 @@ fn lower_struct_declarations(
         if struct_supported {
             lowered.push(ExecutableStructDeclaration {
                 name: struct_declaration.name.clone(),
+                struct_reference: ExecutableStructReference {
+                    package_path: struct_declaration.struct_reference.package_path.clone(),
+                    symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+                },
                 fields: executable_fields,
                 methods: lower_method_declarations(&struct_declaration.methods, diagnostics),
             });
@@ -152,7 +187,7 @@ fn lower_method_declarations(
 fn validate_main_signature_from_type_analysis(
     type_annotated_file: &TypeAnnotatedFile,
     diagnostics: &mut Vec<PhaseDiagnostic>,
-) {
+) -> Option<ExecutableCallableReference> {
     let fallback_span_for_diagnostic = type_annotated_file
         .function_declarations
         .iter()
@@ -165,7 +200,7 @@ fn validate_main_signature_from_type_analysis(
             "build mode requires type analysis information for main",
             fallback_span_for_diagnostic,
         ));
-        return;
+        return None;
     };
     if main_signature.type_parameter_count != 0 {
         diagnostics.push(PhaseDiagnostic::new(
@@ -185,6 +220,15 @@ fn validate_main_signature_from_type_analysis(
             fallback_span_for_diagnostic,
         ));
     }
+
+    type_annotated_file
+        .function_declarations
+        .iter()
+        .find(|function_declaration| function_declaration.name == "main")
+        .map(|function_declaration| ExecutableCallableReference {
+            package_path: function_declaration.callable_reference.package_path.clone(),
+            symbol_name: function_declaration.callable_reference.symbol_name.clone(),
+        })
 }
 
 fn lower_statements(
@@ -289,10 +333,16 @@ fn lower_expression(
             ExecutableExpression::Identifier { name: name.clone() }
         }
         TypeAnnotatedExpression::StructLiteral {
-            type_name, fields, ..
+            struct_reference,
+            fields,
+            span,
+            ..
         } => {
-            let Some(executable_type_name) = lower_type_name_to_identifier(type_name, diagnostics)
-            else {
+            let Some(struct_reference) = struct_reference else {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "build mode requires resolved struct reference metadata for struct literals",
+                    span.clone(),
+                ));
                 return ExecutableExpression::NilLiteral;
             };
             let executable_fields = fields
@@ -303,7 +353,10 @@ fn lower_expression(
                 })
                 .collect();
             ExecutableExpression::StructLiteral {
-                type_name: executable_type_name,
+                struct_reference: ExecutableStructReference {
+                    package_path: struct_reference.package_path.clone(),
+                    symbol_name: struct_reference.symbol_name.clone(),
+                },
                 fields: executable_fields,
             }
         }
@@ -353,6 +406,7 @@ fn lower_expression(
         },
         TypeAnnotatedExpression::Call {
             callee,
+            call_target,
             arguments,
             has_type_arguments,
             span,
@@ -369,6 +423,21 @@ fn lower_expression(
                 .collect();
             ExecutableExpression::Call {
                 callee: Box::new(lower_expression(callee, diagnostics)),
+                call_target: call_target.as_ref().map(|call_target| match call_target {
+                    TypeAnnotatedCallTarget::BuiltinFunction { function_name } => {
+                        ExecutableCallTarget::BuiltinFunction {
+                            function_name: function_name.clone(),
+                        }
+                    }
+                    TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
+                        ExecutableCallTarget::UserDefinedFunction {
+                            callable_reference: ExecutableCallableReference {
+                                package_path: callable_reference.package_path.clone(),
+                                symbol_name: callable_reference.symbol_name.clone(),
+                            },
+                        }
+                    }
+                }),
                 arguments: lowered_arguments,
             }
         }

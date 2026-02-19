@@ -1,0 +1,6 @@
+import workspace/lib { greet }
+
+function main() -> nil {
+    print(greet())
+    return nil
+}

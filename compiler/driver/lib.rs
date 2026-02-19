@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use compiler__cranelift_backend::{BuildArtifactIdentity, build_program, run_program};
 use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
-use compiler__executable_lowering::lower_type_annotated_file;
+use compiler__executable_lowering::lower_type_annotated_build_unit;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
     PackageSymbolFileInput, ResolvedImportBindingSummary, ResolvedImportSummary,
@@ -39,6 +39,9 @@ struct AnalyzedTarget {
     workspace: Workspace,
     absolute_target_path: PathBuf,
     target_is_file: bool,
+    package_path_by_file: BTreeMap<PathBuf, String>,
+    file_role_by_path: BTreeMap<PathBuf, FileRole>,
+    resolved_imports: Vec<ResolvedImport>,
     type_annotated_file_by_path: BTreeMap<PathBuf, TypeAnnotatedFile>,
 }
 
@@ -204,6 +207,8 @@ fn analyze_target_with_workspace_root(
     let mut rendered_diagnostics = Vec::new();
     let mut source_by_path = BTreeMap::new();
     let mut parsed_units = Vec::new();
+    let mut package_path_by_file = BTreeMap::new();
+    let mut file_role_by_path = BTreeMap::new();
     for package in workspace.packages() {
         let package_in_scope = scope_is_workspace
             || scoped_package_paths
@@ -221,6 +226,8 @@ fn analyze_target_with_workspace_root(
 
         for (relative_path, role) in file_entries {
             let absolute_path = workspace_root.join(&relative_path);
+            package_path_by_file.insert(relative_path.clone(), package.package_path.clone());
+            file_role_by_path.insert(relative_path.clone(), role);
             let source = fs::read_to_string(&absolute_path).map_err(|error| CompilerFailure {
                 kind: CompilerFailureKind::ReadSource,
                 message: error.to_string(),
@@ -338,19 +345,19 @@ fn analyze_target_with_workspace_root(
             status,
         } = lowering_result;
         parsed_unit.phase_state.semantic_lowering = status;
-        if !scope_is_workspace
-            && !scoped_package_paths
-                .as_ref()
-                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
-        {
-            continue;
-        }
-        for diagnostic in diagnostics {
-            rendered_diagnostics.push(render_diagnostic(
-                DiagnosticPhase::SemanticLowering,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                diagnostic,
-            ));
+        let parsed_unit_in_scope = is_parsed_unit_in_scope(
+            parsed_unit,
+            scope_is_workspace,
+            scoped_package_paths.as_ref(),
+        );
+        if parsed_unit_in_scope {
+            for diagnostic in diagnostics {
+                rendered_diagnostics.push(render_diagnostic(
+                    DiagnosticPhase::SemanticLowering,
+                    display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                    diagnostic,
+                ));
+            }
         }
         if matches!(parsed_unit.phase_state.semantic_lowering, PhaseStatus::Ok) {
             semantic_file_by_path.insert(parsed_unit.path.clone(), value);
@@ -377,16 +384,14 @@ fn analyze_target_with_workspace_root(
     let mut type_annotated_file_by_path = BTreeMap::new();
 
     for parsed_unit in &parsed_units {
-        if !scope_is_workspace
-            && !scoped_package_paths
-                .as_ref()
-                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
-        {
-            continue;
-        }
         if !parsed_unit.phase_state.can_run_type_analysis() {
             continue;
         }
+        let parsed_unit_in_scope = is_parsed_unit_in_scope(
+            parsed_unit,
+            scope_is_workspace,
+            scoped_package_paths.as_ref(),
+        );
         let imported_bindings = imported_bindings_by_file
             .get(&parsed_unit.path)
             .map_or(&[][..], Vec::as_slice);
@@ -395,6 +400,7 @@ fn analyze_target_with_workspace_root(
         };
         let type_analysis_result = type_analysis::check_package_unit(
             parsed_unit.package_id,
+            &parsed_unit.package_path,
             semantic_file,
             imported_bindings,
         );
@@ -402,12 +408,14 @@ fn analyze_target_with_workspace_root(
             type_annotated_file_by_path
                 .insert(parsed_unit.path.clone(), type_analysis_result.value.clone());
         }
-        for diagnostic in type_analysis_result.diagnostics {
-            rendered_diagnostics.push(render_diagnostic(
-                DiagnosticPhase::TypeAnalysis,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                diagnostic,
-            ));
+        if parsed_unit_in_scope {
+            for diagnostic in type_analysis_result.diagnostics {
+                rendered_diagnostics.push(render_diagnostic(
+                    DiagnosticPhase::TypeAnalysis,
+                    display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                    diagnostic,
+                ));
+            }
         }
     }
 
@@ -427,6 +435,9 @@ fn analyze_target_with_workspace_root(
         workspace,
         absolute_target_path,
         target_is_file,
+        package_path_by_file,
+        file_role_by_path,
+        resolved_imports,
         type_annotated_file_by_path,
     })
 }
@@ -437,6 +448,15 @@ fn collect_package_ids_by_path(workspace: &Workspace) -> BTreeMap<String, Packag
         package_id_by_path.insert(package.package_path.clone(), package.id);
     }
     package_id_by_path
+}
+
+fn is_parsed_unit_in_scope(
+    parsed_unit: &ParsedUnit,
+    scope_is_workspace: bool,
+    scoped_package_paths: Option<&BTreeSet<String>>,
+) -> bool {
+    scope_is_workspace
+        || scoped_package_paths.is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
 }
 
 fn build_typecheck_resolved_imports(
@@ -461,6 +481,7 @@ fn build_typecheck_resolved_imports(
         typecheck_resolved_imports.push(ResolvedImportSummary {
             source_path: resolved_import.source_path.clone(),
             target_package_id: *target_package_id,
+            target_package_path: resolved_import.target_package_path.clone(),
             bindings,
         });
     }
@@ -610,7 +631,7 @@ pub fn build_target_with_workspace_root(
         &analyzed_target.absolute_target_path,
         analyzed_target.target_is_file,
     )?;
-    let type_annotated_file = analyzed_target
+    let binary_entrypoint_type_annotated_file = analyzed_target
         .type_annotated_file_by_path
         .get(&binary_entrypoint)
         .ok_or_else(|| CompilerFailure {
@@ -619,7 +640,40 @@ pub fn build_target_with_workspace_root(
             path: Some(path_to_key(&binary_entrypoint)),
             details: Vec::new(),
         })?;
-    let executable_lowering_result = lower_type_annotated_file(type_annotated_file);
+    let binary_entrypoint_package_path = analyzed_target
+        .package_path_by_file
+        .get(&binary_entrypoint)
+        .ok_or_else(|| CompilerFailure {
+            kind: CompilerFailureKind::BuildFailed,
+            message: "missing package ownership for binary entrypoint".to_string(),
+            path: Some(path_to_key(&binary_entrypoint)),
+            details: Vec::new(),
+        })?;
+    let reachable_package_paths = package_dependency_closure(
+        binary_entrypoint_package_path,
+        &analyzed_target.resolved_imports,
+    );
+    let dependency_library_files = analyzed_target
+        .type_annotated_file_by_path
+        .iter()
+        .filter_map(|(path, type_annotated_file)| {
+            if path == &binary_entrypoint {
+                return None;
+            }
+            if analyzed_target.file_role_by_path.get(path) != Some(&FileRole::Library) {
+                return None;
+            }
+            let file_package_path = analyzed_target.package_path_by_file.get(path)?;
+            if !reachable_package_paths.contains(file_package_path) {
+                return None;
+            }
+            Some(type_annotated_file)
+        })
+        .collect::<Vec<_>>();
+    let executable_lowering_result = lower_type_annotated_build_unit(
+        binary_entrypoint_type_annotated_file,
+        &dependency_library_files,
+    );
     if !matches!(executable_lowering_result.status, PhaseStatus::Ok) {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
@@ -662,6 +716,34 @@ pub fn build_target_with_workspace_root(
     Ok(BuiltTarget {
         executable_path: display_path(&built_program.binary_path),
     })
+}
+
+fn package_dependency_closure(
+    root_package_path: &str,
+    resolved_imports: &[ResolvedImport],
+) -> BTreeSet<String> {
+    let mut imported_package_paths_by_source_package = BTreeMap::<String, BTreeSet<String>>::new();
+    for resolved_import in resolved_imports {
+        imported_package_paths_by_source_package
+            .entry(resolved_import.source_package_path.clone())
+            .or_default()
+            .insert(resolved_import.target_package_path.clone());
+    }
+
+    let mut visited_package_paths = BTreeSet::new();
+    let mut package_paths_to_visit = vec![root_package_path.to_string()];
+    while let Some(package_path) = package_paths_to_visit.pop() {
+        if !visited_package_paths.insert(package_path.clone()) {
+            continue;
+        }
+        if let Some(imported_package_paths) =
+            imported_package_paths_by_source_package.get(&package_path)
+        {
+            package_paths_to_visit.extend(imported_package_paths.iter().cloned());
+        }
+    }
+
+    visited_package_paths
 }
 
 pub fn run_target_with_workspace_root(

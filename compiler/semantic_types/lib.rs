@@ -179,6 +179,8 @@ pub enum ImportedSymbol {
 #[derive(Clone)]
 pub struct ImportedBinding {
     pub local_name: String,
+    pub imported_package_path: String,
+    pub imported_symbol_name: String,
     pub span: Span,
     pub symbol: ImportedSymbol,
 }

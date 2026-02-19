@@ -181,64 +181,79 @@ pub enum SemanticStatement {
 #[derive(Clone, Debug)]
 pub enum SemanticExpression {
     IntegerLiteral {
+        id: SemanticExpressionId,
         value: i64,
         span: Span,
     },
     NilLiteral {
+        id: SemanticExpressionId,
         span: Span,
     },
     BooleanLiteral {
+        id: SemanticExpressionId,
         value: bool,
         span: Span,
     },
     StringLiteral {
+        id: SemanticExpressionId,
         value: String,
         span: Span,
     },
     NameReference {
+        id: SemanticExpressionId,
         name: String,
         kind: SemanticNameReferenceKind,
         span: Span,
     },
     StructLiteral {
+        id: SemanticExpressionId,
         type_name: SemanticTypeName,
         fields: Vec<SemanticStructLiteralField>,
         span: Span,
     },
     FieldAccess {
+        id: SemanticExpressionId,
         target: Box<SemanticExpression>,
         field: String,
         field_span: Span,
         span: Span,
     },
     Call {
+        id: SemanticExpressionId,
         callee: Box<SemanticExpression>,
         type_arguments: Vec<SemanticTypeName>,
         arguments: Vec<SemanticExpression>,
         span: Span,
     },
     Unary {
+        id: SemanticExpressionId,
         operator: SemanticUnaryOperator,
         expression: Box<SemanticExpression>,
         span: Span,
     },
     Binary {
+        id: SemanticExpressionId,
         operator: SemanticBinaryOperator,
         left: Box<SemanticExpression>,
         right: Box<SemanticExpression>,
         span: Span,
     },
     Match {
+        id: SemanticExpressionId,
         target: Box<SemanticExpression>,
         arms: Vec<SemanticMatchArm>,
         span: Span,
     },
     Matches {
+        id: SemanticExpressionId,
         value: Box<SemanticExpression>,
         type_name: SemanticTypeName,
         span: Span,
     },
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SemanticExpressionId(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SemanticNameReferenceKind {

@@ -8,7 +8,10 @@ use compiler__source::Span;
 
 use compiler__semantic_types::{GenericTypeParameter, NominalTypeId, Type};
 
-use super::{ExpressionSpan, MethodKey, TypeChecker, TypeKind};
+use super::{
+    ExpressionSpan, MethodKey, TypeAnnotatedCallTarget, TypeAnnotatedStructReference, TypeChecker,
+    TypeKind,
+};
 
 struct InstantiatedFunctionSignature {
     parameter_types: Vec<Type>,
@@ -19,10 +22,12 @@ struct ResolvedCallTarget {
     display_name: String,
     parameter_types: Vec<Type>,
     return_type: Type,
+    call_target: Option<TypeAnnotatedCallTarget>,
 }
 
 struct ResolvedStructFields {
     struct_display_name: String,
+    struct_reference: TypeAnnotatedStructReference,
     fields: Vec<(String, Type)>,
 }
 
@@ -33,14 +38,15 @@ impl TypeChecker<'_> {
             SemanticExpression::NilLiteral { .. } => Type::Nil,
             SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
             SemanticExpression::StringLiteral { .. } => Type::String,
-            SemanticExpression::NameReference { name, kind, span } => {
-                self.check_name_reference_expression(name, *kind, span)
-            }
+            SemanticExpression::NameReference {
+                name, kind, span, ..
+            } => self.check_name_reference_expression(name, *kind, span),
             SemanticExpression::StructLiteral {
                 type_name,
                 fields,
                 span: _,
-            } => self.check_struct_literal(type_name, fields),
+                ..
+            } => self.check_struct_literal(expression, type_name, fields),
             SemanticExpression::FieldAccess {
                 target,
                 field,
@@ -82,6 +88,7 @@ impl TypeChecker<'_> {
                 type_arguments,
                 arguments,
                 span,
+                ..
             } => {
                 let argument_types = arguments
                     .iter()
@@ -107,6 +114,7 @@ impl TypeChecker<'_> {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
+                            call_target: Some(info.call_target.clone()),
                         })
                     } else if let Some(info) = self.imported_functions.get(name).cloned() {
                         self.mark_import_used(name);
@@ -123,6 +131,7 @@ impl TypeChecker<'_> {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
+                            call_target: Some(info.call_target.clone()),
                         })
                     } else {
                         if self.imported_bindings.contains_key(name) {
@@ -220,6 +229,7 @@ impl TypeChecker<'_> {
                             display_name: field.clone(),
                             parameter_types: method_parameter_types,
                             return_type: method_return_type,
+                            call_target: None,
                         })
                     } else {
                         self.error(
@@ -259,8 +269,15 @@ impl TypeChecker<'_> {
                         display_name: "function value".to_string(),
                         parameter_types,
                         return_type: *return_type,
+                        call_target: None,
                     }
                 };
+                if let Some(call_target) = &resolved_target.call_target {
+                    self.call_target_by_expression_id.insert(
+                        super::semantic_expression_id(expression),
+                        call_target.clone(),
+                    );
+                }
 
                 if arguments.len() != resolved_target.parameter_types.len() {
                     self.error(
@@ -301,6 +318,7 @@ impl TypeChecker<'_> {
                 left,
                 right,
                 span: _,
+                ..
             } => {
                 let left_type = self.check_expression(left);
                 let right_type = self.check_expression(right);
@@ -367,13 +385,14 @@ impl TypeChecker<'_> {
                     }
                 }
             }
-            SemanticExpression::Match { target, arms, span } => {
-                self.check_match_expression(target, arms, span)
-            }
+            SemanticExpression::Match {
+                target, arms, span, ..
+            } => self.check_match_expression(target, arms, span),
             SemanticExpression::Matches {
                 value,
                 type_name,
                 span: _,
+                ..
             } => self.check_matches_expression(value, type_name),
         }
     }
@@ -557,6 +576,7 @@ impl TypeChecker<'_> {
 
     pub(super) fn check_struct_literal(
         &mut self,
+        expression: &SemanticExpression,
         type_name: &SemanticTypeName,
         fields: &[SemanticStructLiteralField],
     ) -> Type {
@@ -587,6 +607,10 @@ impl TypeChecker<'_> {
             }
             return struct_type;
         };
+        self.struct_reference_by_expression_id.insert(
+            super::semantic_expression_id(expression),
+            resolved_struct_fields.struct_reference.clone(),
+        );
 
         let mut seen = std::collections::HashSet::new();
         for field in fields {
@@ -854,6 +878,10 @@ impl TypeChecker<'_> {
                 };
                 Some(ResolvedStructFields {
                     struct_display_name: type_name.display_name.clone(),
+                    struct_reference: TypeAnnotatedStructReference {
+                        package_path: info.package_path.clone(),
+                        symbol_name: info.nominal_type_id.symbol_name.clone(),
+                    },
                     fields: fields.clone(),
                 })
             }
@@ -882,6 +910,10 @@ impl TypeChecker<'_> {
                     .collect();
                 Some(ResolvedStructFields {
                     struct_display_name: struct_type.display(),
+                    struct_reference: TypeAnnotatedStructReference {
+                        package_path: info.package_path.clone(),
+                        symbol_name: info.nominal_type_id.symbol_name.clone(),
+                    },
                     fields: instantiated_fields,
                 })
             }
