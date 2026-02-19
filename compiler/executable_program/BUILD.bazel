@@ -5,6 +5,7 @@ rust_library(
     name = "executable_program",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
+    deps = ["@crates//:serde"],
 )
 
 dependency_enforcement_test(
@@ -13,6 +14,7 @@ dependency_enforcement_test(
         "//compiler/binding",
         "//compiler/diagnostics",
         "//compiler/driver",
+        "//compiler/cranelift_backend",
         "//compiler/executable_lowering",
         "//compiler/exports",
         "//compiler/file_role_rules",

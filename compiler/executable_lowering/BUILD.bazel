@@ -18,6 +18,7 @@ dependency_enforcement_test(
     name = "executable_lowering_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
+        "//compiler/cranelift_backend",
         "//compiler/driver",
         "//compiler/exports",
         "//compiler/file_role_rules",

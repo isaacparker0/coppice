@@ -12,6 +12,7 @@ dependency_enforcement_test(
     name = "type_annotated_program_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
+        "//compiler/cranelift_backend",
         "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/executable_lowering",

@@ -2,20 +2,29 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "runtime_interface",
+    name = "cranelift_backend",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/executable_program",
+        "//compiler/reports",
+        "//compiler/runtime_interface",
+        "@crates//:cranelift-codegen",
+        "@crates//:cranelift-frontend",
+        "@crates//:cranelift-jit",
+        "@crates//:cranelift-module",
+        "@crates//:serde",
+        "@crates//:serde_json",
+    ],
 )
 
 dependency_enforcement_test(
-    name = "runtime_interface_forbidden_dependencies",
+    name = "cranelift_backend_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
-        "//compiler/cranelift_backend",
         "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/executable_lowering",
-        "//compiler/executable_program",
         "//compiler/exports",
         "//compiler/file_role_rules",
         "//compiler/package_graph",
@@ -23,20 +32,17 @@ dependency_enforcement_test(
         "//compiler/packages",
         "//compiler/parsing",
         "//compiler/phase_results",
-        "//compiler/reports",
         "//compiler/resolution",
         "//compiler/rust_backend",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
         "//compiler/semantic_types",
-        "//compiler/source",
         "//compiler/symbols",
         "//compiler/syntax",
         "//compiler/syntax_rules",
-        "//compiler/type_annotated_program",
         "//compiler/type_analysis",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":runtime_interface",
+    target = ":cranelift_backend",
 )
