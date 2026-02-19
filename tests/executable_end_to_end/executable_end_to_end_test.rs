@@ -5,7 +5,8 @@ use std::process::Command;
 
 use runfiles::{Runfiles, rlocation};
 use tests__snapshot_fixture_helpers::{
-    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths, read_snapshot_fixture_file,
+    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths,
+    normalize_snapshot_fixture_process_output, read_snapshot_fixture_file,
     snapshot_fixture_run_mode_from_environment, write_snapshot_fixture_file_if_changed,
 };
 
@@ -68,8 +69,10 @@ fn run_case(
         .unwrap();
 
     let actual_exit = output.status.code().unwrap_or(1);
-    let actual_stdout = trim_one_trailing_newline(&String::from_utf8_lossy(&output.stdout));
-    let actual_stderr = trim_one_trailing_newline(&String::from_utf8_lossy(&output.stderr));
+    let actual_stdout =
+        normalize_snapshot_fixture_process_output(&String::from_utf8_lossy(&output.stdout));
+    let actual_stderr =
+        normalize_snapshot_fixture_process_output(&String::from_utf8_lossy(&output.stderr));
     let actual_artifact_paths = collect_artifact_paths(&temp_output_directory);
 
     match mode {
@@ -250,10 +253,6 @@ fn substitute_placeholders(
             temp_output_directory.to_string_lossy().as_ref(),
         )
         .replace("${INPUT_DIR}", input_directory.to_string_lossy().as_ref())
-}
-
-fn trim_one_trailing_newline(value: &str) -> String {
-    value.strip_suffix('\n').unwrap_or(value).to_string()
 }
 
 fn normalize_output_for_snapshot(

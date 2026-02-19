@@ -70,3 +70,8 @@ pub fn write_snapshot_fixture_file_if_changed(path: &Path, content: String, case
         println!("updated: {}", case_path.display());
     }
 }
+
+#[must_use]
+pub fn normalize_snapshot_fixture_process_output(value: &str) -> String {
+    value.strip_suffix('\n').unwrap_or(value).to_string()
+}
