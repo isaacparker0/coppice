@@ -1,0 +1,7 @@
+type Box[T] :: struct {
+    value: T,
+}
+
+function run(value: Box[int64]) -> boolean {
+    return value matches Box[int64]
+}

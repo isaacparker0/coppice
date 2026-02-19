@@ -109,6 +109,16 @@ impl Parser {
             if self.peek_is_keyword(Keyword::Matches) {
                 let operator_span = self.advance().span.clone();
                 let type_name = self.parse_type_name()?;
+                if type_name
+                    .names
+                    .iter()
+                    .any(|segment| !segment.type_arguments.is_empty())
+                {
+                    return Err(ParseError::InvalidConstruct {
+                        kind: InvalidConstructKind::PatternTypeArgumentsNotSupported,
+                        span: type_name.span.clone(),
+                    });
+                }
                 let span = Span {
                     start: expression.span().start,
                     end: type_name.span.end,
@@ -516,6 +526,16 @@ impl Parser {
         if self.peek_is_symbol(Symbol::Colon) {
             self.advance();
             let type_name = self.parse_type_name()?;
+            if type_name
+                .names
+                .iter()
+                .any(|segment| !segment.type_arguments.is_empty())
+            {
+                return Err(ParseError::InvalidConstruct {
+                    kind: InvalidConstructKind::PatternTypeArgumentsNotSupported,
+                    span: type_name.span.clone(),
+                });
+            }
             let span = Span {
                 start: name_span.start,
                 end: type_name.span.end,
@@ -538,6 +558,18 @@ impl Parser {
             qualified_name.push('.');
             qualified_name.push_str(&segment);
             qualified_span.end = segment_span.end;
+        }
+        if self.peek_is_symbol(Symbol::LeftBracket) {
+            let (_, right_bracket) = self.parse_type_argument_list()?;
+            return Err(ParseError::InvalidConstruct {
+                kind: InvalidConstructKind::PatternTypeArgumentsNotSupported,
+                span: Span {
+                    start: name_span.start,
+                    end: right_bracket.end,
+                    line: name_span.line,
+                    column: name_span.column,
+                },
+            });
         }
 
         let type_name = SyntaxTypeName {

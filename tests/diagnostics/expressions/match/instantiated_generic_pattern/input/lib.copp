@@ -1,0 +1,10 @@
+type Box[T] :: struct {
+    value: T,
+}
+
+function describe(value: int64 | Box[int64]) -> string {
+    return match value {
+        Box[int64] => "boxed"
+        int64 => "int"
+    }
+}

@@ -48,10 +48,18 @@ pub struct TypeAnnotatedFunctionSignature {
 pub struct TypeAnnotatedFunctionDeclaration {
     pub name: String,
     pub callable_reference: TypeAnnotatedCallableReference,
+    pub type_parameters: Vec<TypeAnnotatedTypeParameter>,
     pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
     pub return_type: TypeAnnotatedTypeName,
     pub span: Span,
     pub statements: Vec<TypeAnnotatedStatement>,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedTypeParameter {
+    pub name: String,
+    pub constraint: Option<TypeAnnotatedTypeName>,
+    pub span: Span,
 }
 
 #[derive(Clone)]
@@ -65,6 +73,7 @@ pub struct TypeAnnotatedParameterDeclaration {
 pub struct TypeAnnotatedStructDeclaration {
     pub name: String,
     pub struct_reference: TypeAnnotatedStructReference,
+    pub type_parameters: Vec<TypeAnnotatedTypeParameter>,
     pub fields: Vec<TypeAnnotatedStructFieldDeclaration>,
     pub methods: Vec<TypeAnnotatedMethodDeclaration>,
     pub span: Span,
@@ -182,7 +191,8 @@ pub enum TypeAnnotatedExpression {
         callee: Box<TypeAnnotatedExpression>,
         call_target: Option<TypeAnnotatedCallTarget>,
         arguments: Vec<TypeAnnotatedExpression>,
-        has_type_arguments: bool,
+        type_arguments: Vec<TypeAnnotatedTypeName>,
+        resolved_type_arguments: Vec<TypeAnnotatedResolvedTypeArgument>,
         span: Span,
     },
     Match {
@@ -257,8 +267,30 @@ pub struct TypeAnnotatedTypeName {
 #[derive(Clone)]
 pub struct TypeAnnotatedTypeNameSegment {
     pub name: String,
-    pub has_type_arguments: bool,
+    pub type_arguments: Vec<TypeAnnotatedTypeName>,
     pub span: Span,
+}
+
+#[derive(Clone)]
+pub enum TypeAnnotatedResolvedTypeArgument {
+    Int64,
+    Boolean,
+    String,
+    Nil,
+    Never,
+    Union {
+        members: Vec<TypeAnnotatedResolvedTypeArgument>,
+    },
+    TypeParameter {
+        name: String,
+    },
+    NominalTypeApplication {
+        base_name: String,
+        arguments: Vec<TypeAnnotatedResolvedTypeArgument>,
+    },
+    NominalType {
+        name: String,
+    },
 }
 
 #[derive(Clone)]

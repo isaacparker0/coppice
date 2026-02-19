@@ -43,13 +43,22 @@ enum RuntimeValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RuntimeStructInstance {
     struct_reference: ExecutableStructReference,
+    type_reference: ExecutableTypeReference,
     field_value_by_name: BTreeMap<String, RuntimeValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RuntimeEnumVariantValue {
     enum_variant_reference: ExecutableEnumVariantReference,
+    type_reference: ExecutableTypeReference,
 }
+
+#[derive(Clone, Debug)]
+struct RuntimeWitnessTable {
+    type_reference: ExecutableTypeReference,
+}
+
+type RuntimeWitnessTableByTypeParameterName = BTreeMap<String, RuntimeWitnessTable>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StatementExecutionSignal {
@@ -157,7 +166,7 @@ fn validate_program_with_cranelift(program: &ExecutableProgram) -> Result<(), Co
 
     for struct_declaration in &program.struct_declarations {
         for method_declaration in &struct_declaration.methods {
-            let mut parameter_types = vec![ExecutableTypeReference::Named {
+            let mut parameter_types = vec![ExecutableTypeReference::NominalType {
                 name: struct_declaration.name.clone(),
             }];
             for parameter in &method_declaration.parameters {
@@ -289,7 +298,9 @@ fn cranelift_type_for(type_reference: &ExecutableTypeReference) -> types::Type {
         ExecutableTypeReference::Union { .. }
         | ExecutableTypeReference::Int64
         | ExecutableTypeReference::String
-        | ExecutableTypeReference::Named { .. } => types::I64,
+        | ExecutableTypeReference::TypeParameter { .. }
+        | ExecutableTypeReference::NominalTypeApplication { .. }
+        | ExecutableTypeReference::NominalType { .. } => types::I64,
     }
 }
 
@@ -335,6 +346,7 @@ fn execute_entrypoint_function(
         program_execution_context,
         entrypoint_callable_reference,
         &[],
+        &[],
         &mut local_value_by_name,
         &mut return_value,
     )?;
@@ -344,6 +356,7 @@ fn execute_entrypoint_function(
 fn execute_function_by_callable_reference(
     program_execution_context: &ProgramExecutionContext<'_>,
     callable_reference: &ExecutableCallableReference,
+    type_argument_references: &[ExecutableTypeReference],
     argument_values: &[RuntimeValue],
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
     return_value: &mut RuntimeValue,
@@ -374,14 +387,39 @@ fn execute_function_by_callable_reference(
         )));
     }
 
+    if function_declaration.type_parameter_names.len() != type_argument_references.len() {
+        return Err(RuntimeExecutionError::Failure(run_failed(
+            format!(
+                "function '{}::{}' expected {} type argument(s) but got {}",
+                callable_reference.package_path,
+                callable_reference.symbol_name,
+                function_declaration.type_parameter_names.len(),
+                type_argument_references.len()
+            ),
+            None,
+        )));
+    }
+
     local_value_by_name.clear();
     for (parameter, argument_value) in function_declaration.parameters.iter().zip(argument_values) {
         local_value_by_name.insert(parameter.name.clone(), argument_value.clone());
     }
+    let witness_table_by_type_parameter_name = function_declaration
+        .type_parameter_names
+        .iter()
+        .cloned()
+        .zip(
+            type_argument_references
+                .iter()
+                .cloned()
+                .map(|type_reference| RuntimeWitnessTable { type_reference }),
+        )
+        .collect::<RuntimeWitnessTableByTypeParameterName>();
 
     let statement_signal = execute_statements(
         program_execution_context,
         &function_declaration.statements,
+        &witness_table_by_type_parameter_name,
         local_value_by_name,
         return_value,
     )?;
@@ -452,6 +490,44 @@ fn execute_method(
         )));
     }
 
+    let method_type_argument_references = match &struct_instance.type_reference {
+        ExecutableTypeReference::NominalTypeApplication { arguments, .. } => arguments.clone(),
+        ExecutableTypeReference::NominalType { .. } => Vec::new(),
+        _ => {
+            return Err(RuntimeExecutionError::Failure(run_failed(
+                format!(
+                    "method receiver for '{}::{}' has invalid runtime type reference",
+                    struct_instance.struct_reference.package_path,
+                    struct_instance.struct_reference.symbol_name
+                ),
+                None,
+            )));
+        }
+    };
+    if struct_declaration.type_parameter_names.len() != method_type_argument_references.len() {
+        return Err(RuntimeExecutionError::Failure(run_failed(
+            format!(
+                "method '{}::{}.{}' expected {} receiver type argument(s) but got {}",
+                struct_instance.struct_reference.package_path,
+                struct_instance.struct_reference.symbol_name,
+                method_name,
+                struct_declaration.type_parameter_names.len(),
+                method_type_argument_references.len()
+            ),
+            None,
+        )));
+    }
+    let witness_table_by_type_parameter_name = struct_declaration
+        .type_parameter_names
+        .iter()
+        .cloned()
+        .zip(
+            method_type_argument_references
+                .into_iter()
+                .map(|type_reference| RuntimeWitnessTable { type_reference }),
+        )
+        .collect::<RuntimeWitnessTableByTypeParameterName>();
+
     let mut method_local_value_by_name = BTreeMap::new();
     method_local_value_by_name.insert(
         "self".to_string(),
@@ -465,6 +541,7 @@ fn execute_method(
     let statement_signal = execute_statements(
         program_execution_context,
         &method_declaration.statements,
+        &witness_table_by_type_parameter_name,
         &mut method_local_value_by_name,
         return_value,
     )?;
@@ -503,6 +580,7 @@ fn execute_method(
 fn execute_statements(
     program_execution_context: &ProgramExecutionContext<'_>,
     statements: &[ExecutableStatement],
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
     return_value: &mut RuntimeValue,
 ) -> Result<StatementExecutionSignal, RuntimeExecutionError> {
@@ -514,6 +592,7 @@ fn execute_statements(
                 let initializer_value = evaluate_expression(
                     program_execution_context,
                     initializer,
+                    witness_table_by_type_parameter_name,
                     local_value_by_name,
                 )?;
                 local_value_by_name.insert(name.clone(), initializer_value);
@@ -525,8 +604,12 @@ fn execute_statements(
                         None,
                     )));
                 }
-                let value_to_assign =
-                    evaluate_expression(program_execution_context, value, local_value_by_name)?;
+                let value_to_assign = evaluate_expression(
+                    program_execution_context,
+                    value,
+                    witness_table_by_type_parameter_name,
+                    local_value_by_name,
+                )?;
                 local_value_by_name.insert(name.clone(), value_to_assign);
             }
             ExecutableStatement::If {
@@ -534,13 +617,18 @@ fn execute_statements(
                 then_statements,
                 else_statements,
             } => {
-                let condition_value =
-                    evaluate_expression(program_execution_context, condition, local_value_by_name)?;
+                let condition_value = evaluate_expression(
+                    program_execution_context,
+                    condition,
+                    witness_table_by_type_parameter_name,
+                    local_value_by_name,
+                )?;
                 let condition_boolean = runtime_boolean_from_value(&condition_value)?;
                 let statement_signal = if condition_boolean {
                     execute_statements(
                         program_execution_context,
                         then_statements,
+                        witness_table_by_type_parameter_name,
                         local_value_by_name,
                         return_value,
                     )?
@@ -548,6 +636,7 @@ fn execute_statements(
                     execute_statements(
                         program_execution_context,
                         else_statements,
+                        witness_table_by_type_parameter_name,
                         local_value_by_name,
                         return_value,
                     )?
@@ -566,6 +655,7 @@ fn execute_statements(
                     let condition_value = evaluate_expression(
                         program_execution_context,
                         condition,
+                        witness_table_by_type_parameter_name,
                         local_value_by_name,
                     )?;
                     if !runtime_boolean_from_value(&condition_value)? {
@@ -576,6 +666,7 @@ fn execute_statements(
                 match execute_statements(
                     program_execution_context,
                     body_statements,
+                    witness_table_by_type_parameter_name,
                     local_value_by_name,
                     return_value,
                 )? {
@@ -592,12 +683,17 @@ fn execute_statements(
                 let _ = evaluate_expression(
                     program_execution_context,
                     expression,
+                    witness_table_by_type_parameter_name,
                     local_value_by_name,
                 )?;
             }
             ExecutableStatement::Return { value } => {
-                *return_value =
-                    evaluate_expression(program_execution_context, value, local_value_by_name)?;
+                *return_value = evaluate_expression(
+                    program_execution_context,
+                    value,
+                    witness_table_by_type_parameter_name,
+                    local_value_by_name,
+                )?;
                 return Ok(StatementExecutionSignal::Return);
             }
         }
@@ -609,6 +705,7 @@ fn execute_statements(
 fn evaluate_expression(
     program_execution_context: &ProgramExecutionContext<'_>,
     expression: &ExecutableExpression,
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
 ) -> Result<RuntimeValue, RuntimeExecutionError> {
     match expression {
@@ -623,11 +720,17 @@ fn evaluate_expression(
         }
         ExecutableExpression::EnumVariantLiteral {
             enum_variant_reference,
+            type_reference,
         } => Ok(RuntimeValue::EnumVariant(RuntimeEnumVariantValue {
             enum_variant_reference: enum_variant_reference.clone(),
+            type_reference: resolve_type_reference_for_call(
+                type_reference,
+                witness_table_by_type_parameter_name,
+            ),
         })),
         ExecutableExpression::StructLiteral {
             struct_reference,
+            type_reference,
             fields,
         } => {
             let mut field_value_by_name = BTreeMap::new();
@@ -635,18 +738,27 @@ fn evaluate_expression(
                 let field_value = evaluate_expression(
                     program_execution_context,
                     &field.value,
+                    witness_table_by_type_parameter_name,
                     local_value_by_name,
                 )?;
                 field_value_by_name.insert(field.name.clone(), field_value);
             }
             Ok(RuntimeValue::StructInstance(RuntimeStructInstance {
                 struct_reference: struct_reference.clone(),
+                type_reference: resolve_type_reference_for_call(
+                    type_reference,
+                    witness_table_by_type_parameter_name,
+                ),
                 field_value_by_name,
             }))
         }
         ExecutableExpression::FieldAccess { target, field } => {
-            let target_value =
-                evaluate_expression(program_execution_context, target, local_value_by_name)?;
+            let target_value = evaluate_expression(
+                program_execution_context,
+                target,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             let RuntimeValue::StructInstance(struct_instance) = target_value else {
                 return Err(RuntimeExecutionError::Failure(run_failed(
                     "field access requires struct receiver".to_string(),
@@ -673,8 +785,12 @@ fn evaluate_expression(
             operator,
             expression,
         } => {
-            let expression_value =
-                evaluate_expression(program_execution_context, expression, local_value_by_name)?;
+            let expression_value = evaluate_expression(
+                program_execution_context,
+                expression,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             match operator {
                 ExecutableUnaryOperator::Not => Ok(RuntimeValue::Boolean(
                     !runtime_boolean_from_value(&expression_value)?,
@@ -693,26 +809,35 @@ fn evaluate_expression(
             *operator,
             left,
             right,
+            witness_table_by_type_parameter_name,
             local_value_by_name,
         ),
         ExecutableExpression::Call {
             callee,
             call_target,
             arguments,
+            type_arguments,
         } => evaluate_call_expression(
             program_execution_context,
             callee,
             call_target.as_ref(),
             arguments,
+            type_arguments,
+            witness_table_by_type_parameter_name,
             local_value_by_name,
         ),
         ExecutableExpression::Match { target, arms } => {
-            let target_value =
-                evaluate_expression(program_execution_context, target, local_value_by_name)?;
+            let target_value = evaluate_expression(
+                program_execution_context,
+                target,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             evaluate_match_expression(
                 program_execution_context,
                 &target_value,
                 arms,
+                witness_table_by_type_parameter_name,
                 local_value_by_name,
             )
         }
@@ -720,10 +845,16 @@ fn evaluate_expression(
             value,
             type_reference,
         } => {
-            let value = evaluate_expression(program_execution_context, value, local_value_by_name)?;
+            let value = evaluate_expression(
+                program_execution_context,
+                value,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             Ok(RuntimeValue::Boolean(runtime_value_matches_type_reference(
                 &value,
                 type_reference,
+                witness_table_by_type_parameter_name,
             )))
         }
     }
@@ -733,10 +864,15 @@ fn evaluate_match_expression(
     program_execution_context: &ProgramExecutionContext<'_>,
     target_value: &RuntimeValue,
     arms: &[ExecutableMatchArm],
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
 ) -> Result<RuntimeValue, RuntimeExecutionError> {
     for arm in arms {
-        if !runtime_value_matches_match_pattern(target_value, &arm.pattern) {
+        if !runtime_value_matches_match_pattern(
+            target_value,
+            &arm.pattern,
+            witness_table_by_type_parameter_name,
+        ) {
             continue;
         }
 
@@ -750,8 +886,12 @@ fn evaluate_match_expression(
             local_value_by_name.insert(binding_name.clone(), target_value.clone());
         }
 
-        let arm_value_result =
-            evaluate_expression(program_execution_context, &arm.value, local_value_by_name);
+        let arm_value_result = evaluate_expression(
+            program_execution_context,
+            &arm.value,
+            witness_table_by_type_parameter_name,
+            local_value_by_name,
+        );
 
         if let Some(binding_name) = binding_name_to_restore {
             if let Some(previous_value) = previous_value {
@@ -775,38 +915,63 @@ fn evaluate_binary_expression(
     operator: ExecutableBinaryOperator,
     left: &ExecutableExpression,
     right: &ExecutableExpression,
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
 ) -> Result<RuntimeValue, RuntimeExecutionError> {
     match operator {
         ExecutableBinaryOperator::And => {
-            let left_value =
-                evaluate_expression(program_execution_context, left, local_value_by_name)?;
+            let left_value = evaluate_expression(
+                program_execution_context,
+                left,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             let left_boolean = runtime_boolean_from_value(&left_value)?;
             if !left_boolean {
                 return Ok(RuntimeValue::Boolean(false));
             }
-            let right_value =
-                evaluate_expression(program_execution_context, right, local_value_by_name)?;
+            let right_value = evaluate_expression(
+                program_execution_context,
+                right,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             let right_boolean = runtime_boolean_from_value(&right_value)?;
             Ok(RuntimeValue::Boolean(right_boolean))
         }
         ExecutableBinaryOperator::Or => {
-            let left_value =
-                evaluate_expression(program_execution_context, left, local_value_by_name)?;
+            let left_value = evaluate_expression(
+                program_execution_context,
+                left,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             let left_boolean = runtime_boolean_from_value(&left_value)?;
             if left_boolean {
                 return Ok(RuntimeValue::Boolean(true));
             }
-            let right_value =
-                evaluate_expression(program_execution_context, right, local_value_by_name)?;
+            let right_value = evaluate_expression(
+                program_execution_context,
+                right,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             let right_boolean = runtime_boolean_from_value(&right_value)?;
             Ok(RuntimeValue::Boolean(right_boolean))
         }
         _ => {
-            let left_value =
-                evaluate_expression(program_execution_context, left, local_value_by_name)?;
-            let right_value =
-                evaluate_expression(program_execution_context, right, local_value_by_name)?;
+            let left_value = evaluate_expression(
+                program_execution_context,
+                left,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
+            let right_value = evaluate_expression(
+                program_execution_context,
+                right,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )?;
             match operator {
                 ExecutableBinaryOperator::Add => Ok(RuntimeValue::Int64(
                     runtime_int64_from_value(&left_value)?
@@ -857,18 +1022,31 @@ fn evaluate_call_expression(
     callee: &ExecutableExpression,
     call_target: Option<&ExecutableCallTarget>,
     arguments: &[ExecutableExpression],
+    type_arguments: &[ExecutableTypeReference],
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
     local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
 ) -> Result<RuntimeValue, RuntimeExecutionError> {
     let argument_values = arguments
         .iter()
         .map(|argument| {
-            evaluate_expression(program_execution_context, argument, local_value_by_name)
+            evaluate_expression(
+                program_execution_context,
+                argument,
+                witness_table_by_type_parameter_name,
+                local_value_by_name,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     if let Some(call_target) = call_target {
         match call_target {
             ExecutableCallTarget::BuiltinFunction { function_name } => {
+                if !type_arguments.is_empty() {
+                    return Err(RuntimeExecutionError::Failure(run_failed(
+                        format!("builtin function '{function_name}' does not take type arguments"),
+                        None,
+                    )));
+                }
                 if function_name == PRINT_FUNCTION_CONTRACT.language_name {
                     if argument_values.len() != 1 {
                         return Err(RuntimeExecutionError::Failure(run_failed(
@@ -901,9 +1079,19 @@ fn evaluate_call_expression(
             ExecutableCallTarget::UserDefinedFunction { callable_reference } => {
                 let mut function_local_value_by_name = BTreeMap::new();
                 let mut function_return_value = RuntimeValue::Nil;
+                let resolved_type_arguments = type_arguments
+                    .iter()
+                    .map(|type_argument| {
+                        resolve_type_reference_for_call(
+                            type_argument,
+                            witness_table_by_type_parameter_name,
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 execute_function_by_callable_reference(
                     program_execution_context,
                     callable_reference,
+                    &resolved_type_arguments,
                     &argument_values,
                     &mut function_local_value_by_name,
                     &mut function_return_value,
@@ -919,6 +1107,12 @@ fn evaluate_call_expression(
             None,
         ))),
         ExecutableExpression::FieldAccess { target, field } => {
+            if !type_arguments.is_empty() {
+                return Err(RuntimeExecutionError::Failure(run_failed(
+                    "method calls do not take type arguments".to_string(),
+                    None,
+                )));
+            }
             if let ExecutableExpression::Identifier {
                 name: target_variable_name,
             } = target.as_ref()
@@ -946,8 +1140,12 @@ fn evaluate_call_expression(
                 );
                 Ok(method_return_value)
             } else {
-                let target_value =
-                    evaluate_expression(program_execution_context, target, local_value_by_name)?;
+                let target_value = evaluate_expression(
+                    program_execution_context,
+                    target,
+                    witness_table_by_type_parameter_name,
+                    local_value_by_name,
+                )?;
                 let RuntimeValue::StructInstance(target_struct_instance) = target_value else {
                     return Err(RuntimeExecutionError::Failure(run_failed(
                         "method call requires struct receiver".to_string(),
@@ -1006,11 +1204,16 @@ fn runtime_string_from_value(value: &RuntimeValue) -> Result<String, RuntimeExec
 fn runtime_value_matches_match_pattern(
     value: &RuntimeValue,
     pattern: &ExecutableMatchPattern,
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
 ) -> bool {
     match pattern {
         ExecutableMatchPattern::Type { type_reference }
         | ExecutableMatchPattern::Binding { type_reference, .. } => {
-            runtime_value_matches_type_reference(value, type_reference)
+            runtime_value_matches_type_reference(
+                value,
+                type_reference,
+                witness_table_by_type_parameter_name,
+            )
         }
     }
 }
@@ -1018,6 +1221,7 @@ fn runtime_value_matches_match_pattern(
 fn runtime_value_matches_type_reference(
     value: &RuntimeValue,
     type_reference: &ExecutableTypeReference,
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
 ) -> bool {
     match type_reference {
         ExecutableTypeReference::Int64 => matches!(value, RuntimeValue::Int64(_)),
@@ -1025,10 +1229,47 @@ fn runtime_value_matches_type_reference(
         ExecutableTypeReference::String => matches!(value, RuntimeValue::String(_)),
         ExecutableTypeReference::Nil => matches!(value, RuntimeValue::Nil),
         ExecutableTypeReference::Never => false,
-        ExecutableTypeReference::Union { members } => members
-            .iter()
-            .any(|member| runtime_value_matches_type_reference(value, member)),
-        ExecutableTypeReference::Named { name } => {
+        ExecutableTypeReference::Union { members } => members.iter().any(|member| {
+            runtime_value_matches_type_reference(
+                value,
+                member,
+                witness_table_by_type_parameter_name,
+            )
+        }),
+        ExecutableTypeReference::TypeParameter { name } => witness_table_by_type_parameter_name
+            .get(name)
+            .is_some_and(|witness_table| {
+                runtime_value_matches_type_reference(
+                    value,
+                    &witness_table.type_reference,
+                    witness_table_by_type_parameter_name,
+                )
+            }),
+        ExecutableTypeReference::NominalTypeApplication {
+            base_name,
+            arguments,
+        } => {
+            if let RuntimeValue::StructInstance(struct_instance) = value {
+                if !named_type_reference_matches_struct_instance(base_name, struct_instance) {
+                    return false;
+                }
+                return runtime_type_reference_arguments_match_instantiation(
+                    arguments,
+                    &struct_instance.type_reference,
+                );
+            }
+            if let RuntimeValue::EnumVariant(enum_variant_value) = value {
+                if !named_type_reference_matches_enum_variant(base_name, enum_variant_value) {
+                    return false;
+                }
+                return runtime_type_reference_arguments_match_instantiation(
+                    arguments,
+                    &enum_variant_value.type_reference,
+                );
+            }
+            false
+        }
+        ExecutableTypeReference::NominalType { name } => {
             if let RuntimeValue::StructInstance(struct_instance) = value {
                 return named_type_reference_matches_struct_instance(name, struct_instance);
             }
@@ -1037,6 +1278,119 @@ fn runtime_value_matches_type_reference(
             }
             false
         }
+    }
+}
+
+fn runtime_type_reference_arguments_match_instantiation(
+    pattern_arguments: &[ExecutableTypeReference],
+    value_type_reference: &ExecutableTypeReference,
+) -> bool {
+    let ExecutableTypeReference::NominalTypeApplication {
+        arguments: value_arguments,
+        ..
+    } = value_type_reference
+    else {
+        return pattern_arguments.is_empty();
+    };
+    if pattern_arguments.len() != value_arguments.len() {
+        return false;
+    }
+    pattern_arguments
+        .iter()
+        .zip(value_arguments)
+        .all(|(pattern_argument, value_argument)| {
+            runtime_type_reference_structurally_equals(pattern_argument, value_argument)
+        })
+}
+
+fn runtime_type_reference_structurally_equals(
+    left: &ExecutableTypeReference,
+    right: &ExecutableTypeReference,
+) -> bool {
+    match (left, right) {
+        (ExecutableTypeReference::Int64, ExecutableTypeReference::Int64)
+        | (ExecutableTypeReference::Boolean, ExecutableTypeReference::Boolean)
+        | (ExecutableTypeReference::String, ExecutableTypeReference::String)
+        | (ExecutableTypeReference::Nil, ExecutableTypeReference::Nil)
+        | (ExecutableTypeReference::Never, ExecutableTypeReference::Never) => true,
+        (
+            ExecutableTypeReference::TypeParameter { name: left_name },
+            ExecutableTypeReference::TypeParameter { name: right_name },
+        )
+        | (
+            ExecutableTypeReference::NominalType { name: left_name },
+            ExecutableTypeReference::NominalType { name: right_name },
+        ) => left_name == right_name,
+        (
+            ExecutableTypeReference::NominalTypeApplication {
+                base_name: left_base_name,
+                arguments: left_arguments,
+            },
+            ExecutableTypeReference::NominalTypeApplication {
+                base_name: right_base_name,
+                arguments: right_arguments,
+            },
+        ) => {
+            left_base_name == right_base_name
+                && left_arguments.len() == right_arguments.len()
+                && left_arguments.iter().zip(right_arguments).all(
+                    |(left_argument, right_argument)| {
+                        runtime_type_reference_structurally_equals(left_argument, right_argument)
+                    },
+                )
+        }
+        (
+            ExecutableTypeReference::Union {
+                members: left_members,
+            },
+            ExecutableTypeReference::Union {
+                members: right_members,
+            },
+        ) => {
+            left_members.len() == right_members.len()
+                && left_members
+                    .iter()
+                    .zip(right_members)
+                    .all(|(left_member, right_member)| {
+                        runtime_type_reference_structurally_equals(left_member, right_member)
+                    })
+        }
+        _ => false,
+    }
+}
+
+fn resolve_type_reference_for_call(
+    type_reference: &ExecutableTypeReference,
+    witness_table_by_type_parameter_name: &RuntimeWitnessTableByTypeParameterName,
+) -> ExecutableTypeReference {
+    match type_reference {
+        ExecutableTypeReference::Union { members } => ExecutableTypeReference::Union {
+            members: members
+                .iter()
+                .map(|member| {
+                    resolve_type_reference_for_call(member, witness_table_by_type_parameter_name)
+                })
+                .collect(),
+        },
+        ExecutableTypeReference::TypeParameter { name } => {
+            witness_table_by_type_parameter_name.get(name).map_or_else(
+                || type_reference.clone(),
+                |witness_table| witness_table.type_reference.clone(),
+            )
+        }
+        ExecutableTypeReference::NominalTypeApplication {
+            base_name,
+            arguments,
+        } => ExecutableTypeReference::NominalTypeApplication {
+            base_name: base_name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| {
+                    resolve_type_reference_for_call(argument, witness_table_by_type_parameter_name)
+                })
+                .collect(),
+        },
+        _ => type_reference.clone(),
     }
 }
 

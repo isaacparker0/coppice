@@ -3,3 +3,9 @@ string
 is int64
 north? yes
 north
+generic self
+generic self
+generic self
+generic app true
+generic app false
+reified generic true

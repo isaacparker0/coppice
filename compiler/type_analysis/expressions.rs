@@ -16,12 +16,14 @@ use super::{
 struct InstantiatedFunctionSignature {
     parameter_types: Vec<Type>,
     return_type: Type,
+    resolved_type_arguments: Vec<Type>,
 }
 
 struct ResolvedCallTarget {
     display_name: String,
     parameter_types: Vec<Type>,
     return_type: Type,
+    resolved_type_arguments: Vec<Type>,
     call_target: Option<TypeAnnotatedCallTarget>,
 }
 
@@ -122,6 +124,7 @@ impl TypeChecker<'_> {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
+                            resolved_type_arguments: instantiated.resolved_type_arguments,
                             call_target: Some(info.call_target.clone()),
                         })
                     } else if let Some(info) = self.imported_functions.get(name).cloned() {
@@ -139,6 +142,7 @@ impl TypeChecker<'_> {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
+                            resolved_type_arguments: instantiated.resolved_type_arguments,
                             call_target: Some(info.call_target.clone()),
                         })
                     } else {
@@ -237,6 +241,7 @@ impl TypeChecker<'_> {
                             display_name: field.clone(),
                             parameter_types: method_parameter_types,
                             return_type: method_return_type,
+                            resolved_type_arguments: Vec::new(),
                             call_target: None,
                         })
                     } else {
@@ -277,6 +282,7 @@ impl TypeChecker<'_> {
                         display_name: "function value".to_string(),
                         parameter_types,
                         return_type: *return_type,
+                        resolved_type_arguments: Vec::new(),
                         call_target: None,
                     }
                 };
@@ -285,6 +291,19 @@ impl TypeChecker<'_> {
                         super::semantic_expression_id(expression),
                         call_target.clone(),
                     );
+                }
+                if !resolved_target.resolved_type_arguments.is_empty() {
+                    let resolved_type_arguments = resolved_target
+                        .resolved_type_arguments
+                        .iter()
+                        .map(super::type_annotated_resolved_type_argument_from_type)
+                        .collect::<Option<Vec<_>>>();
+                    if let Some(resolved_type_arguments) = resolved_type_arguments {
+                        self.resolved_type_argument_types_by_expression_id.insert(
+                            super::semantic_expression_id(expression),
+                            resolved_type_arguments,
+                        );
+                    }
                 }
 
                 if arguments.len() != resolved_target.parameter_types.len() {
@@ -579,6 +598,13 @@ impl TypeChecker<'_> {
             self.error("match patterns must be concrete types", span.clone());
             return Type::Unknown;
         }
+        if matches!(resolved, Type::Applied { .. }) {
+            self.error(
+                "match patterns must not use instantiated generic types",
+                span.clone(),
+            );
+            return Type::Unknown;
+        }
         resolved
     }
 
@@ -739,6 +765,7 @@ impl TypeChecker<'_> {
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         }
         if type_arguments.is_empty() {
@@ -758,7 +785,7 @@ impl TypeChecker<'_> {
                 let substitutions: HashMap<String, Type> = type_parameters
                     .iter()
                     .map(|parameter| parameter.name.clone())
-                    .zip(inferred_type_arguments)
+                    .zip(inferred_type_arguments.iter().cloned())
                     .collect();
                 let instantiated_parameters = parameter_types
                     .iter()
@@ -768,11 +795,13 @@ impl TypeChecker<'_> {
                 return InstantiatedFunctionSignature {
                     parameter_types: instantiated_parameters,
                     return_type: instantiated_return,
+                    resolved_type_arguments: inferred_type_arguments,
                 };
             }
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         }
         if type_arguments.len() != type_parameters.len() {
@@ -787,6 +816,7 @@ impl TypeChecker<'_> {
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         }
 
@@ -803,7 +833,7 @@ impl TypeChecker<'_> {
         let substitutions: HashMap<String, Type> = type_parameters
             .iter()
             .map(|parameter| parameter.name.clone())
-            .zip(resolved_type_arguments)
+            .zip(resolved_type_arguments.iter().cloned())
             .collect();
         let instantiated_parameters = parameter_types
             .iter()
@@ -813,6 +843,7 @@ impl TypeChecker<'_> {
         InstantiatedFunctionSignature {
             parameter_types: instantiated_parameters,
             return_type: instantiated_return,
+            resolved_type_arguments,
         }
     }
 
@@ -832,6 +863,7 @@ impl TypeChecker<'_> {
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         };
 
@@ -839,6 +871,7 @@ impl TypeChecker<'_> {
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         }
 
@@ -854,6 +887,7 @@ impl TypeChecker<'_> {
             return InstantiatedFunctionSignature {
                 parameter_types: parameter_types.to_vec(),
                 return_type: return_type.clone(),
+                resolved_type_arguments: Vec::new(),
             };
         }
 
@@ -871,6 +905,7 @@ impl TypeChecker<'_> {
         InstantiatedFunctionSignature {
             parameter_types: instantiated_parameters,
             return_type: instantiated_return,
+            resolved_type_arguments: receiver_type_arguments.to_vec(),
         }
     }
 

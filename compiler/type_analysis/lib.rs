@@ -19,10 +19,10 @@ use compiler__type_annotated_program::{
     TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedMatchArm,
     TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
-    TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
-    TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
-    TypeAnnotatedUnaryOperator,
+    TypeAnnotatedParameterDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
+    TypeAnnotatedStructLiteralField, TypeAnnotatedStructReference, TypeAnnotatedTypeName,
+    TypeAnnotatedTypeNameSegment, TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -36,6 +36,8 @@ mod unused_bindings;
 struct TypeAnalysisSummary {
     file_typecheck_summary: FileTypecheckSummary,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id:
+        BTreeMap<SemanticExpressionId, Vec<TypeAnnotatedResolvedTypeArgument>>,
     struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
     enum_variant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedEnumVariantReference>,
@@ -73,6 +75,7 @@ pub fn check_package_unit(
                 package_path,
                 &summary.type_declarations_for_annotations,
                 &summary.call_target_by_expression_id,
+                &summary.resolved_type_argument_types_by_expression_id,
                 &summary.struct_reference_by_expression_id,
                 &summary.enum_variant_reference_by_expression_id,
             ),
@@ -80,6 +83,7 @@ pub fn check_package_unit(
                 package_path,
                 &summary.function_declarations_for_annotations,
                 &summary.call_target_by_expression_id,
+                &summary.resolved_type_argument_types_by_expression_id,
                 &summary.struct_reference_by_expression_id,
                 &summary.enum_variant_reference_by_expression_id,
             ),
@@ -113,6 +117,10 @@ fn build_function_declaration_annotations(
     package_path: &str,
     function_declarations: &[SemanticFunctionDeclaration],
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
     struct_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedStructReference,
@@ -130,6 +138,18 @@ fn build_function_declaration_annotations(
                 package_path: package_path.to_string(),
                 symbol_name: function_declaration.name.clone(),
             },
+            type_parameters: function_declaration
+                .type_parameters
+                .iter()
+                .map(|type_parameter| TypeAnnotatedTypeParameter {
+                    name: type_parameter.name.clone(),
+                    constraint: type_parameter
+                        .constraint
+                        .as_ref()
+                        .map(type_annotated_type_name_from_semantic_type_name),
+                    span: type_parameter.span.clone(),
+                })
+                .collect(),
             parameters: function_declaration
                 .parameters
                 .iter()
@@ -153,6 +173,7 @@ fn build_function_declaration_annotations(
                     type_annotated_statement_from_semantic_statement(
                         statement,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     )
@@ -166,6 +187,10 @@ fn build_struct_declaration_annotations(
     package_path: &str,
     type_declarations: &[SemanticTypeDeclaration],
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
     struct_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedStructReference,
@@ -185,6 +210,18 @@ fn build_struct_declaration_annotations(
                         package_path: package_path.to_string(),
                         symbol_name: type_declaration.name.clone(),
                     },
+                    type_parameters: type_declaration
+                        .type_parameters
+                        .iter()
+                        .map(|type_parameter| TypeAnnotatedTypeParameter {
+                            name: type_parameter.name.clone(),
+                            constraint: type_parameter
+                                .constraint
+                                .as_ref()
+                                .map(type_annotated_type_name_from_semantic_type_name),
+                            span: type_parameter.span.clone(),
+                        })
+                        .collect(),
                     fields: fields
                         .iter()
                         .map(|field| TypeAnnotatedStructFieldDeclaration {
@@ -223,6 +260,7 @@ fn build_struct_declaration_annotations(
                                     type_annotated_statement_from_semantic_statement(
                                         statement,
                                         call_target_by_expression_id,
+                                        resolved_type_argument_types_by_expression_id,
                                         struct_reference_by_expression_id,
                                         enum_variant_reference_by_expression_id,
                                     )
@@ -243,6 +281,10 @@ fn build_struct_declaration_annotations(
 fn type_annotated_statement_from_semantic_statement(
     statement: &SemanticStatement,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
     struct_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedStructReference,
@@ -265,6 +307,7 @@ fn type_annotated_statement_from_semantic_statement(
             initializer: type_annotated_expression_from_semantic_expression(
                 initializer,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             ),
@@ -277,6 +320,7 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(
                 value,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             ),
@@ -291,6 +335,7 @@ fn type_annotated_statement_from_semantic_statement(
             condition: type_annotated_expression_from_semantic_expression(
                 condition,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             ),
@@ -301,6 +346,7 @@ fn type_annotated_statement_from_semantic_statement(
                     type_annotated_statement_from_semantic_statement(
                         statement,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     )
@@ -314,6 +360,7 @@ fn type_annotated_statement_from_semantic_statement(
                         type_annotated_statement_from_semantic_statement(
                             statement,
                             call_target_by_expression_id,
+                            resolved_type_argument_types_by_expression_id,
                             struct_reference_by_expression_id,
                             enum_variant_reference_by_expression_id,
                         )
@@ -331,6 +378,7 @@ fn type_annotated_statement_from_semantic_statement(
                 type_annotated_expression_from_semantic_expression(
                     expression,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )
@@ -342,6 +390,7 @@ fn type_annotated_statement_from_semantic_statement(
                     type_annotated_statement_from_semantic_statement(
                         statement,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     )
@@ -357,6 +406,7 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(
                 value,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             ),
@@ -366,6 +416,7 @@ fn type_annotated_statement_from_semantic_statement(
             value: type_annotated_expression_from_semantic_expression(
                 value,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             ),
@@ -377,6 +428,10 @@ fn type_annotated_statement_from_semantic_statement(
 fn type_annotated_expression_from_semantic_expression(
     expression: &SemanticExpression,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
     struct_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedStructReference,
@@ -446,6 +501,7 @@ fn type_annotated_expression_from_semantic_expression(
                     value: type_annotated_expression_from_semantic_expression(
                         &field.value,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     ),
@@ -466,6 +522,7 @@ fn type_annotated_expression_from_semantic_expression(
             target: Box::new(type_annotated_expression_from_semantic_expression(
                 target,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             )),
@@ -485,6 +542,7 @@ fn type_annotated_expression_from_semantic_expression(
             expression: Box::new(type_annotated_expression_from_semantic_expression(
                 expression,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             )),
@@ -502,12 +560,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -518,12 +578,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -534,12 +596,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -550,12 +614,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -566,12 +632,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -582,12 +650,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -598,12 +668,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -614,12 +686,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -630,12 +704,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -646,12 +722,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -662,12 +740,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -678,12 +758,14 @@ fn type_annotated_expression_from_semantic_expression(
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
                     call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
                 )),
@@ -700,6 +782,7 @@ fn type_annotated_expression_from_semantic_expression(
             callee: Box::new(type_annotated_expression_from_semantic_expression(
                 callee,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             )),
@@ -712,12 +795,20 @@ fn type_annotated_expression_from_semantic_expression(
                     type_annotated_expression_from_semantic_expression(
                         argument,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     )
                 })
                 .collect(),
-            has_type_arguments: !type_arguments.is_empty(),
+            type_arguments: type_arguments
+                .iter()
+                .map(type_annotated_type_name_from_semantic_type_name)
+                .collect(),
+            resolved_type_arguments: resolved_type_argument_types_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .cloned()
+                .unwrap_or_default(),
             span: span.clone(),
         },
         SemanticExpression::Match {
@@ -726,6 +817,7 @@ fn type_annotated_expression_from_semantic_expression(
             target: Box::new(type_annotated_expression_from_semantic_expression(
                 target,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             )),
@@ -735,6 +827,7 @@ fn type_annotated_expression_from_semantic_expression(
                     type_annotated_match_arm_from_semantic_match_arm(
                         arm,
                         call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
                     )
@@ -751,6 +844,7 @@ fn type_annotated_expression_from_semantic_expression(
             value: Box::new(type_annotated_expression_from_semantic_expression(
                 value,
                 call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
             )),
@@ -763,6 +857,10 @@ fn type_annotated_expression_from_semantic_expression(
 fn type_annotated_match_arm_from_semantic_match_arm(
     arm: &compiler__semantic_program::SemanticMatchArm,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
     struct_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedStructReference,
@@ -777,6 +875,7 @@ fn type_annotated_match_arm_from_semantic_match_arm(
         value: type_annotated_expression_from_semantic_expression(
             &arm.value,
             call_target_by_expression_id,
+            resolved_type_argument_types_by_expression_id,
             struct_reference_by_expression_id,
             enum_variant_reference_by_expression_id,
         ),
@@ -833,12 +932,50 @@ fn type_annotated_type_name_from_semantic_type_name(
             .iter()
             .map(|name_segment| TypeAnnotatedTypeNameSegment {
                 name: name_segment.name.clone(),
-                has_type_arguments: !name_segment.type_arguments.is_empty(),
+                type_arguments: name_segment
+                    .type_arguments
+                    .iter()
+                    .map(type_annotated_type_name_from_semantic_type_name)
+                    .collect(),
                 span: name_segment.span.clone(),
             })
             .collect(),
         span: type_name.span.clone(),
     }
+}
+
+fn type_annotated_resolved_type_argument_from_type(
+    value_type: &Type,
+) -> Option<TypeAnnotatedResolvedTypeArgument> {
+    Some(match value_type {
+        Type::Integer64 => TypeAnnotatedResolvedTypeArgument::Int64,
+        Type::Boolean => TypeAnnotatedResolvedTypeArgument::Boolean,
+        Type::String => TypeAnnotatedResolvedTypeArgument::String,
+        Type::Nil => TypeAnnotatedResolvedTypeArgument::Nil,
+        Type::Never => TypeAnnotatedResolvedTypeArgument::Never,
+        Type::Named(named) => TypeAnnotatedResolvedTypeArgument::NominalType {
+            name: named.display_name.clone(),
+        },
+        Type::TypeParameter(name) => {
+            TypeAnnotatedResolvedTypeArgument::TypeParameter { name: name.clone() }
+        }
+        Type::Applied { base, arguments } => {
+            TypeAnnotatedResolvedTypeArgument::NominalTypeApplication {
+                base_name: base.display_name.clone(),
+                arguments: arguments
+                    .iter()
+                    .map(type_annotated_resolved_type_argument_from_type)
+                    .collect::<Option<Vec<_>>>()?,
+            }
+        }
+        Type::Union(members) => TypeAnnotatedResolvedTypeArgument::Union {
+            members: members
+                .iter()
+                .map(type_annotated_resolved_type_argument_from_type)
+                .collect::<Option<Vec<_>>>()?,
+        },
+        Type::Function { .. } | Type::Unknown => return None,
+    })
 }
 
 fn analyze_package_unit(
@@ -1016,6 +1153,8 @@ struct TypeChecker<'a> {
     current_return_type: Type,
     loop_depth: usize,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id:
+        BTreeMap<SemanticExpressionId, Vec<TypeAnnotatedResolvedTypeArgument>>,
     struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
     enum_variant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedEnumVariantReference>,
@@ -1080,6 +1219,7 @@ impl<'a> TypeChecker<'a> {
             current_return_type: Type::Unknown,
             loop_depth: 0,
             call_target_by_expression_id: BTreeMap::new(),
+            resolved_type_argument_types_by_expression_id: BTreeMap::new(),
             struct_reference_by_expression_id: BTreeMap::new(),
             enum_variant_reference_by_expression_id: BTreeMap::new(),
         }
@@ -1122,6 +1262,9 @@ impl<'a> TypeChecker<'a> {
                 typed_symbol_by_name,
             },
             call_target_by_expression_id: self.call_target_by_expression_id.clone(),
+            resolved_type_argument_types_by_expression_id: self
+                .resolved_type_argument_types_by_expression_id
+                .clone(),
             struct_reference_by_expression_id: self.struct_reference_by_expression_id.clone(),
             enum_variant_reference_by_expression_id: self
                 .enum_variant_reference_by_expression_id

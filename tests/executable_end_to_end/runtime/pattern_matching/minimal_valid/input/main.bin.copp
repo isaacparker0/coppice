@@ -10,6 +10,28 @@ function describe(value: int64 | string) -> string {
     }
 }
 
+function genericDescribe[T](value: T) -> string {
+    return match value {
+        T => "generic self"
+    }
+}
+
+type Box[T] :: struct {
+    value: T,
+}
+
+function genericApplicationMatches[T](value: T | Box[string]) -> boolean {
+    return value matches T
+}
+
+function makeBox[T](value: T) -> Box[T] {
+    return Box[T] { value: value }
+}
+
+function matchesGenericType[T](value: T | nil) -> boolean {
+    return value matches T
+}
+
 function main() -> nil {
     print(describe(7))
     print(describe("ok"))
@@ -28,6 +50,26 @@ function main() -> nil {
         Direction.South => "south"
     }
     print(label)
+
+    print(genericDescribe[int64](9))
+    print(genericDescribe[string]("x"))
+    print(genericDescribe(11))
+    if genericApplicationMatches[Box[int64]](Box[int64] { value: 7 }) {
+        print("generic app true")
+    } else {
+        print("generic app false")
+    }
+    if genericApplicationMatches[Box[int64]](Box[string] { value: "oops" }) {
+        print("generic app true")
+    } else {
+        print("generic app false")
+    }
+    boxed := makeBox[int64](7)
+    if matchesGenericType[Box[int64]](boxed) {
+        print("reified generic true")
+    } else {
+        print("reified generic false")
+    }
 
     return nil
 }

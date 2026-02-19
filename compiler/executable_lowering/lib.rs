@@ -12,8 +12,9 @@ use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedExpression,
     TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedMatchArm,
-    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument,
+    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
+    TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -77,10 +78,18 @@ fn lower_function_declarations(
     for function_declaration in function_declarations {
         let mut function_supported = true;
         let mut executable_parameters = Vec::new();
+        let type_parameter_names = function_declaration
+            .type_parameters
+            .iter()
+            .map(|type_parameter| type_parameter.name.clone())
+            .collect::<Vec<_>>();
         for parameter in &function_declaration.parameters {
-            let Some(type_reference) =
-                lower_type_name_to_type_reference(&parameter.type_name, true, diagnostics)
-            else {
+            let Some(type_reference) = lower_type_name_to_type_reference(
+                &parameter.type_name,
+                true,
+                &type_parameter_names,
+                diagnostics,
+            ) else {
                 function_supported = false;
                 continue;
             };
@@ -89,9 +98,12 @@ fn lower_function_declarations(
                 type_reference,
             });
         }
-        let Some(return_type) =
-            lower_type_name_to_type_reference(&function_declaration.return_type, true, diagnostics)
-        else {
+        let Some(return_type) = lower_type_name_to_type_reference(
+            &function_declaration.return_type,
+            true,
+            &type_parameter_names,
+            diagnostics,
+        ) else {
             continue;
         };
         if !function_supported {
@@ -103,9 +115,14 @@ fn lower_function_declarations(
                 package_path: function_declaration.callable_reference.package_path.clone(),
                 symbol_name: function_declaration.callable_reference.symbol_name.clone(),
             },
+            type_parameter_names: type_parameter_names.clone(),
             parameters: executable_parameters,
             return_type,
-            statements: lower_statements(&function_declaration.statements, diagnostics),
+            statements: lower_statements(
+                &function_declaration.statements,
+                &type_parameter_names,
+                diagnostics,
+            ),
         });
     }
     lowered
@@ -121,7 +138,7 @@ fn lower_struct_declarations(
         let mut struct_supported = true;
         for field in &struct_declaration.fields {
             let Some(type_reference) =
-                lower_type_name_to_type_reference(&field.type_name, false, diagnostics)
+                lower_type_name_to_type_reference(&field.type_name, false, &[], diagnostics)
             else {
                 struct_supported = false;
                 continue;
@@ -132,14 +149,24 @@ fn lower_struct_declarations(
             });
         }
         if struct_supported {
+            let type_parameter_names = struct_declaration
+                .type_parameters
+                .iter()
+                .map(|type_parameter| type_parameter.name.clone())
+                .collect::<Vec<_>>();
             lowered.push(ExecutableStructDeclaration {
                 name: struct_declaration.name.clone(),
                 struct_reference: ExecutableStructReference {
                     package_path: struct_declaration.struct_reference.package_path.clone(),
                     symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
                 },
+                type_parameter_names: type_parameter_names.clone(),
                 fields: executable_fields,
-                methods: lower_method_declarations(&struct_declaration.methods, diagnostics),
+                methods: lower_method_declarations(
+                    &struct_declaration.methods,
+                    &type_parameter_names,
+                    diagnostics,
+                ),
             });
         }
     }
@@ -148,6 +175,7 @@ fn lower_struct_declarations(
 
 fn lower_method_declarations(
     method_declarations: &[TypeAnnotatedMethodDeclaration],
+    enclosing_type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Vec<ExecutableMethodDeclaration> {
     let mut lowered = Vec::new();
@@ -155,9 +183,12 @@ fn lower_method_declarations(
         let mut method_supported = true;
         let mut executable_parameters = Vec::new();
         for parameter in &method_declaration.parameters {
-            let Some(type_reference) =
-                lower_type_name_to_type_reference(&parameter.type_name, true, diagnostics)
-            else {
+            let Some(type_reference) = lower_type_name_to_type_reference(
+                &parameter.type_name,
+                true,
+                enclosing_type_parameter_names,
+                diagnostics,
+            ) else {
                 method_supported = false;
                 continue;
             };
@@ -166,9 +197,12 @@ fn lower_method_declarations(
                 type_reference,
             });
         }
-        let Some(return_type) =
-            lower_type_name_to_type_reference(&method_declaration.return_type, true, diagnostics)
-        else {
+        let Some(return_type) = lower_type_name_to_type_reference(
+            &method_declaration.return_type,
+            true,
+            enclosing_type_parameter_names,
+            diagnostics,
+        ) else {
             continue;
         };
         if !method_supported {
@@ -179,7 +213,11 @@ fn lower_method_declarations(
             self_mutable: method_declaration.self_mutable,
             parameters: executable_parameters,
             return_type,
-            statements: lower_statements(&method_declaration.statements, diagnostics),
+            statements: lower_statements(
+                &method_declaration.statements,
+                enclosing_type_parameter_names,
+                diagnostics,
+            ),
         });
     }
     lowered
@@ -234,16 +272,18 @@ fn validate_main_signature_from_type_analysis(
 
 fn lower_statements(
     statements: &[TypeAnnotatedStatement],
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Vec<ExecutableStatement> {
     statements
         .iter()
-        .filter_map(|statement| lower_statement(statement, diagnostics))
+        .filter_map(|statement| lower_statement(statement, type_parameter_names, diagnostics))
         .collect()
 }
 
 fn lower_statement(
     statement: &TypeAnnotatedStatement,
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableStatement> {
     match statement {
@@ -253,7 +293,8 @@ fn lower_statement(
             initializer,
             ..
         } => {
-            let executable_initializer = lower_expression(initializer, diagnostics);
+            let executable_initializer =
+                lower_expression(initializer, type_parameter_names, diagnostics);
             Some(ExecutableStatement::Binding {
                 name: name.clone(),
                 mutable: *mutable,
@@ -261,7 +302,7 @@ fn lower_statement(
             })
         }
         TypeAnnotatedStatement::Assign { name, value, .. } => {
-            let executable_value = lower_expression(value, diagnostics);
+            let executable_value = lower_expression(value, type_parameter_names, diagnostics);
             Some(ExecutableStatement::Assign {
                 name: name.clone(),
                 value: executable_value,
@@ -273,11 +314,11 @@ fn lower_statement(
             else_statements,
             ..
         } => Some(ExecutableStatement::If {
-            condition: lower_expression(condition, diagnostics),
-            then_statements: lower_statements(then_statements, diagnostics),
+            condition: lower_expression(condition, type_parameter_names, diagnostics),
+            then_statements: lower_statements(then_statements, type_parameter_names, diagnostics),
             else_statements: else_statements
                 .as_ref()
-                .map(|statements| lower_statements(statements, diagnostics)),
+                .map(|statements| lower_statements(statements, type_parameter_names, diagnostics)),
         }),
         TypeAnnotatedStatement::For {
             condition,
@@ -286,19 +327,19 @@ fn lower_statement(
         } => Some(ExecutableStatement::For {
             condition: condition
                 .as_ref()
-                .map(|expression| lower_expression(expression, diagnostics)),
-            body_statements: lower_statements(body_statements, diagnostics),
+                .map(|expression| lower_expression(expression, type_parameter_names, diagnostics)),
+            body_statements: lower_statements(body_statements, type_parameter_names, diagnostics),
         }),
         TypeAnnotatedStatement::Break { .. } => Some(ExecutableStatement::Break),
         TypeAnnotatedStatement::Continue { .. } => Some(ExecutableStatement::Continue),
         TypeAnnotatedStatement::Expression { value, .. } => {
-            let executable_expression = lower_expression(value, diagnostics);
+            let executable_expression = lower_expression(value, type_parameter_names, diagnostics);
             Some(ExecutableStatement::Expression {
                 expression: executable_expression,
             })
         }
         TypeAnnotatedStatement::Return { value, .. } => {
-            let executable_expression = lower_expression(value, diagnostics);
+            let executable_expression = lower_expression(value, type_parameter_names, diagnostics);
             Some(ExecutableStatement::Return {
                 value: executable_expression,
             })
@@ -315,6 +356,7 @@ fn lower_statement(
 
 fn lower_expression(
     expression: &TypeAnnotatedExpression,
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> ExecutableExpression {
     match expression {
@@ -341,8 +383,15 @@ fn lower_expression(
                 enum_name: enum_variant_reference.enum_name.clone(),
                 variant_name: enum_variant_reference.variant_name.clone(),
             },
+            type_reference: ExecutableTypeReference::NominalType {
+                name: format!(
+                    "{}.{}",
+                    enum_variant_reference.enum_name, enum_variant_reference.variant_name
+                ),
+            },
         },
         TypeAnnotatedExpression::StructLiteral {
+            type_name,
             struct_reference,
             fields,
             span,
@@ -355,11 +404,19 @@ fn lower_expression(
                 ));
                 return ExecutableExpression::NilLiteral;
             };
+            let Some(type_reference) = lower_type_name_to_type_reference(
+                type_name,
+                false,
+                type_parameter_names,
+                diagnostics,
+            ) else {
+                return ExecutableExpression::NilLiteral;
+            };
             let executable_fields = fields
                 .iter()
                 .map(|field| ExecutableStructLiteralField {
                     name: field.name.clone(),
-                    value: lower_expression(&field.value, diagnostics),
+                    value: lower_expression(&field.value, type_parameter_names, diagnostics),
                 })
                 .collect();
             ExecutableExpression::StructLiteral {
@@ -367,12 +424,13 @@ fn lower_expression(
                     package_path: struct_reference.package_path.clone(),
                     symbol_name: struct_reference.symbol_name.clone(),
                 },
+                type_reference,
                 fields: executable_fields,
             }
         }
         TypeAnnotatedExpression::FieldAccess { target, field, .. } => {
             ExecutableExpression::FieldAccess {
-                target: Box::new(lower_expression(target, diagnostics)),
+                target: Box::new(lower_expression(target, type_parameter_names, diagnostics)),
                 field: field.clone(),
             }
         }
@@ -385,7 +443,11 @@ fn lower_expression(
                 TypeAnnotatedUnaryOperator::Not => ExecutableUnaryOperator::Not,
                 TypeAnnotatedUnaryOperator::Negate => ExecutableUnaryOperator::Negate,
             },
-            expression: Box::new(lower_expression(expression, diagnostics)),
+            expression: Box::new(lower_expression(
+                expression,
+                type_parameter_names,
+                diagnostics,
+            )),
         },
         TypeAnnotatedExpression::Binary {
             operator,
@@ -411,28 +473,29 @@ fn lower_expression(
                 TypeAnnotatedBinaryOperator::And => ExecutableBinaryOperator::And,
                 TypeAnnotatedBinaryOperator::Or => ExecutableBinaryOperator::Or,
             },
-            left: Box::new(lower_expression(left, diagnostics)),
-            right: Box::new(lower_expression(right, diagnostics)),
+            left: Box::new(lower_expression(left, type_parameter_names, diagnostics)),
+            right: Box::new(lower_expression(right, type_parameter_names, diagnostics)),
         },
         TypeAnnotatedExpression::Call {
             callee,
             call_target,
             arguments,
-            has_type_arguments,
-            span,
+            type_arguments: _,
+            resolved_type_arguments,
+            span: _,
         } => {
-            if *has_type_arguments {
-                diagnostics.push(PhaseDiagnostic::new(
-                    "build mode currently supports calls without type arguments",
-                    span.clone(),
-                ));
-            }
             let lowered_arguments = arguments
                 .iter()
-                .map(|argument| lower_expression(argument, diagnostics))
+                .map(|argument| lower_expression(argument, type_parameter_names, diagnostics))
+                .collect();
+            let lowered_type_arguments = resolved_type_arguments
+                .iter()
+                .map(|type_reference| {
+                    lower_type_reference_to_type_reference(type_reference, type_parameter_names)
+                })
                 .collect();
             ExecutableExpression::Call {
-                callee: Box::new(lower_expression(callee, diagnostics)),
+                callee: Box::new(lower_expression(callee, type_parameter_names, diagnostics)),
                 call_target: call_target.as_ref().map(|call_target| match call_target {
                     TypeAnnotatedCallTarget::BuiltinFunction { function_name } => {
                         ExecutableCallTarget::BuiltinFunction {
@@ -449,27 +512,32 @@ fn lower_expression(
                     }
                 }),
                 arguments: lowered_arguments,
+                type_arguments: lowered_type_arguments,
             }
         }
         TypeAnnotatedExpression::Match { target, arms, .. } => {
-            let Some(lowered_arms) = lower_match_arms(arms, diagnostics) else {
+            let Some(lowered_arms) = lower_match_arms(arms, type_parameter_names, diagnostics)
+            else {
                 return ExecutableExpression::NilLiteral;
             };
             ExecutableExpression::Match {
-                target: Box::new(lower_expression(target, diagnostics)),
+                target: Box::new(lower_expression(target, type_parameter_names, diagnostics)),
                 arms: lowered_arms,
             }
         }
         TypeAnnotatedExpression::Matches {
             value, type_name, ..
         } => {
-            let Some(type_reference) =
-                lower_type_name_to_type_reference(type_name, true, diagnostics)
-            else {
+            let Some(type_reference) = lower_type_name_to_type_reference(
+                type_name,
+                true,
+                type_parameter_names,
+                diagnostics,
+            ) else {
                 return ExecutableExpression::NilLiteral;
             };
             ExecutableExpression::Matches {
-                value: Box::new(lower_expression(value, diagnostics)),
+                value: Box::new(lower_expression(value, type_parameter_names, diagnostics)),
                 type_reference,
             }
         }
@@ -483,9 +551,53 @@ fn lower_expression(
     }
 }
 
+fn lower_type_reference_to_type_reference(
+    type_reference: &TypeAnnotatedResolvedTypeArgument,
+    type_parameter_names: &[String],
+) -> ExecutableTypeReference {
+    match type_reference {
+        TypeAnnotatedResolvedTypeArgument::Int64 => ExecutableTypeReference::Int64,
+        TypeAnnotatedResolvedTypeArgument::Boolean => ExecutableTypeReference::Boolean,
+        TypeAnnotatedResolvedTypeArgument::String => ExecutableTypeReference::String,
+        TypeAnnotatedResolvedTypeArgument::Nil => ExecutableTypeReference::Nil,
+        TypeAnnotatedResolvedTypeArgument::Never => ExecutableTypeReference::Never,
+        TypeAnnotatedResolvedTypeArgument::Union { members } => ExecutableTypeReference::Union {
+            members: members
+                .iter()
+                .map(|member| lower_type_reference_to_type_reference(member, type_parameter_names))
+                .collect(),
+        },
+        TypeAnnotatedResolvedTypeArgument::TypeParameter { name } => {
+            assert!(
+                type_parameter_names
+                    .iter()
+                    .any(|type_parameter| type_parameter == name),
+                "internal invariant: unknown type parameter '{name}' in resolved type arguments"
+            );
+            ExecutableTypeReference::TypeParameter { name: name.clone() }
+        }
+        TypeAnnotatedResolvedTypeArgument::NominalTypeApplication {
+            base_name,
+            arguments,
+        } => ExecutableTypeReference::NominalTypeApplication {
+            base_name: base_name.clone(),
+            arguments: arguments
+                .iter()
+                .map(|argument| {
+                    lower_type_reference_to_type_reference(argument, type_parameter_names)
+                })
+                .collect(),
+        },
+        TypeAnnotatedResolvedTypeArgument::NominalType { name } => {
+            ExecutableTypeReference::NominalType { name: name.clone() }
+        }
+    }
+}
+
 fn lower_type_name_to_type_reference(
     type_name: &TypeAnnotatedTypeName,
     allow_nil: bool,
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableTypeReference> {
     if type_name.names.is_empty() {
@@ -500,14 +612,19 @@ fn lower_type_name_to_type_reference(
         return lower_type_name_segment_to_type_reference(
             &type_name.names[0],
             allow_nil,
+            type_parameter_names,
             diagnostics,
         );
     }
 
     let mut union_members = Vec::new();
     for type_name_segment in &type_name.names {
-        let member =
-            lower_type_name_segment_to_type_reference(type_name_segment, allow_nil, diagnostics)?;
+        let member = lower_type_name_segment_to_type_reference(
+            type_name_segment,
+            allow_nil,
+            type_parameter_names,
+            diagnostics,
+        )?;
         union_members.push(member);
     }
     Some(ExecutableTypeReference::Union {
@@ -518,21 +635,69 @@ fn lower_type_name_to_type_reference(
 fn lower_type_name_segment_to_type_reference(
     type_name_segment: &compiler__type_annotated_program::TypeAnnotatedTypeNameSegment,
     allow_nil: bool,
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableTypeReference> {
-    if type_name_segment.has_type_arguments {
-        diagnostics.push(PhaseDiagnostic::new(
-            "build mode currently supports only non-generic type names",
-            type_name_segment.span.clone(),
-        ));
-        return None;
+    let has_type_arguments = !type_name_segment.type_arguments.is_empty();
+
+    if type_parameter_names
+        .iter()
+        .any(|type_parameter_name| type_parameter_name == &type_name_segment.name)
+    {
+        if has_type_arguments {
+            diagnostics.push(PhaseDiagnostic::new(
+                format!(
+                    "type parameter '{}' does not take type arguments",
+                    type_name_segment.name
+                ),
+                type_name_segment.span.clone(),
+            ));
+            return None;
+        }
+        return Some(ExecutableTypeReference::TypeParameter {
+            name: type_name_segment.name.clone(),
+        });
     }
 
     match type_name_segment.name.as_str() {
-        "int64" => Some(ExecutableTypeReference::Int64),
-        "boolean" => Some(ExecutableTypeReference::Boolean),
-        "string" => Some(ExecutableTypeReference::String),
+        "int64" => {
+            if has_type_arguments {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "built-in type 'int64' does not take type arguments",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            Some(ExecutableTypeReference::Int64)
+        }
+        "boolean" => {
+            if has_type_arguments {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "built-in type 'boolean' does not take type arguments",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            Some(ExecutableTypeReference::Boolean)
+        }
+        "string" => {
+            if has_type_arguments {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "built-in type 'string' does not take type arguments",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            Some(ExecutableTypeReference::String)
+        }
         "nil" => {
+            if has_type_arguments {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "built-in type 'nil' does not take type arguments",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
             if allow_nil {
                 Some(ExecutableTypeReference::Nil)
             } else {
@@ -543,23 +708,61 @@ fn lower_type_name_segment_to_type_reference(
                 None
             }
         }
-        "never" => Some(ExecutableTypeReference::Never),
-        _ => Some(ExecutableTypeReference::Named {
-            name: type_name_segment.name.clone(),
-        }),
+        "never" => {
+            if has_type_arguments {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "built-in type 'never' does not take type arguments",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            Some(ExecutableTypeReference::Never)
+        }
+        "function" => {
+            diagnostics.push(PhaseDiagnostic::new(
+                "build mode does not support function type names yet",
+                type_name_segment.span.clone(),
+            ));
+            None
+        }
+        _ => {
+            if has_type_arguments {
+                let arguments = type_name_segment
+                    .type_arguments
+                    .iter()
+                    .map(|type_argument| {
+                        lower_type_name_to_type_reference(
+                            type_argument,
+                            true,
+                            type_parameter_names,
+                            diagnostics,
+                        )
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                Some(ExecutableTypeReference::NominalTypeApplication {
+                    base_name: type_name_segment.name.clone(),
+                    arguments,
+                })
+            } else {
+                Some(ExecutableTypeReference::NominalType {
+                    name: type_name_segment.name.clone(),
+                })
+            }
+        }
     }
 }
 
 fn lower_match_arms(
     arms: &[TypeAnnotatedMatchArm],
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<Vec<ExecutableMatchArm>> {
     let mut lowered_arms = Vec::new();
     for arm in arms {
-        let pattern = lower_match_pattern(&arm.pattern, diagnostics)?;
+        let pattern = lower_match_pattern(&arm.pattern, type_parameter_names, diagnostics)?;
         lowered_arms.push(ExecutableMatchArm {
             pattern,
-            value: lower_expression(&arm.value, diagnostics),
+            value: lower_expression(&arm.value, type_parameter_names, diagnostics),
         });
     }
     Some(lowered_arms)
@@ -567,17 +770,28 @@ fn lower_match_arms(
 
 fn lower_match_pattern(
     pattern: &TypeAnnotatedMatchPattern,
+    type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableMatchPattern> {
     match pattern {
         TypeAnnotatedMatchPattern::Type { type_name, .. } => {
-            let type_reference = lower_type_name_to_type_reference(type_name, true, diagnostics)?;
+            let type_reference = lower_type_name_to_type_reference(
+                type_name,
+                true,
+                type_parameter_names,
+                diagnostics,
+            )?;
             Some(ExecutableMatchPattern::Type { type_reference })
         }
         TypeAnnotatedMatchPattern::Binding {
             name, type_name, ..
         } => {
-            let type_reference = lower_type_name_to_type_reference(type_name, true, diagnostics)?;
+            let type_reference = lower_type_name_to_type_reference(
+                type_name,
+                true,
+                type_parameter_names,
+                diagnostics,
+            )?;
             Some(ExecutableMatchPattern::Binding {
                 binding_name: name.clone(),
                 type_reference,

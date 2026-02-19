@@ -11,6 +11,7 @@ pub struct ExecutableProgram {
 pub struct ExecutableFunctionDeclaration {
     pub name: String,
     pub callable_reference: ExecutableCallableReference,
+    pub type_parameter_names: Vec<String>,
     pub parameters: Vec<ExecutableParameterDeclaration>,
     pub return_type: ExecutableTypeReference,
     pub statements: Vec<ExecutableStatement>,
@@ -42,6 +43,7 @@ pub struct ExecutableParameterDeclaration {
 pub struct ExecutableStructDeclaration {
     pub name: String,
     pub struct_reference: ExecutableStructReference,
+    pub type_parameter_names: Vec<String>,
     pub fields: Vec<ExecutableStructFieldDeclaration>,
     pub methods: Vec<ExecutableMethodDeclaration>,
 }
@@ -73,7 +75,7 @@ pub struct ExecutableMethodDeclaration {
     pub statements: Vec<ExecutableStatement>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecutableTypeReference {
     Int64,
     Boolean,
@@ -83,7 +85,14 @@ pub enum ExecutableTypeReference {
     Union {
         members: Vec<ExecutableTypeReference>,
     },
-    Named {
+    TypeParameter {
+        name: String,
+    },
+    NominalTypeApplication {
+        base_name: String,
+        arguments: Vec<ExecutableTypeReference>,
+    },
+    NominalType {
         name: String,
     },
 }
@@ -135,9 +144,11 @@ pub enum ExecutableExpression {
     },
     EnumVariantLiteral {
         enum_variant_reference: ExecutableEnumVariantReference,
+        type_reference: ExecutableTypeReference,
     },
     StructLiteral {
         struct_reference: ExecutableStructReference,
+        type_reference: ExecutableTypeReference,
         fields: Vec<ExecutableStructLiteralField>,
     },
     FieldAccess {
@@ -157,6 +168,7 @@ pub enum ExecutableExpression {
         callee: Box<ExecutableExpression>,
         call_target: Option<ExecutableCallTarget>,
         arguments: Vec<ExecutableExpression>,
+        type_arguments: Vec<ExecutableTypeReference>,
     },
     Match {
         target: Box<ExecutableExpression>,

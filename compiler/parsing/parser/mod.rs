@@ -33,6 +33,7 @@ pub(super) enum InvalidConstructKind {
     FirstMethodParameterMustBeSelf,
     ConstantsRequireExplicitTypeAnnotation,
     TypeArgumentsMustBeFollowedByCall,
+    PatternTypeArgumentsNotSupported,
 }
 
 #[derive(Clone, Debug)]
@@ -341,6 +342,9 @@ impl Parser {
                     }
                     InvalidConstructKind::TypeArgumentsMustBeFollowedByCall => {
                         "type arguments must be followed by a call".to_string()
+                    }
+                    InvalidConstructKind::PatternTypeArgumentsNotSupported => {
+                        "match patterns must not include type arguments".to_string()
                     }
                 };
                 Some(PhaseDiagnostic::new(message, span.clone()))
