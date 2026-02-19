@@ -62,11 +62,11 @@ enum FormatterOutcome {
 
 const FORMATTERS: [Formatter; 7] = [
     Formatter {
-        name: "JSON/Markdown/YAML",
+        name: "JSON/Markdown/HTML/CSS/JS/YAML",
         tool: Tool::Deno,
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        selector: FileSelector::Extensions(&["json", "md", "yaml"]),
+        selector: FileSelector::Extensions(&["json", "md", "html", "css", "js", "yaml"]),
     },
     Formatter {
         name: "Go",

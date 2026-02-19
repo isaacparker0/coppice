@@ -1,0 +1,8 @@
+filegroup(
+    name = "web_assets",
+    srcs = glob(
+        ["*"],
+        exclude = ["BUILD.bazel"],
+    ),
+    visibility = ["//:__subpackages__"],
+)

@@ -21,3 +21,8 @@ common --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 common --output_groups=+clippy_checks
 common --@rules_rust//rust/settings:clippy_flags=-D,warnings
 common --@rules_rust//rust/settings:extra_rustc_flags=-D,warnings
+
+common --workspace_status_command=tools/bazel/workspace_status.sh
+
+# rules_oci push actions read registry auth from DOCKER_CONFIG.
+common --action_env=DOCKER_CONFIG

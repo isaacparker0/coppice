@@ -5,6 +5,9 @@ bazel_dep(name = "rules_go", version = "0.60.0")
 bazel_dep(name = "protobuf", version = "33.5")
 bazel_dep(name = "toolchains_llvm_bootstrapped", version = "0.5.9")
 bazel_dep(name = "gazelle", version = "0.47.0")
+bazel_dep(name = "rules_pkg", version = "1.2.0")
+bazel_dep(name = "rules_oci", version = "2.2.7")
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
 
 register_toolchains(
     "@toolchains_llvm_bootstrapped//toolchain:all",
@@ -62,3 +65,12 @@ use_repo(
     go_deps,
     "org_golang_google_protobuf",
 )
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "debian_bookworm_slim",
+    digest = "sha256:2c91e484d93f0830a7e05a2b9d92a7b102be7cab562198b984a84fdbc7806d91",
+    image = "docker.io/library/debian",
+    platforms = ["linux/amd64"],
+)
+use_repo(oci, "debian_bookworm_slim", "debian_bookworm_slim_linux_amd64")
