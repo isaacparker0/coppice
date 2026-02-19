@@ -144,6 +144,31 @@ pub enum ExecutableExpression {
         call_target: Option<ExecutableCallTarget>,
         arguments: Vec<ExecutableExpression>,
     },
+    Match {
+        target: Box<ExecutableExpression>,
+        arms: Vec<ExecutableMatchArm>,
+    },
+    Matches {
+        value: Box<ExecutableExpression>,
+        type_reference: ExecutableTypeReference,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutableMatchArm {
+    pub pattern: ExecutableMatchPattern,
+    pub value: ExecutableExpression,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ExecutableMatchPattern {
+    Type {
+        type_reference: ExecutableTypeReference,
+    },
+    Binding {
+        binding_name: String,
+        type_reference: ExecutableTypeReference,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

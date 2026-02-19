@@ -1,18 +1,19 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMethodDeclaration,
-    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
-    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableParameterDeclaration,
+    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
+    ExecutableStructFieldDeclaration, ExecutableStructLiteralField, ExecutableStructReference,
+    ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedExpression,
-    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedMethodDeclaration,
-    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
-    TypeAnnotatedUnaryOperator,
+    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedMatchArm,
+    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -441,6 +442,28 @@ fn lower_expression(
                 arguments: lowered_arguments,
             }
         }
+        TypeAnnotatedExpression::Match { target, arms, .. } => {
+            let Some(lowered_arms) = lower_match_arms(arms, diagnostics) else {
+                return ExecutableExpression::NilLiteral;
+            };
+            ExecutableExpression::Match {
+                target: Box::new(lower_expression(target, diagnostics)),
+                arms: lowered_arms,
+            }
+        }
+        TypeAnnotatedExpression::Matches {
+            value, type_name, ..
+        } => {
+            let Some(type_reference) =
+                lower_type_name_to_type_reference(type_name, true, diagnostics)
+            else {
+                return ExecutableExpression::NilLiteral;
+            };
+            ExecutableExpression::Matches {
+                value: Box::new(lower_expression(value, diagnostics)),
+                type_reference,
+            }
+        }
         TypeAnnotatedExpression::Unsupported { span } => {
             diagnostics.push(PhaseDiagnostic::new(
                 "build mode does not support this expression yet",
@@ -497,6 +520,42 @@ fn lower_type_name_to_identifier(
         return None;
     }
     Some(segment.name.clone())
+}
+
+fn lower_match_arms(
+    arms: &[TypeAnnotatedMatchArm],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<Vec<ExecutableMatchArm>> {
+    let mut lowered_arms = Vec::new();
+    for arm in arms {
+        let pattern = lower_match_pattern(&arm.pattern, diagnostics)?;
+        lowered_arms.push(ExecutableMatchArm {
+            pattern,
+            value: lower_expression(&arm.value, diagnostics),
+        });
+    }
+    Some(lowered_arms)
+}
+
+fn lower_match_pattern(
+    pattern: &TypeAnnotatedMatchPattern,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<ExecutableMatchPattern> {
+    match pattern {
+        TypeAnnotatedMatchPattern::Type { type_name, .. } => {
+            let type_reference = lower_type_name_to_type_reference(type_name, true, diagnostics)?;
+            Some(ExecutableMatchPattern::Type { type_reference })
+        }
+        TypeAnnotatedMatchPattern::Binding {
+            name, type_name, ..
+        } => {
+            let type_reference = lower_type_name_to_type_reference(type_name, true, diagnostics)?;
+            Some(ExecutableMatchPattern::Binding {
+                binding_name: name.clone(),
+                type_reference,
+            })
+        }
+    }
 }
 
 fn fallback_span() -> Span {

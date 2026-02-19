@@ -1,6 +1,0 @@
-function main() -> nil {
-    if 1 matches int64 {
-        print("ok")
-    }
-    return nil
-}

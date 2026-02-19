@@ -175,7 +175,37 @@ pub enum TypeAnnotatedExpression {
         has_type_arguments: bool,
         span: Span,
     },
+    Match {
+        target: Box<TypeAnnotatedExpression>,
+        arms: Vec<TypeAnnotatedMatchArm>,
+        span: Span,
+    },
+    Matches {
+        value: Box<TypeAnnotatedExpression>,
+        type_name: TypeAnnotatedTypeName,
+        span: Span,
+    },
     Unsupported {
+        span: Span,
+    },
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedMatchArm {
+    pub pattern: TypeAnnotatedMatchPattern,
+    pub value: TypeAnnotatedExpression,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub enum TypeAnnotatedMatchPattern {
+    Type {
+        type_name: TypeAnnotatedTypeName,
+        span: Span,
+    },
+    Binding {
+        name: String,
+        type_name: TypeAnnotatedTypeName,
         span: Span,
     },
 }

@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructReference, ExecutableTypeReference,
-    ExecutableUnaryOperator,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
+    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
@@ -693,7 +693,68 @@ fn evaluate_expression(
             arguments,
             local_value_by_name,
         ),
+        ExecutableExpression::Match { target, arms } => {
+            let target_value =
+                evaluate_expression(program_execution_context, target, local_value_by_name)?;
+            evaluate_match_expression(
+                program_execution_context,
+                &target_value,
+                arms,
+                local_value_by_name,
+            )
+        }
+        ExecutableExpression::Matches {
+            value,
+            type_reference,
+        } => {
+            let value = evaluate_expression(program_execution_context, value, local_value_by_name)?;
+            Ok(RuntimeValue::Boolean(runtime_value_matches_type_reference(
+                &value,
+                type_reference,
+            )))
+        }
     }
+}
+
+fn evaluate_match_expression(
+    program_execution_context: &ProgramExecutionContext<'_>,
+    target_value: &RuntimeValue,
+    arms: &[ExecutableMatchArm],
+    local_value_by_name: &mut BTreeMap<String, RuntimeValue>,
+) -> Result<RuntimeValue, RuntimeExecutionError> {
+    for arm in arms {
+        if !runtime_value_matches_match_pattern(target_value, &arm.pattern) {
+            continue;
+        }
+
+        let binding_name_to_restore = match &arm.pattern {
+            ExecutableMatchPattern::Binding { binding_name, .. } => Some(binding_name),
+            ExecutableMatchPattern::Type { .. } => None,
+        };
+        let previous_value = binding_name_to_restore
+            .and_then(|binding_name| local_value_by_name.get(binding_name).cloned());
+        if let Some(binding_name) = binding_name_to_restore {
+            local_value_by_name.insert(binding_name.clone(), target_value.clone());
+        }
+
+        let arm_value_result =
+            evaluate_expression(program_execution_context, &arm.value, local_value_by_name);
+
+        if let Some(binding_name) = binding_name_to_restore {
+            if let Some(previous_value) = previous_value {
+                local_value_by_name.insert(binding_name.clone(), previous_value);
+            } else {
+                local_value_by_name.remove(binding_name);
+            }
+        }
+
+        return arm_value_result;
+    }
+
+    Err(RuntimeExecutionError::Failure(run_failed(
+        "match expression had no matching arm at runtime".to_string(),
+        None,
+    )))
 }
 
 fn evaluate_binary_expression(
@@ -926,6 +987,37 @@ fn runtime_string_from_value(value: &RuntimeValue) -> Result<String, RuntimeExec
             "expected string value".to_string(),
             None,
         ))),
+    }
+}
+
+fn runtime_value_matches_match_pattern(
+    value: &RuntimeValue,
+    pattern: &ExecutableMatchPattern,
+) -> bool {
+    match pattern {
+        ExecutableMatchPattern::Type { type_reference }
+        | ExecutableMatchPattern::Binding { type_reference, .. } => {
+            runtime_value_matches_type_reference(value, type_reference)
+        }
+    }
+}
+
+fn runtime_value_matches_type_reference(
+    value: &RuntimeValue,
+    type_reference: &ExecutableTypeReference,
+) -> bool {
+    match type_reference {
+        ExecutableTypeReference::Int64 => matches!(value, RuntimeValue::Int64(_)),
+        ExecutableTypeReference::Boolean => matches!(value, RuntimeValue::Boolean(_)),
+        ExecutableTypeReference::String => matches!(value, RuntimeValue::String(_)),
+        ExecutableTypeReference::Nil => matches!(value, RuntimeValue::Nil),
+        ExecutableTypeReference::Never => false,
+        ExecutableTypeReference::Named { name } => {
+            if let RuntimeValue::StructInstance(struct_instance) = value {
+                return struct_instance.struct_reference.symbol_name == *name;
+            }
+            false
+        }
     }
 }
 

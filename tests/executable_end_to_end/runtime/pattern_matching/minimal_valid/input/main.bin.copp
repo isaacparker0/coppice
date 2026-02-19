@@ -1,0 +1,15 @@
+function main() -> nil {
+    numberOrText: int64 | string := 7
+    if numberOrText matches int64 {
+        print("is int64")
+    }
+
+    other: int64 | string := "ok"
+    message := match other {
+        int64 => "int"
+        string => "string"
+    }
+    print(message)
+
+    return nil
+}

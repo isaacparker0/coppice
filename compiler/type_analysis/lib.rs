@@ -17,7 +17,8 @@ use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference,
     TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration,
-    TypeAnnotatedFunctionSignature, TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
+    TypeAnnotatedFunctionSignature, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
+    TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
     TypeAnnotatedParameterDeclaration, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
     TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
     TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
@@ -647,8 +648,81 @@ fn type_annotated_expression_from_semantic_expression(
             has_type_arguments: !type_arguments.is_empty(),
             span: span.clone(),
         },
-        _ => TypeAnnotatedExpression::Unsupported {
-            span: expression.span(),
+        SemanticExpression::Match {
+            target, arms, span, ..
+        } => TypeAnnotatedExpression::Match {
+            target: Box::new(type_annotated_expression_from_semantic_expression(
+                target,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            )),
+            arms: arms
+                .iter()
+                .map(|arm| {
+                    type_annotated_match_arm_from_semantic_match_arm(
+                        arm,
+                        call_target_by_expression_id,
+                        struct_reference_by_expression_id,
+                    )
+                })
+                .collect(),
+            span: span.clone(),
+        },
+        SemanticExpression::Matches {
+            value,
+            type_name,
+            span,
+            ..
+        } => TypeAnnotatedExpression::Matches {
+            value: Box::new(type_annotated_expression_from_semantic_expression(
+                value,
+                call_target_by_expression_id,
+                struct_reference_by_expression_id,
+            )),
+            type_name: type_annotated_type_name_from_semantic_type_name(type_name),
+            span: span.clone(),
+        },
+    }
+}
+
+fn type_annotated_match_arm_from_semantic_match_arm(
+    arm: &compiler__semantic_program::SemanticMatchArm,
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
+) -> TypeAnnotatedMatchArm {
+    TypeAnnotatedMatchArm {
+        pattern: type_annotated_match_pattern_from_semantic_match_pattern(&arm.pattern),
+        value: type_annotated_expression_from_semantic_expression(
+            &arm.value,
+            call_target_by_expression_id,
+            struct_reference_by_expression_id,
+        ),
+        span: arm.span.clone(),
+    }
+}
+
+fn type_annotated_match_pattern_from_semantic_match_pattern(
+    pattern: &compiler__semantic_program::SemanticMatchPattern,
+) -> TypeAnnotatedMatchPattern {
+    match pattern {
+        compiler__semantic_program::SemanticMatchPattern::Type { type_name, span } => {
+            TypeAnnotatedMatchPattern::Type {
+                type_name: type_annotated_type_name_from_semantic_type_name(type_name),
+                span: span.clone(),
+            }
+        }
+        compiler__semantic_program::SemanticMatchPattern::Binding {
+            name,
+            type_name,
+            span,
+            ..
+        } => TypeAnnotatedMatchPattern::Binding {
+            name: name.clone(),
+            type_name: type_annotated_type_name_from_semantic_type_name(type_name),
+            span: span.clone(),
         },
     }
 }
