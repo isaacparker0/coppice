@@ -16,10 +16,10 @@ use crate::compiler_adapter::{
 };
 use crate::models::{
     CheckRequest, CheckResponse, ErrorResponse, HealthResponse, RunRequest, RunResponse,
-    SessionResponse,
+    SessionResponse, failure_response,
 };
 use crate::session_store::SessionStore;
-use compiler__reports::CompilerFailure;
+use compiler__reports::{CompilerCheckJsonOutput, CompilerFailure};
 
 const MAX_SOURCE_BYTES: usize = 128 * 1024;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
@@ -240,6 +240,25 @@ async fn check(
             }
 
             if execution.exit_code != 0 {
+                if let Ok(mut cli_output) =
+                    serde_json::from_str::<CompilerCheckJsonOutput>(&execution.stdout)
+                {
+                    for diagnostic in &mut cli_output.diagnostics {
+                        diagnostic.path =
+                            sanitize_workspace_path(&diagnostic.path, &session_directory);
+                    }
+                    let error = cli_output.error.as_ref().map(failure_response);
+
+                    return (
+                        StatusCode::OK,
+                        Json(CheckResponse {
+                            ok: false,
+                            diagnostics: cli_output.diagnostics,
+                            error,
+                        }),
+                    );
+                }
+
                 let message = if execution.stderr.is_empty() {
                     "check failed".to_string()
                 } else {
@@ -255,6 +274,22 @@ async fn check(
                             message,
                             details: Vec::new(),
                         }),
+                    }),
+                );
+            }
+
+            if let Ok(mut cli_output) =
+                serde_json::from_str::<CompilerCheckJsonOutput>(&execution.stdout)
+            {
+                for diagnostic in &mut cli_output.diagnostics {
+                    diagnostic.path = sanitize_workspace_path(&diagnostic.path, &session_directory);
+                }
+                return (
+                    StatusCode::OK,
+                    Json(CheckResponse {
+                        ok: cli_output.ok,
+                        diagnostics: cli_output.diagnostics,
+                        error: None,
                     }),
                 );
             }
@@ -285,6 +320,20 @@ async fn check(
             }),
         ),
     }
+}
+
+fn sanitize_workspace_path(path: &str, session_directory: &Path) -> String {
+    let raw_prefix = session_directory.to_string_lossy();
+    if raw_prefix.is_empty() {
+        return path.to_string();
+    }
+
+    let mut sanitized = path.replace(raw_prefix.as_ref(), ".");
+    if std::path::MAIN_SEPARATOR != '/' {
+        let unix_prefix = raw_prefix.replace(std::path::MAIN_SEPARATOR, "/");
+        sanitized = sanitized.replace(&unix_prefix, ".");
+    }
+    sanitized
 }
 
 async fn run(

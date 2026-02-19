@@ -1,12 +1,22 @@
 let sessionId = null;
 let debounceTimer = null;
 let activeCheckController = null;
+let editorReady = null;
 
-const editor = document.getElementById("editor");
 const runButton = document.getElementById("run");
 const newSessionButton = document.getElementById("new-session");
 const stdoutElement = document.getElementById("stdout");
 const stderrElement = document.getElementById("stderr");
+
+function ensureEditorReady() {
+    if (!editorReady) {
+        editorReady = playgroundEditor.initEditor({
+            mount: document.getElementById("editor"),
+            onChange: scheduleCheck,
+        });
+    }
+    return editorReady;
+}
 
 async function ensureSession() {
     if (sessionId) {
@@ -25,6 +35,7 @@ function scheduleCheck() {
 }
 
 async function runCheck() {
+    await ensureEditorReady();
     const id = await ensureSession();
     if (activeCheckController) {
         activeCheckController.abort();
@@ -34,7 +45,7 @@ async function runCheck() {
     playgroundEditor.setStatus("checking...");
     const result = await checkSource(
         id,
-        editor.value,
+        playgroundEditor.getSource(),
         activeCheckController.signal,
     ).catch((error) => {
         if (error.name === "AbortError") {
@@ -46,30 +57,22 @@ async function runCheck() {
         return;
     }
 
+    playgroundEditor.renderDiagnostics(result.data.diagnostics);
     if (result.data.error) {
-        playgroundEditor.renderDiagnostics([
-            {
-                line: 1,
-                column: 1,
-                message: result.data.error.message,
-                phase: result.data.error.kind,
-            },
-        ]);
         playgroundEditor.setStatus("check failed");
         return;
     }
-
-    playgroundEditor.renderDiagnostics(result.data.diagnostics);
     playgroundEditor.setStatus(result.data.ok ? "ok" : "diagnostics");
 }
 
 async function runProgram() {
+    await ensureEditorReady();
     const id = await ensureSession();
     playgroundEditor.setStatus("running...");
     runButton.disabled = true;
 
     try {
-        const result = await runSource(id, editor.value);
+        const result = await runSource(id, playgroundEditor.getSource());
         playgroundEditor.renderDiagnostics(result.data.diagnostics || []);
 
         stdoutElement.textContent = result.data.stdout || "";
@@ -94,16 +97,22 @@ async function runProgram() {
 }
 
 async function resetSession() {
+    await ensureEditorReady();
+    if (activeCheckController) {
+        activeCheckController.abort();
+        activeCheckController = null;
+    }
     sessionId = null;
     await ensureSession();
+    playgroundEditor.setSource(playgroundEditor.defaultProgram());
     stdoutElement.textContent = "";
     stderrElement.textContent = "";
     playgroundEditor.renderDiagnostics([]);
     playgroundEditor.setStatus("new session");
+    await runCheck();
 }
 
-editor.value = playgroundEditor.defaultProgram();
-void ensureSession().then(() => runCheck());
-editor.addEventListener("input", scheduleCheck);
 runButton.addEventListener("click", () => void runProgram());
 newSessionButton.addEventListener("click", () => void resetSession());
+
+void ensureEditorReady().then(() => ensureSession()).then(() => runCheck());

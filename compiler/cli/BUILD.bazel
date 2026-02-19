@@ -8,7 +8,6 @@ rust_binary(
         "//compiler/driver",
         "//compiler/reports",
         "@crates//:clap",
-        "@crates//:serde",
         "@crates//:serde_json",
     ],
 )

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
@@ -38,7 +38,7 @@ impl FromStr for ReportFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticPhase {
     Parsing,
@@ -49,7 +49,7 @@ pub enum DiagnosticPhase {
     TypeAnalysis,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RenderedDiagnostic {
     pub phase: DiagnosticPhase,
     pub path: String,
@@ -57,7 +57,7 @@ pub struct RenderedDiagnostic {
     pub span: Span,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompilerFailure {
     pub kind: CompilerFailureKind,
     pub message: String,
@@ -67,7 +67,7 @@ pub struct CompilerFailure {
     pub details: Vec<CompilerFailureDetail>,
 }
 
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CompilerFailureKind {
     ReadSource,
@@ -82,9 +82,17 @@ pub enum CompilerFailureKind {
     RunFailed,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompilerFailureDetail {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CompilerCheckJsonOutput {
+    pub ok: bool,
+    pub diagnostics: Vec<RenderedDiagnostic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<CompilerFailure>,
 }

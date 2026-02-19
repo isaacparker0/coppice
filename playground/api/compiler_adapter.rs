@@ -60,6 +60,8 @@ pub async fn check_workspace_via_cli(
         .arg("--workspace-root")
         .arg(session_directory)
         .arg("check")
+        .arg("--format")
+        .arg("json")
         .arg("main.bin.coppice")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -82,7 +84,10 @@ pub async fn check_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = truncate_utf8_lossy(&output.stderr, max_output_bytes);
+    let stderr = sanitize_workspace_paths(
+        &truncate_utf8_lossy(&output.stderr, max_output_bytes),
+        session_directory,
+    );
     Ok(CheckExecution {
         exit_code: output.status.code().unwrap_or(1),
         stdout,
@@ -125,7 +130,10 @@ pub async fn run_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = truncate_utf8_lossy(&output.stderr, max_output_bytes);
+    let stderr = sanitize_workspace_paths(
+        &truncate_utf8_lossy(&output.stderr, max_output_bytes),
+        session_directory,
+    );
     Ok(RunExecution {
         exit_code: output.status.code().unwrap_or(1),
         stdout,
@@ -159,4 +167,18 @@ fn truncate_utf8_lossy(bytes: &[u8], max_output_bytes: usize) -> String {
     let mut output = String::from_utf8_lossy(&bytes[..max_output_bytes]).to_string();
     output.push_str("\n... output truncated ...");
     output
+}
+
+fn sanitize_workspace_paths(output: &str, session_directory: &Path) -> String {
+    let raw_prefix = session_directory.to_string_lossy();
+    if raw_prefix.is_empty() {
+        return output.to_string();
+    }
+
+    let mut sanitized = output.replace(raw_prefix.as_ref(), ".");
+    if std::path::MAIN_SEPARATOR != '/' {
+        let unix_prefix = raw_prefix.replace(std::path::MAIN_SEPARATOR, "/");
+        sanitized = sanitized.replace(&unix_prefix, ".");
+    }
+    sanitized
 }

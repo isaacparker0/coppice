@@ -1,13 +1,14 @@
 use std::process;
 
 use clap::{Parser, Subcommand};
-use serde::Serialize;
 
 use compiler__driver::{
     build_target_with_workspace_root, check_target_with_workspace_root,
     run_target_with_workspace_root,
 };
-use compiler__reports::{CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat};
+use compiler__reports::{
+    CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
+};
 
 #[derive(Parser)]
 #[command(version)]
@@ -86,7 +87,7 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                 }
             }
             ReportFormat::Json => {
-                let output = JsonOutput {
+                let output = CompilerCheckJsonOutput {
                     ok: checked_target.diagnostics.is_empty(),
                     diagnostics: checked_target.diagnostics.clone(),
                     error: None,
@@ -103,7 +104,7 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     render_compiler_failure_text(path, &error);
                 }
                 ReportFormat::Json => {
-                    let output = JsonOutput {
+                    let output = CompilerCheckJsonOutput {
                         ok: false,
                         diagnostics: Vec::new(),
                         error: Some(error),
@@ -156,12 +157,4 @@ fn render_compiler_failure_text(path: &str, error: &CompilerFailure) {
         let detail_path = detail.path.as_deref().unwrap_or(error_path);
         eprintln!("{detail_path}: error: {}", detail.message);
     }
-}
-
-#[derive(Serialize)]
-struct JsonOutput {
-    ok: bool,
-    diagnostics: Vec<RenderedDiagnostic>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<CompilerFailure>,
 }

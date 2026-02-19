@@ -31,18 +31,9 @@ pub struct ErrorResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct DiagnosticResponse {
-    pub phase: String,
-    pub path: String,
-    pub line: usize,
-    pub column: usize,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
 pub struct CheckResponse {
     pub ok: bool,
-    pub diagnostics: Vec<DiagnosticResponse>,
+    pub diagnostics: Vec<RenderedDiagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorResponse>,
 }
@@ -53,23 +44,10 @@ pub struct RunResponse {
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
-    pub diagnostics: Vec<DiagnosticResponse>,
+    pub diagnostics: Vec<RenderedDiagnostic>,
     pub timed_out: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorResponse>,
-}
-
-impl DiagnosticResponse {
-    #[must_use]
-    pub fn from_rendered(diagnostic: &RenderedDiagnostic) -> Self {
-        Self {
-            phase: format!("{:?}", diagnostic.phase),
-            path: diagnostic.path.clone(),
-            line: diagnostic.span.line,
-            column: diagnostic.span.column,
-            message: diagnostic.message.clone(),
-        }
-    }
 }
 
 #[must_use]

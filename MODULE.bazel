@@ -45,6 +45,28 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "monaco_editor",
+    build_file_content = """
+filegroup(
+    name = "assets",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "c280cdcf0b0c13d1a2bf01af958d4387ed06d7f6c918401d00c4adcae1bc72b6",
+    strip_prefix = "package/min",
+    urls = ["https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz"],
+)
+
+bazel_lib_toolchains = use_extension("@aspect_bazel_lib//lib:extensions.bzl", "toolchains")
+bazel_lib_toolchains.copy_to_directory()
+use_repo(bazel_lib_toolchains, "copy_to_directory_toolchains")
+
+register_toolchains("@copy_to_directory_toolchains//:all")
+
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1.2")
 bazel_dep(name = "rules_multitool", version = "1.11.1")
 

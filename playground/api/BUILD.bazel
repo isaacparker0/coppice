@@ -14,6 +14,7 @@ rust_library(
         "//compiler/reports",
         "@crates//:axum",
         "@crates//:serde",
+        "@crates//:serde_json",
         "@crates//:tokio",
         "@rules_rust//tools/runfiles",
     ],
