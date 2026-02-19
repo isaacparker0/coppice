@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io nginx
+
+mkdir -p /root/.docker
+AUTH="$(printf "doctl:%s" "${registry_token}" | base64 -w 0 2>/dev/null || printf "doctl:%s" "${registry_token}" | base64)"
+printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "$AUTH" > /root/.docker/config.json
+
+cat > /etc/nginx/sites-available/coppice-playground <<'NGINX'
+${nginx_config}
+NGINX
+
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/coppice-playground /etc/nginx/sites-enabled/coppice-playground
+
+mkdir -p /etc/coppice-playground
+if [[ ! -f /etc/coppice-playground/image_ref ]]; then
+  echo "${image_repository}:bootstrap" > /etc/coppice-playground/image_ref
+fi
+
+cat > /usr/local/bin/coppice-playground-deploy <<'DEPLOY'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: coppice-playground-deploy <image-tag>" >&2
+  exit 2
+fi
+
+image_ref="${image_repository}:$1"
+echo "$image_ref" > /etc/coppice-playground/image_ref
+
+/usr/bin/docker pull "$image_ref"
+/bin/systemctl restart coppice-playground
+DEPLOY
+chmod +x /usr/local/bin/coppice-playground-deploy
+
+cat > /etc/systemd/system/coppice-playground.service <<'SERVICE'
+[Unit]
+Description=Coppice Playground
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+ExecStartPre=/bin/bash -lc '/usr/bin/docker pull "$(cat /etc/coppice-playground/image_ref)"'
+ExecStartPre=-/usr/bin/docker rm -f coppice-playground
+ExecStart=/bin/bash -lc '/usr/bin/docker run --name coppice-playground -p 127.0.0.1:8080:8080 "$(cat /etc/coppice-playground/image_ref)"'
+ExecStop=/usr/bin/docker stop -t 10 coppice-playground
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable --now docker
+systemctl enable coppice-playground
+nginx -t
+systemctl enable --now nginx

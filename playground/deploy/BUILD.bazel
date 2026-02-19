@@ -1,9 +1,0 @@
-filegroup(
-    name = "deploy_files",
-    srcs = [
-        "README.md",
-        "nginx.conf",
-        "playground_api.service",
-    ],
-    visibility = ["//visibility:public"],
-)
