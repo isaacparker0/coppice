@@ -35,15 +35,7 @@
     ],
     "packageRules": [
         {
-            "matchManagers": ["bazelisk", "bazel-module"],
-            "postUpgradeTasks": {
-                "commands": ["bazel mod deps --lockfile_mode=update"],
-                "fileFilters": ["MODULE.bazel.lock"],
-                "executionMode": "branch"
-            }
-        },
-        {
-            "matchManagers": ["cargo"],
+            "matchManagers": ["bazelisk", "bazel-module", "cargo"],
             "postUpgradeTasks": {
                 "commands": ["bazel mod deps --lockfile_mode=update"],
                 "fileFilters": ["MODULE.bazel.lock"],
@@ -74,6 +66,11 @@
                 "fileFilters": ["go.mod", "go.sum", "MODULE.bazel"],
                 "executionMode": "branch"
             }
+        },
+        {
+            "matchManagers": ["cargo"],
+            "matchPackagePatterns": ["^cranelift-"],
+            "groupName": "cranelift"
         }
     ]
 }
