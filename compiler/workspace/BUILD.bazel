@@ -27,6 +27,7 @@ rust_test(
 dependency_enforcement_test(
     name = "workspace_forbidden_dependencies",
     forbidden = [
+        "//compiler/cranelift_backend",
         "//compiler/binding",
         "//compiler/diagnostics",
         "//compiler/driver",
