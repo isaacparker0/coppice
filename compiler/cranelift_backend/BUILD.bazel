@@ -33,7 +33,6 @@ dependency_enforcement_test(
         "//compiler/parsing",
         "//compiler/phase_results",
         "//compiler/resolution",
-        "//compiler/rust_backend",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
         "//compiler/semantic_types",

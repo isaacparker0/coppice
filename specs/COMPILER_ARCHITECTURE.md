@@ -208,7 +208,7 @@ High-level direction:
 5. `semantic_lowering -> {syntax,semantic_program}`
 6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
 7. `executable_lowering -> {type_annotated_program,executable_program}`
-8. `rust_backend -> {executable_program,runtime_interface}`
+8. `cranelift_backend -> {executable_program,runtime_interface}`
 9. `driver` depends on phase crates for orchestration
 
 Key prohibitions:
