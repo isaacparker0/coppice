@@ -38,7 +38,7 @@ async fn main() {
     let local_address: SocketAddr = listener
         .local_addr()
         .unwrap_or_else(|error| panic!("failed to read local address: {error}"));
-    eprintln!("playground api listening on {local_address}");
+    eprintln!("playground api listening on http://{local_address}");
 
     let make_service: IntoMakeServiceWithConnectInfo<_, SocketAddr> =
         app.into_make_service_with_connect_info::<SocketAddr>();
