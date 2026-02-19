@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "only struct types can declare implements clauses; 'Outcome' is not a struct",
             "span": {
                 "start": 96,

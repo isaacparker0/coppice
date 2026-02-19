@@ -9,8 +9,8 @@ See `tests/README.md` for shared fixture hierarchy and naming conventions.
 
 ```
 tests/diagnostics/<area>/<feature>/<case>/
-  input/PACKAGE.coppice
-  input/<files>.coppice
+  input/PACKAGE.copp
+  input/<files>.copp
   expect.text
   expect.json
 ```
@@ -18,13 +18,13 @@ tests/diagnostics/<area>/<feature>/<case>/
 ## Content rules
 
 - Each fixture is self-contained and should use a clear role-oriented default
-  filename under `input/`: prefer `lib.coppice` for library/general cases,
-  `lib.test.coppice` for test-role cases, `main.bin.coppice` for binary-role
-  cases, and `PACKAGE.coppice` for manifest-role cases; these are defaults for
-  clarity, not hard constraints, and multi-file fixtures may use other
-  filenames/layouts as needed.
+  filename under `input/`: prefer `lib.copp` for library/general cases,
+  `lib.test.copp` for test-role cases, `main.bin.copp` for binary-role cases,
+  and `PACKAGE.copp` for manifest-role cases; these are defaults for clarity,
+  not hard constraints, and multi-file fixtures may use other filenames/layouts
+  as needed.
 - The fixture runner invokes `check` from `input/` (equivalent to `check .`), so
-  each `input/` directory should contain `PACKAGE.coppice` to define the package
+  each `input/` directory should contain `PACKAGE.copp` to define the package
   root. The intentional exception is workspace-root error fixtures that validate
   missing-root-manifest behavior.
 - `expect.text` is the exact expected output from

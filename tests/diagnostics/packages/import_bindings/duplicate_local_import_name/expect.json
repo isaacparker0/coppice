@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "duplicate imported name 'Token'; use an alias",
             "span": {
                 "start": 59,

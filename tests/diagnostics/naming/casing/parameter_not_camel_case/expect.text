@@ -1,3 +1,3 @@
-lib.coppice:1:15: error: parameter name must be camelCase
+lib.copp:1:15: error: parameter name must be camelCase
   function demo(BadParam: int64) -> int64 {
                 ^

@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "a/lib.coppice",
+            "path": "a/lib.copp",
             "message": "package import cycle detected: workspace/a -> workspace/b -> workspace/c -> workspace/a",
             "span": {
                 "start": 0,

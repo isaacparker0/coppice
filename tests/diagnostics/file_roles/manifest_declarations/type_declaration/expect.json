@@ -3,8 +3,8 @@
     "diagnostics": [
         {
             "phase": "file_role_rules",
-            "path": "PACKAGE.coppice",
-            "message": "PACKAGE.coppice may only contain exports declarations",
+            "path": "PACKAGE.copp",
+            "message": "PACKAGE.copp may only contain exports declarations",
             "span": {
                 "start": 5,
                 "end": 43,

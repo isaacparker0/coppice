@@ -1,3 +1,3 @@
-a/lib.coppice:1:1: error: package import cycle detected: workspace/a -> workspace/b -> workspace/a
+a/lib.copp:1:1: error: package import cycle detected: workspace/a -> workspace/b -> workspace/a
   import workspace/b { B }
   ^

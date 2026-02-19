@@ -8,11 +8,11 @@ use compiler__workspace::discover_workspace;
 #[test]
 fn assigns_files_to_nearest_manifest_package() {
     let workspace = TestWorkspace::new(&[
-        "platform/auth/PACKAGE.coppice",
-        "platform/auth/token.coppice",
-        "platform/auth/crypto/hash.coppice",
-        "platform/auth/oauth/PACKAGE.coppice",
-        "platform/auth/oauth/google.coppice",
+        "platform/auth/PACKAGE.copp",
+        "platform/auth/token.copp",
+        "platform/auth/crypto/hash.copp",
+        "platform/auth/oauth/PACKAGE.copp",
+        "platform/auth/oauth/google.copp",
     ]);
 
     let workspace = discover_workspace(workspace.path()).expect("discovery should succeed");
@@ -28,8 +28,8 @@ fn assigns_files_to_nearest_manifest_package() {
     assert_eq!(
         auth_file_paths,
         vec![
-            "platform/auth/crypto/hash.coppice".to_string(),
-            "platform/auth/token.coppice".to_string(),
+            "platform/auth/crypto/hash.copp".to_string(),
+            "platform/auth/token.copp".to_string(),
         ]
     );
 
@@ -43,13 +43,13 @@ fn assigns_files_to_nearest_manifest_package() {
         .collect();
     assert_eq!(
         oauth_file_paths,
-        vec!["platform/auth/oauth/google.coppice".to_string()]
+        vec!["platform/auth/oauth/google.copp".to_string()]
     );
 }
 
 #[test]
 fn errors_on_orphan_source_file() {
-    let workspace = TestWorkspace::new(&["orphans/lost.coppice"]);
+    let workspace = TestWorkspace::new(&["orphans/lost.copp"]);
 
     let errors = discover_workspace(workspace.path()).expect_err("discovery should fail");
     assert_eq!(errors.len(), 1);
@@ -58,17 +58,17 @@ fn errors_on_orphan_source_file() {
             .path
             .as_ref()
             .map(|path| compiler__source::path_to_key(path)),
-        Some("orphans/lost.coppice".to_string())
+        Some("orphans/lost.copp".to_string())
     );
 }
 
 #[test]
 fn classifies_file_roles_by_suffix() {
     let workspace = TestWorkspace::new(&[
-        "pkg/PACKAGE.coppice",
-        "pkg/lib.coppice",
-        "pkg/tool.bin.coppice",
-        "pkg/tool.test.coppice",
+        "pkg/PACKAGE.copp",
+        "pkg/lib.copp",
+        "pkg/tool.bin.copp",
+        "pkg/tool.test.copp",
     ]);
 
     let model = discover_workspace(workspace.path()).expect("discovery should succeed");
@@ -88,16 +88,13 @@ fn classifies_file_roles_by_suffix() {
         })
         .collect();
 
+    assert_eq!(role_by_path.get("pkg/lib.copp"), Some(&FileRole::Library));
     assert_eq!(
-        role_by_path.get("pkg/lib.coppice"),
-        Some(&FileRole::Library)
-    );
-    assert_eq!(
-        role_by_path.get("pkg/tool.bin.coppice"),
+        role_by_path.get("pkg/tool.bin.copp"),
         Some(&FileRole::BinaryEntrypoint)
     );
     assert_eq!(
-        role_by_path.get("pkg/tool.test.coppice"),
+        role_by_path.get("pkg/tool.test.copp"),
         Some(&FileRole::Test)
     );
 }
@@ -105,11 +102,11 @@ fn classifies_file_roles_by_suffix() {
 #[test]
 fn discovery_order_is_deterministic() {
     let workspace = TestWorkspace::new(&[
-        "zeta/PACKAGE.coppice",
-        "zeta/c.coppice",
-        "zeta/a.coppice",
-        "alpha/PACKAGE.coppice",
-        "alpha/b.coppice",
+        "zeta/PACKAGE.copp",
+        "zeta/c.copp",
+        "zeta/a.copp",
+        "alpha/PACKAGE.copp",
+        "alpha/b.copp",
     ]);
 
     let first = discover_workspace(workspace.path()).expect("first discovery should succeed");

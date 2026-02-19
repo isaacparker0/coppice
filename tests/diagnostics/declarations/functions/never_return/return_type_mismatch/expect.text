@@ -1,3 +1,3 @@
-lib.coppice:2:12: error: return type mismatch: expected never, got nil
+lib.copp:2:12: error: return type mismatch: expected never, got nil
       return nil
              ^

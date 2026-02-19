@@ -86,8 +86,6 @@ During naming exploration, many alternatives were considered:
 - More whimsical plant names (e.g., light “sprout”-style names) felt too playful
   and were often already used in software.
 - Heavier Old English landscape terms felt overly archaic or surname-like.
-- Abbreviations felt misaligned with the language’s preference for full words
-  and explicitness.
 
 Coppice provided the best balance of:
 
@@ -102,24 +100,25 @@ Coppice provided the best balance of:
 The official file extension is:
 
 ```
-.coppice
+.copp
 ```
 
-This choice reflects the language’s styleguide:
+This choice balances identity and daily ergonomics:
 
-- Prefer full words over abbreviations.
-- Favor clarity over terseness.
-- Avoid unnecessary compression.
+- Keep a clear link to the language name.
+- Minimize typing friction in common workflows.
+- Avoid overloaded terms and acronym ambiguity.
 
-Using the full extension reinforces explicitness and avoids acronym ambiguity.
+`.copp` remains recognizably tied to **Coppice** while keeping filenames and
+commands compact.
 
 Examples:
 
 ```
-main.coppice
-server.bin.coppice
-token.test.coppice
-PACKAGE.coppice
+main.copp
+server.bin.copp
+token.test.copp
+PACKAGE.copp
 ```
 
 ---

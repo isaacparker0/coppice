@@ -264,9 +264,9 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 
 2. CLI supports runnable flow:
 
-- `coppice build <path-to-bin.coppice> [--output-dir ...]`
-- `coppice run <path-to-bin.coppice> [--output-dir ...]`
-- `build`/`run` require an explicit `.bin.coppice` file path.
+- `coppice build <path-to-bin.copp> [--output-dir ...]`
+- `coppice run <path-to-bin.copp> [--output-dir ...]`
+- `build`/`run` require an explicit `.bin.copp` file path.
 
 3. Toolchain execution for Rust emission is hermetic in monorepo CLI mode:
 

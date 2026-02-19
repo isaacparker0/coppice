@@ -30,20 +30,15 @@ pub fn write_workspace_source(
 ) -> Result<(), CompilerFailure> {
     ensure_workspace_manifest(session_directory).map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::ReadSource,
-        message: format!("failed to write PACKAGE.coppice: {error}"),
-        path: Some(
-            session_directory
-                .join("PACKAGE.coppice")
-                .display()
-                .to_string(),
-        ),
+        message: format!("failed to write PACKAGE.copp: {error}"),
+        path: Some(session_directory.join("PACKAGE.copp").display().to_string()),
         details: Vec::new(),
     })?;
 
-    let source_path = session_directory.join("main.bin.coppice");
+    let source_path = session_directory.join("main.bin.copp");
     fs::write(&source_path, source).map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::ReadSource,
-        message: format!("failed to write main.bin.coppice: {error}"),
+        message: format!("failed to write main.bin.copp: {error}"),
         path: Some(source_path.display().to_string()),
         details: Vec::new(),
     })
@@ -63,7 +58,7 @@ pub async fn check_workspace_via_cli(
         .arg("check")
         .arg("--format")
         .arg("json")
-        .arg("main.bin.coppice")
+        .arg("main.bin.copp")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -109,7 +104,7 @@ pub async fn run_workspace_via_cli(
         .arg("--workspace-root")
         .arg(session_directory)
         .arg("run")
-        .arg("main.bin.coppice")
+        .arg("main.bin.copp")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 

@@ -1,3 +1,3 @@
-lib.coppice:4:5: error: generic function 'make' requires 1 explicit type arguments
+lib.copp:4:5: error: generic function 'make' requires 1 explicit type arguments
       make()
       ^

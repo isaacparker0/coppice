@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "enum type 'Outcome' cannot declare type parameters",
             "span": {
                 "start": 5,

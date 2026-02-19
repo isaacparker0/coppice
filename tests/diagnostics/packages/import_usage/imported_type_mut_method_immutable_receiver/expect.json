@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "cannot call mutating method 'User.bump' on immutable binding 'user'",
             "span": {
                 "start": 101,

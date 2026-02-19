@@ -1,3 +1,3 @@
-lib.coppice:2:5: error: continue can only be used inside a loop
+lib.copp:2:5: error: continue can only be used inside a loop
       continue
       ^

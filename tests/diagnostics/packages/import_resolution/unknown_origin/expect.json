@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "import path must start with import origin 'workspace', 'std/', or 'external/'",
             "span": {
                 "start": 0,

@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "unknown package 'workspace/missing/pkg'",
             "span": {
                 "start": 0,

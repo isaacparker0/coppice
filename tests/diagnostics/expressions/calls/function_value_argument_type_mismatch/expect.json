@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "argument 1 to 'function value' must be int64, got string",
             "span": {
                 "start": 84,

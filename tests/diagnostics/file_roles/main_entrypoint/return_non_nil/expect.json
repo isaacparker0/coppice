@@ -3,8 +3,8 @@
     "diagnostics": [
         {
             "phase": "file_role_rules",
-            "path": "main.bin.coppice",
-            "message": "main in .bin.coppice must return nil",
+            "path": "main.bin.copp",
+            "message": "main in .bin.copp must return nil",
             "span": {
                 "start": 19,
                 "end": 24,

@@ -35,7 +35,7 @@ pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<Discov
 
     let mut source_paths_by_package_root: BTreeMap<PathBuf, Vec<PathBuf>> = BTreeMap::new();
     for source_path in source_paths {
-        let role = FileRole::from_path(&source_path).expect("source path must be .coppice");
+        let role = FileRole::from_path(&source_path).expect("source path must be .copp");
         if role == FileRole::PackageManifest {
             continue;
         }
@@ -63,7 +63,7 @@ pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<Discov
         let mut source_files = Vec::new();
         if let Some(paths) = source_paths_by_package_root.get(package_root) {
             for source_path in paths {
-                let role = FileRole::from_path(source_path).expect("source path must be .coppice");
+                let role = FileRole::from_path(source_path).expect("source path must be .copp");
                 let source_file = SourceFile {
                     id: FileId(file_id_counter),
                     workspace_relative_path: source_path.clone(),
@@ -74,7 +74,7 @@ pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<Discov
             }
         }
 
-        let manifest_path = package_root.join("PACKAGE.coppice");
+        let manifest_path = package_root.join("PACKAGE.copp");
         packages.push(DiscoveredPackage {
             id: PackageId(package_index),
             package_path: package_path_from_root(package_root),
@@ -143,7 +143,7 @@ fn collect_workspace_entries(
             && !package_roots.insert(relative_directory.to_path_buf())
         {
             errors.push(DiscoveryError::new(
-                "duplicate PACKAGE.coppice in package root",
+                "duplicate PACKAGE.copp in package root",
                 Some(child_relative_path),
             ));
         }

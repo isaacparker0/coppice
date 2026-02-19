@@ -611,15 +611,15 @@ returning recoverable errors in function signatures.
 
 ### Package Definition
 
-A directory is a package if and only if it contains a `PACKAGE.coppice` file.
+A directory is a package if and only if it contains a `PACKAGE.copp` file.
 Without one, a subdirectory's files belong to the parent package.
 
 All source files must be owned by a package, including role-specialized files:
-`*.bin.coppice` and `*.test.coppice` are package members, not standalone
-compilation units.
+`*.bin.copp` and `*.test.copp` are package members, not standalone compilation
+units.
 
-If a `.coppice` source file has no ancestor `PACKAGE.coppice` up to workspace
-root, compilation fails.
+If a `.copp` source file has no ancestor `PACKAGE.copp` up to workspace root,
+compilation fails.
 
 Why this policy:
 
@@ -630,25 +630,25 @@ Why this policy:
 ```
 platform/
   auth/
-    PACKAGE.coppice           # makes auth/ a package
-    token.coppice             # library file in auth package
-    password.coppice          # library file in auth package
-    server.bin.coppice        # binary entrypoint file in auth package
-    token.test.coppice        # test file in auth package
+    PACKAGE.copp           # makes auth/ a package
+    token.copp             # library file in auth package
+    password.copp          # library file in auth package
+    server.bin.copp        # binary entrypoint file in auth package
+    token.test.copp        # test file in auth package
     crypto/
-      encrypt.coppice         # NO PACKAGE.coppice → still part of auth package
-      hash.coppice
+      encrypt.copp         # NO PACKAGE.copp → still part of auth package
+      hash.copp
     oauth/
-      PACKAGE.coppice         # makes oauth/ its own package
-      google.coppice
+      PACKAGE.copp         # makes oauth/ its own package
+      google.copp
 ```
 
-### PACKAGE.coppice
+### PACKAGE.copp
 
 Contains only a doc comment and `exports` declarations. No code.
 
 ```
-// platform/auth/PACKAGE.coppice
+// platform/auth/PACKAGE.copp
 
 // Package auth provides authentication and authorization.
 
@@ -658,7 +658,7 @@ exports { Token, parse, hash, verify }
 `exports` declares selected symbols as the package's external API. This is the
 only place `exports` is allowed. The keyword `export` is invalid.
 
-The plural keyword is intentional: `PACKAGE.coppice` is a declarative API table,
+The plural keyword is intentional: `PACKAGE.copp` is a declarative API table,
 not a file-local export statement and not a barrel forwarding module.
 
 ### Imports
@@ -677,8 +677,8 @@ Valid path forms:
 - `external/<registry-package-path>`
 
 `workspace` denotes the workspace-root package. `workspace/<...>` denotes a
-first-party package directory containing `PACKAGE.coppice`. `PACKAGE.coppice`
-itself is never written in import syntax.
+first-party package directory containing `PACKAGE.copp`. `PACKAGE.copp` itself
+is never written in import syntax.
 
 ```
 import workspace/platform/auth { Token, parse }
@@ -707,8 +707,7 @@ Two visibility axes:
 - Top-level declarations:
   - No modifier — file-private.
   - `visible` — package-visible (importable by other files in the same package).
-  - External visibility — requires `visible` plus `exports` in
-    `PACKAGE.coppice`.
+  - External visibility — requires `visible` plus `exports` in `PACKAGE.copp`.
 - Struct members:
   - No modifier — type-private (accessible only inside methods on that type).
   - `public` — accessible anywhere the type itself is accessible.
@@ -727,11 +726,11 @@ Keyword rationale:
 - Keep `public` for struct member visibility, matching common member-access
   terminology.
 - Avoid overloading one keyword across unrelated scope boundaries.
-- Keep external API selection explicit and centralized in `PACKAGE.coppice` via
+- Keep external API selection explicit and centralized in `PACKAGE.copp` via
   `exports`.
 
 ```
-// auth/token.coppice
+// auth/token.copp
 
 visible type Token :: struct {        // package-visible, can be listed in exports
     public user_id: i64          // visible on the struct externally
@@ -743,7 +742,7 @@ visible function validate(t: Token) -> bool {   // package-visible function
 }
 ```
 
-Test files (`*.test.coppice`) may import library symbols per normal visibility
+Test files (`*.test.copp`) may import library symbols per normal visibility
 rules, but may not declare `visible` symbols and are not importable.
 
 ### Intra-Package Access
@@ -752,15 +751,15 @@ Intra-package usage is explicit for code files. Files do not see sibling
 declarations implicitly; they import package-visible (`visible`) symbols
 explicitly using the same import form as other code files.
 
-`PACKAGE.coppice` is a declarative manifest, not a normal code scope. It does
-not import symbols; `exports { ... }` resolves members against package-level
+`PACKAGE.copp` is a declarative manifest, not a normal code scope. It does not
+import symbols; `exports { ... }` resolves members against package-level
 `visible` declarations.
 
 ```
-// auth/token.coppice
+// auth/token.copp
 visible function validate(t: Token) -> bool { ... }
 
-// auth/password.coppice
+// auth/password.copp
 import workspace/platform/auth { validate, Token }
 
 function check(pw: string, t: Token) -> bool {
@@ -768,7 +767,7 @@ function check(pw: string, t: Token) -> bool {
     ...
 }
 
-// auth/crypto/encrypt.coppice
+// auth/crypto/encrypt.copp
 function encrypt(data: string) -> string { ... }   // file-private
 ```
 
@@ -778,22 +777,22 @@ function encrypt(data: string) -> string { ... }   // file-private
 
 ### Test Files
 
-Tests live in separate `*.test.coppice` files. Same directory as the source.
+Tests live in separate `*.test.copp` files. Same directory as the source.
 `visible` declarations are forbidden in test files, and test files are not
 importable.
 
 ```
 auth/
-  token.coppice
-  token.test.coppice
-  password.coppice
-  password.test.coppice
+  token.copp
+  token.test.copp
+  password.copp
+  password.test.copp
 ```
 
 ### Syntax
 
 ```
-// token.test.coppice
+// token.test.copp
 
 group Token.parse {
     test "handles valid JWT" {
@@ -842,7 +841,7 @@ No assertion libraries. No `assertEqual`, `expect().toBe()`. Just `assert`.
 Functions. No framework, no decorators, no dependency injection.
 
 ```
-// testutil/auth.coppice (with PACKAGE.coppice listing these in exports)
+// testutil/auth.copp (with PACKAGE.copp listing these in exports)
 
 visible function make_token(user_id: i64) -> Token {
     return Token.new(user_id: user_id, secret: "test-secret", ttl: 3600)
@@ -850,7 +849,7 @@ visible function make_token(user_id: i64) -> Token {
 ```
 
 ```
-// token.test.coppice
+// token.test.copp
 import testutil/auth { make_token }
 
 test "token contains user id" {
@@ -867,7 +866,7 @@ Cleanup is handled by deterministic resource cleanup (ARC + destructors). No
 ```
 $ coppice test platform/auth/
 
-platform/auth/token.test.coppice
+platform/auth/token.test.copp
   Token.parse
     ok   handles valid JWT (1ms)
     ok   rejects malformed input (0ms)
@@ -879,7 +878,7 @@ platform/auth/token.test.coppice
     assert status matches TokenExpired
            |      |
            OK     TokenExpired
-    at: token.test.coppice:28
+    at: token.test.copp:28
 
 3 passed, 1 failed
 ```
@@ -990,12 +989,12 @@ Command invocation policy:
 - Workspace root is explicit:
   - default: current working directory
   - override: `--workspace-root <path>`
-- A valid workspace root must contain `PACKAGE.coppice` at its root.
+- A valid workspace root must contain `PACKAGE.copp` at its root.
 - Invoking with an invalid workspace root is a compile-time error.
 - `check` (no path) is canonical and equivalent to `check .`.
 - `check <path>` accepts a file or directory path resolved relative to workspace
   root.
-- If `<path>` is a source file (including `.bin.coppice`/`.test.coppice`), the
+- If `<path>` is a source file (including `.bin.copp`/`.test.copp`), the
   compiler resolves its owning package and checks that package.
 - If a source file has no owning package, `check` fails with a package ownership
   error.
@@ -1054,13 +1053,13 @@ mechanically derived.
 
 Gazelle plugin logic:
 
-1. Walk directory tree. A directory with `PACKAGE.coppice` is a package target.
+1. Walk directory tree. A directory with `PACKAGE.copp` is a package target.
 2. Collect package files under that root:
-   - `*.coppice` excluding `*.bin.coppice`, `*.test.coppice`, and
-     `PACKAGE.coppice` as library source files.
-   - include `PACKAGE.coppice` manifest in package metadata.
-3. Collect `*.bin.coppice` files → `coppice_binary` targets.
-4. Collect `*.test.coppice` files → `coppice_test` targets.
+   - `*.copp` excluding `*.bin.copp`, `*.test.copp`, and `PACKAGE.copp` as
+     library source files.
+   - include `PACKAGE.copp` manifest in package metadata.
+3. Collect `*.bin.copp` files → `coppice_binary` targets.
+4. Collect `*.test.copp` files → `coppice_test` targets.
 5. Parse `import` statements and map import-origin-prefixed import path to
    target deps.
 
@@ -1069,17 +1068,17 @@ No heuristics. No configuration file. No import resolution algorithm.
 ### Target Mapping
 
 ```
-# One package root (with PACKAGE.coppice) = one coppice_library target
+# One package root (with PACKAGE.copp) = one coppice_library target
 
 coppice_library(
     name = "auth",
     srcs = [
-        "token.coppice",
-        "password.coppice",
-        "crypto/encrypt.coppice",     # subdir without PACKAGE.coppice
-        "crypto/hash.coppice",
+        "token.copp",
+        "password.copp",
+        "crypto/encrypt.copp",     # subdir without PACKAGE.copp
+        "crypto/hash.copp",
     ],
-    manifest = "PACKAGE.coppice",
+    manifest = "PACKAGE.copp",
     deps = [
         "//platform/auth/oauth",
         "@coppice_std//time",
@@ -1089,15 +1088,15 @@ coppice_library(
 
 coppice_binary(
     name = "auth_server",
-    src = "server.bin.coppice",
+    src = "server.bin.copp",
     deps = [":auth"],
 )
 
 coppice_test(
     name = "auth_test",
     srcs = [
-        "token.test.coppice",
-        "password.test.coppice",
+        "token.test.copp",
+        "password.test.copp",
     ],
     deps = [":auth"],
 )
@@ -1118,7 +1117,7 @@ coppice_test(
   deterministic caching.
 - Deterministic output → remote cache hits across machines.
 - No hidden dependencies → build graph is correct by construction.
-- `PACKAGE.coppice` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
+- `PACKAGE.copp` as manifest plus file-role suffixes (`.bin`, `.test`) keeps
   Gazelle plugin logic deterministic and small.
 - No transitive header includes, no implicit prelude (or a fixed one) → `deps`
   is minimal and precise.

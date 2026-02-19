@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "imported symbol 'helper' in package 'workspace/auth' is not exported",
             "span": {
                 "start": 24,

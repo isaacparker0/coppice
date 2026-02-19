@@ -1,3 +1,3 @@
-lib.coppice:6:9: error: match pattern type 'boolean' is not in target type
+lib.copp:6:9: error: match pattern type 'boolean' is not in target type
           boolean => 0
           ^

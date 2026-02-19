@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "assignment type mismatch: expected int64, got boolean",
             "span": {
                 "start": 50,

@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "type argument 'User' does not satisfy constraint 'Named' for type parameter 'T' on 'Box'",
             "span": {
                 "start": 263,

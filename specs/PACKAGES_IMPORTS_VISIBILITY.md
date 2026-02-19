@@ -26,9 +26,9 @@ The model intentionally prefers explicitness over minimal boilerplate.
 
 ## Terminology
 
-1. **File**: a `.coppice` source file.
-2. **Package**: a directory containing `PACKAGE.coppice`, plus source files in
-   subdirectories that do not contain their own `PACKAGE.coppice`.
+1. **File**: a `.copp` source file.
+2. **Package**: a directory containing `PACKAGE.copp`, plus source files in
+   subdirectories that do not contain their own `PACKAGE.copp`.
 3. **Symbol**: top-level declaration (type, function, constant).
 4. **External**: from a different package path.
 5. **Workspace root**: the root directory of the current Coppice workspace.
@@ -48,9 +48,9 @@ mapping.
 
 File roles:
 
-1. **Library file**: `*.coppice` excluding `.bin.coppice` and `.test.coppice`.
-2. **Binary entrypoint file**: `*.bin.coppice`.
-3. **Test file**: `*.test.coppice`.
+1. **Library file**: `*.copp` excluding `.bin.copp` and `.test.copp`.
+2. **Binary entrypoint file**: `*.bin.copp`.
+3. **Test file**: `*.test.copp`.
 
 Role is determined by filename only; contents do not change role.
 
@@ -60,9 +60,9 @@ Role is determined by filename only; contents do not change role.
 
 ### Rule
 
-A directory is a package if and only if it contains `PACKAGE.coppice`.
+A directory is a package if and only if it contains `PACKAGE.copp`.
 
-Without a nested `PACKAGE.coppice`, subdirectory files belong to the parent
+Without a nested `PACKAGE.copp`, subdirectory files belong to the parent
 package.
 
 All Coppice commands are evaluated relative to workspace root. Invoking
@@ -73,20 +73,20 @@ Workspace root validity:
 
 1. Default workspace root is current working directory.
 2. CLI may override with `--workspace-root <path>`.
-3. A workspace root is valid only if `PACKAGE.coppice` exists at that root.
+3. A workspace root is valid only if `PACKAGE.copp` exists at that root.
 4. If workspace root is invalid, command fails before package discovery.
 
-Any `.coppice` source file not owned by any package (no ancestor
-`PACKAGE.coppice` up to workspace root) is a compile error.
+Any `.copp` source file not owned by any package (no ancestor `PACKAGE.copp` up
+to workspace root) is a compile error.
 
 This ownership rule applies uniformly to all file roles:
 
-1. library files (`*.coppice`)
-2. binary entrypoint files (`*.bin.coppice`)
-3. test files (`*.test.coppice`)
+1. library files (`*.copp`)
+2. binary entrypoint files (`*.bin.copp`)
+3. test files (`*.test.copp`)
 
-`*.bin.coppice` and `*.test.coppice` are role-specialized source files, not
-standalone compilation units outside package structure.
+`*.bin.copp` and `*.test.copp` are role-specialized source files, not standalone
+compilation units outside package structure.
 
 Rationale:
 
@@ -100,14 +100,14 @@ Rationale:
 ```text
 platform/
   auth/
-    PACKAGE.coppice
-    token.coppice
-    password.coppice
+    PACKAGE.copp
+    token.copp
+    password.copp
     crypto/
-      hash.coppice
+      hash.copp
     oauth/
-      PACKAGE.coppice
-      google.coppice
+      PACKAGE.copp
+      google.copp
 ```
 
 In this layout:
@@ -119,18 +119,18 @@ In this layout:
 
 ## File Suffix and Package Manifest
 
-1. All language files use `.coppice`.
-2. Package manifests are named `PACKAGE.coppice`.
-3. `PACKAGE.coppice` allows only:
+1. All language files use `.copp`.
+2. Package manifests are named `PACKAGE.copp`.
+3. `PACKAGE.copp` allows only:
    - comments/doc comments
    - `exports ...` declarations that define package external API members
-4. Any executable code or declarations in `PACKAGE.coppice` is a compile error.
+4. Any executable code or declarations in `PACKAGE.copp` is a compile error.
 
 ---
 
 ## Binary Entrypoints
 
-Rules for `*.bin.coppice`:
+Rules for `*.bin.copp`:
 
 1. Must be owned by a package (same ownership rule as all source files).
 2. Must declare exactly one `main` function.
@@ -145,7 +145,7 @@ Violations are compile errors anchored to the offending declaration or import.
 
 ## Library Files
 
-Rules for `*.coppice` (non-bin, non-test):
+Rules for `*.copp` (non-bin, non-test):
 
 1. Must not declare `main`.
 2. Any `main` in a library file is a compile error.
@@ -154,7 +154,7 @@ Rules for `*.coppice` (non-bin, non-test):
 
 ## Test Files
 
-Rules for `*.test.coppice`:
+Rules for `*.test.copp`:
 
 1. Must be owned by a package (same ownership rule as all source files).
 2. Must not declare `main`.
@@ -189,9 +189,9 @@ Where `package/path` is always one of:
    - `external`
 2. `workspace` denotes the workspace-root package.
 3. `workspace/<first-party-package-path>` denotes a first-party package
-   directory containing `PACKAGE.coppice`.
+   directory containing `PACKAGE.copp`.
 4. `std/<...>` and `external/<...>` are resolver-owned package spaces.
-5. `PACKAGE.coppice` itself is never written in import syntax.
+5. `PACKAGE.copp` itself is never written in import syntax.
 6. Import list must be explicit named members.
 7. Alias is optional and only per member (`as`).
 8. Relative imports are forbidden.
@@ -215,7 +215,7 @@ Visibility is split across two declaration kinds with scope-specific keywords:
    - default: file-private
    - `visible`: package-visible (eligible to be imported from other files in the
      same package)
-   - externally visible only if `visible` and listed in `PACKAGE.coppice` via
+   - externally visible only if `visible` and listed in `PACKAGE.copp` via
      `exports`
    - constants must include explicit type annotations
 2. **Struct members** (fields, methods):
@@ -244,7 +244,7 @@ another file always requires an explicit `import`.
 
 1. Keep file/package API boundaries explicit for build graph clarity.
 2. Keep member encapsulation explicit at type boundary.
-3. Keep one external API surface defined only by `PACKAGE.coppice`.
+3. Keep one external API surface defined only by `PACKAGE.copp`.
 
 ---
 
@@ -263,7 +263,7 @@ For `import P { X }` in file `f`:
 
 ---
 
-## Package API Syntax in `PACKAGE.coppice`
+## Package API Syntax in `PACKAGE.copp`
 
 Canonical form:
 
@@ -279,13 +279,13 @@ Semantics:
 4. Duplicate exported members are compile errors.
 5. Unknown symbols are compile errors.
 
-Note: `exports` is only valid in `PACKAGE.coppice`. `PACKAGE.coppice` is a
-declarative manifest and does not use imports; exported members resolve against
+Note: `exports` is only valid in `PACKAGE.copp`. `PACKAGE.copp` is a declarative
+manifest and does not use imports; exported members resolve against
 package-level `visible` declarations. The keyword `export` is invalid.
 
-Keyword intent: `exports` is plural by design to emphasize that
-`PACKAGE.coppice` is a declarative package API table, not a file-local export
-statement or a barrel forwarding file.
+Keyword intent: `exports` is plural by design to emphasize that `PACKAGE.copp`
+is a declarative package API table, not a file-local export statement or a
+barrel forwarding file.
 
 ---
 
@@ -413,9 +413,8 @@ missing import insertion where unambiguous.
 ## Implementation Notes (Non-Normative)
 
 1. Keep parser file-local; add top-level import AST nodes.
-2. Add package graph builder (discover `PACKAGE.coppice`, assign files to
-   package).
-3. Add package export table from `PACKAGE.coppice`.
+2. Add package graph builder (discover `PACKAGE.copp`, assign files to package).
+3. Add package export table from `PACKAGE.copp`.
 4. Add resolver pass before typechecking.
 5. Typecheck against resolved package symbol environment, not single file only.
 6. Extend diagnostics fixture harness from single-file assumption to

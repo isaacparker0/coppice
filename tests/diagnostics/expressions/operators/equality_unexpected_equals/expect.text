@@ -1,3 +1,3 @@
-lib.coppice:2:14: error: unexpected '=' in expression
+lib.copp:2:14: error: unexpected '=' in expression
       return 1 = 2
                ^

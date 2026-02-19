@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "implemented type 'NotInterface' must be an interface declaration",
             "span": {
                 "start": 73,

@@ -1,1 +1,1 @@
-${INPUT_DIR}/lib.coppice: error: build/run target must be a .bin.coppice file
+${INPUT_DIR}/lib.copp: error: build/run target must be a .bin.copp file

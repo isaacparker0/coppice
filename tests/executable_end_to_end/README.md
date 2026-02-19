@@ -9,8 +9,8 @@ See `tests/README.md` for shared fixture hierarchy and naming conventions.
 
 ```
 tests/executable_end_to_end/<area>/<feature>/<case>/
-  input/PACKAGE.coppice
-  input/<files>.coppice
+  input/PACKAGE.copp
+  input/<files>.copp
   invoke.args
   expect.exit
   expect.stdout
@@ -21,7 +21,7 @@ tests/executable_end_to_end/<area>/<feature>/<case>/
 ## Content rules
 
 - Prefer a small number of high-signal cases per feature.
-- Each fixture is self-contained and should include `input/PACKAGE.coppice`.
+- Each fixture is self-contained and should include `input/PACKAGE.copp`.
 - `invoke.args` is required and contains one CLI argument per line.
 - `expect.exit`, `expect.stdout`, `expect.stderr`, and `expect.artifacts` are
   all required for every case.

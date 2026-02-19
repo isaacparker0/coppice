@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "syntax_rules",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "doc comment must document a declaration",
             "span": {
                 "start": 30,
