@@ -1,9 +1,6 @@
 # keep-sorted start
-*.tfvars
 .DS_Store
 .coppice
-.terraform
 bazel-*
 target
-terraform.tfstate.backup
 # keep-sorted end
