@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::{Path as RoutePath, State};
+use axum::extract::{Path as RoutePath, Request, State};
 use axum::http::{HeaderValue, StatusCode, header};
+use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -21,6 +22,8 @@ use crate::session_store::SessionStore;
 
 const MAX_SOURCE_BYTES: usize = 128 * 1024;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
+const BASIC_AUTH_HEADER_VALUE: &str = "Basic cGxheWdyb3VuZDpiYXplbC1pcy1jb29s";
+const BASIC_AUTH_CHALLENGE: &str = "Basic realm=\"coppice-playground\"";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -41,10 +44,34 @@ pub fn build_router(session_store: Arc<SessionStore>, web_root: PathBuf) -> Rout
         .route("/check", post(check))
         .route("/run", post(run))
         .route("/{*path}", get(serve_asset))
+        .layer(middleware::from_fn(require_basic_auth))
         .layer(axum::extract::DefaultBodyLimit::max(
             MAX_SOURCE_BYTES + 1024,
         ))
         .with_state(app_state)
+}
+
+async fn require_basic_auth(request: Request, next: Next) -> Response {
+    if request.uri().path() == "/health" {
+        return next.run(request).await;
+    }
+
+    let is_authorized = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == BASIC_AUTH_HEADER_VALUE);
+    if is_authorized {
+        return next.run(request).await;
+    }
+
+    let mut response = Response::new(Body::from("unauthorized"));
+    *response.status_mut() = StatusCode::UNAUTHORIZED;
+    response.headers_mut().insert(
+        header::WWW_AUTHENTICATE,
+        HeaderValue::from_static(BASIC_AUTH_CHALLENGE),
+    );
+    response
 }
 
 async fn health() -> Json<HealthResponse> {
