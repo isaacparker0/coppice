@@ -1,0 +1,22 @@
+load("@aspect_bazel_lib//lib:expand_template.bzl", "expand_template")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+expand_template(
+    name = "stable_commit_sha",
+    stamp_substitutions = {"__COMMIT_SHA__": "{{STABLE_COMMIT_SHA}}"},
+    template = ["__COMMIT_SHA__"],
+)
+
+sh_binary(
+    name = "configure_docr_auth",
+    srcs = ["configure_docr_auth.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "deploy",
+    srcs = ["deploy.sh"],
+    args = ["$(location :stable_commit_sha)"],
+    data = [":stable_commit_sha"],
+    visibility = ["//visibility:public"],
+)

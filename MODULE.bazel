@@ -8,6 +8,7 @@ bazel_dep(name = "gazelle", version = "0.47.0")
 bazel_dep(name = "rules_pkg", version = "1.2.0")
 bazel_dep(name = "rules_oci", version = "2.2.7")
 bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
+bazel_dep(name = "rules_shell", version = "0.6.1")
 
 register_toolchains(
     "@toolchains_llvm_bootstrapped//toolchain:all",
