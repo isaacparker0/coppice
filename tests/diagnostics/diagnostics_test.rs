@@ -97,12 +97,10 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 "missing expect.json for diagnostics case: {}",
                 case_path.display()
             );
-            let expected_text = fs::read_to_string(&expect_text_path).unwrap();
-            let expected_json = fs::read_to_string(&expect_json_path).unwrap();
-            let expected_text = expected_text.trim_end_matches('\n');
-            let expected_json = expected_json.trim_end_matches('\n');
+            let expected_text = read_expected_snapshot(&expect_text_path, case_path, "expect.text");
+            let expected_json = read_expected_snapshot(&expect_json_path, case_path, "expect.json");
             let expected_json_value: Value =
-                serde_json::from_str(expected_json).unwrap_or_else(|error| {
+                serde_json::from_str(&expected_json).unwrap_or_else(|error| {
                     panic!("invalid expected JSON for {}: {error}", case_path.display())
                 });
             let actual_json_value: Value =
@@ -156,6 +154,24 @@ fn run_check(compiler: &Path, input_directory: &Path, format: ReportFormat) -> C
         exit_code: output.status.code().unwrap_or(1),
         output: combined,
     }
+}
+
+fn read_expected_snapshot(path: &Path, case_path: &Path, file_name: &str) -> String {
+    let raw_contents = fs::read_to_string(path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read {} for diagnostics case {}: {}",
+            file_name,
+            case_path.display(),
+            error
+        )
+    });
+    assert!(
+        raw_contents.ends_with('\n'),
+        "{} must end with a trailing newline for diagnostics case {}",
+        file_name,
+        case_path.display()
+    );
+    raw_contents.strip_suffix('\n').unwrap().to_string()
 }
 
 fn expected_exit_code(case_path: &Path) -> i32 {

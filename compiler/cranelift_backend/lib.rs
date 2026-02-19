@@ -47,6 +47,7 @@ struct RuntimeStructInstance {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum StatementExecutionSignal {
+    Next,
     Continue,
     Break,
     Return,
@@ -479,9 +480,9 @@ fn execute_statements(
                         return_value,
                     )?
                 } else {
-                    StatementExecutionSignal::Continue
+                    StatementExecutionSignal::Next
                 };
-                if !matches!(statement_signal, StatementExecutionSignal::Continue) {
+                if !matches!(statement_signal, StatementExecutionSignal::Next) {
                     return Ok(statement_signal);
                 }
             }
@@ -506,7 +507,7 @@ fn execute_statements(
                     local_value_by_name,
                     return_value,
                 )? {
-                    StatementExecutionSignal::Continue => {}
+                    StatementExecutionSignal::Next | StatementExecutionSignal::Continue => {}
                     StatementExecutionSignal::Break => break,
                     StatementExecutionSignal::Return => {
                         return Ok(StatementExecutionSignal::Return);
@@ -530,7 +531,7 @@ fn execute_statements(
         }
     }
 
-    Ok(StatementExecutionSignal::Continue)
+    Ok(StatementExecutionSignal::Next)
 }
 
 fn evaluate_expression(

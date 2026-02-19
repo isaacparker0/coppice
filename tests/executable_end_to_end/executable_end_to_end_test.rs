@@ -138,15 +138,19 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 .trim()
                 .parse()
                 .unwrap();
-            let expected_stdout = substitute_placeholders(
-                &fs::read_to_string(case_directory.join("expect.stdout")).unwrap(),
+            let expected_stdout = read_expected_output_snapshot(
+                &case_directory.join("expect.stdout"),
                 &temp_output_directory,
                 &input_directory,
+                case_path,
+                "expect.stdout",
             );
-            let expected_stderr = substitute_placeholders(
-                &fs::read_to_string(case_directory.join("expect.stderr")).unwrap(),
+            let expected_stderr = read_expected_output_snapshot(
+                &case_directory.join("expect.stderr"),
                 &temp_output_directory,
                 &input_directory,
+                case_path,
+                "expect.stderr",
             );
             let artifacts_path = case_directory.join("expect.artifacts");
             assert!(
@@ -167,13 +171,13 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 case_path.display()
             );
             assert_eq!(
-                trim_one_trailing_newline(&expected_stdout),
+                expected_stdout,
                 actual_stdout,
                 "stdout mismatch for {}",
                 case_path.display()
             );
             assert_eq!(
-                trim_one_trailing_newline(&expected_stderr),
+                expected_stderr,
                 actual_stderr,
                 "stderr mismatch for {}",
                 case_path.display()
@@ -263,6 +267,32 @@ fn substitute_placeholders(
 
 fn trim_one_trailing_newline(value: &str) -> String {
     value.strip_suffix('\n').unwrap_or(value).to_string()
+}
+
+fn read_expected_output_snapshot(
+    path: &Path,
+    temp_output_directory: &Path,
+    input_directory: &Path,
+    case_path: &Path,
+    file_name: &str,
+) -> String {
+    let raw_contents = fs::read_to_string(path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read {} for executable end-to-end case {}: {}",
+            file_name,
+            case_path.display(),
+            error
+        )
+    });
+    assert!(
+        raw_contents.ends_with('\n'),
+        "{} must end with a trailing newline for executable end-to-end case {}",
+        file_name,
+        case_path.display()
+    );
+    let substituted_contents =
+        substitute_placeholders(&raw_contents, temp_output_directory, input_directory);
+    trim_one_trailing_newline(&substituted_contents)
 }
 
 fn normalize_output_for_snapshot(
