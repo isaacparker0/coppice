@@ -1,44 +1,44 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Coppice Playground</title>
-    <link rel="stylesheet" href="/styles.css">
-  </head>
-  <body>
-    <main class="layout">
-      <header class="topbar">
-        <h1>Coppice Playground</h1>
-        <div class="actions">
-          <button id="new-session" type="button">New Session</button>
-          <button id="run" type="button">Run</button>
-        </div>
-      </header>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Coppice Playground</title>
+        <link rel="stylesheet" href="/styles.css">
+    </head>
+    <body>
+        <main class="layout">
+            <header class="topbar">
+                <h1>Coppice Playground</h1>
+                <div class="actions">
+                    <button id="new-session" type="button">New Session</button>
+                    <button id="run" type="button">Run</button>
+                </div>
+            </header>
 
-      <section class="editor-pane">
-        <label for="editor">main.bin.coppice</label>
-        <textarea id="editor" spellcheck="false"></textarea>
-      </section>
+            <section class="editor-pane">
+                <label for="editor">main.bin.coppice</label>
+                <textarea id="editor" spellcheck="false"></textarea>
+            </section>
 
-      <section class="diagnostics-pane">
-        <h2>Diagnostics</h2>
-        <ul id="diagnostics"></ul>
-      </section>
+            <section class="diagnostics-pane">
+                <h2>Diagnostics</h2>
+                <ul id="diagnostics"></ul>
+            </section>
 
-      <section class="output-pane">
-        <h2>Program Output</h2>
-        <pre id="stdout"></pre>
-        <h2>Program Errors</h2>
-        <pre id="stderr"></pre>
-      </section>
+            <section class="output-pane">
+                <h2>Program Output</h2>
+                <pre id="stdout"></pre>
+                <h2>Program Errors</h2>
+                <pre id="stderr"></pre>
+            </section>
 
-      <footer class="status">
-        <span id="status">idle</span>
-      </footer>
-    </main>
-    <script src="/api.js"></script>
-    <script src="/editor.js"></script>
-    <script src="/app.js"></script>
-  </body>
+            <footer class="status">
+                <span id="status">idle</span>
+            </footer>
+        </main>
+        <script src="/api.js"></script>
+        <script src="/editor.js"></script>
+        <script src="/app.js"></script>
+    </body>
 </html>
