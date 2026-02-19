@@ -1,0 +1,13 @@
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+
+pkg_tar(
+    name = "playground_bundle",
+    srcs = [
+        "//playground/api:main",
+        "//playground/deploy:deploy_files",
+    ],
+    extension = "tar.gz",
+    include_runfiles = True,
+    package_dir = "coppice-playground",
+    visibility = ["//visibility:public"],
+)
