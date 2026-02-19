@@ -19,7 +19,6 @@ rust_binary(
         "@multitool//tools/deno",
         "@multitool//tools/keep-sorted",
         "@multitool//tools/shfmt",
-        "@multitool//tools/yamlfmt",
         "@rules_rust//rust/toolchain:current_rustfmt_toolchain",
     ],
     rustc_env = {
@@ -30,7 +29,6 @@ rust_binary(
         "RUSTFMT": "$(rlocationpath @rules_rust//rust/toolchain:current_rustfmt_toolchain)",
         "SHFMT": "$(rlocationpath @multitool//tools/shfmt)",
         "TAPLO": "$(rlocationpath :taplo_tool)",
-        "YAMLFMT": "$(rlocationpath @multitool//tools/yamlfmt)",
     },
     visibility = ["//visibility:public"],
     deps = [
