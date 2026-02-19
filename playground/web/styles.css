@@ -58,11 +58,13 @@ button {
 #editor {
     width: 100%;
     min-height: 320px;
-    padding: 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-family: "JetBrains Mono", "SFMono-Regular", monospace;
-    font-size: 14px;
+    overflow: hidden;
+}
+
+#editor .monaco-editor {
+    min-height: 320px;
 }
 
 #diagnostics {

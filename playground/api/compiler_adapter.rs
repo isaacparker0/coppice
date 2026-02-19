@@ -7,6 +7,7 @@ use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
 use tokio::process::Command;
 
+use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::ensure_workspace_manifest;
 
 pub struct RunExecution {
@@ -60,6 +61,8 @@ pub async fn check_workspace_via_cli(
         .arg("--workspace-root")
         .arg(session_directory)
         .arg("check")
+        .arg("--format")
+        .arg("json")
         .arg("main.bin.coppice")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -82,7 +85,10 @@ pub async fn check_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = truncate_utf8_lossy(&output.stderr, max_output_bytes);
+    let stderr = sanitize_workspace_path(
+        &truncate_utf8_lossy(&output.stderr, max_output_bytes),
+        session_directory,
+    );
     Ok(CheckExecution {
         exit_code: output.status.code().unwrap_or(1),
         stdout,
@@ -125,7 +131,10 @@ pub async fn run_workspace_via_cli(
     };
 
     let stdout = truncate_utf8_lossy(&output.stdout, max_output_bytes);
-    let stderr = truncate_utf8_lossy(&output.stderr, max_output_bytes);
+    let stderr = sanitize_workspace_path(
+        &truncate_utf8_lossy(&output.stderr, max_output_bytes),
+        session_directory,
+    );
     Ok(RunExecution {
         exit_code: output.status.code().unwrap_or(1),
         stdout,

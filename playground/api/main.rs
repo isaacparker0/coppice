@@ -47,16 +47,7 @@ fn resolve_web_root_from_runfiles() -> PathBuf {
     let runfiles = Runfiles::create().unwrap_or_else(|error| {
         panic!("failed to initialize runfiles for playground web: {error}")
     });
-    let index_path = runfiles
-        .rlocation("_main/playground/web/index.html")
-        .unwrap_or_else(|| panic!("failed to resolve runfiles path for playground/web/index.html"));
-    index_path.parent().map_or_else(
-        || {
-            panic!(
-                "runfiles index path has no parent: {}",
-                index_path.display()
-            )
-        },
-        PathBuf::from,
-    )
+    runfiles
+        .rlocation("_main/playground/web/web_assets")
+        .unwrap_or_else(|| panic!("failed to resolve runfiles path for playground/web/web_assets"))
 }
