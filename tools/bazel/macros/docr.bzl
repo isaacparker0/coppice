@@ -8,8 +8,7 @@ def docr_push(name, image, repository):
     """
     Push an OCI image to DOCR.
 
-    Always pushes stamped STABLE_COMMIT_SHA.
-    If --define push_deploy=true is set, also pushes `live`.
+    Always pushes stamped STABLE_COMMIT_SHA and `live`.
     """
     tags_name = name + "_tags"
     tags_template_name = name + "_tags_template"
@@ -17,10 +16,7 @@ def docr_push(name, image, repository):
     write_file(
         name = tags_template_name,
         out = tags_template_name + ".txt",
-        content = select({
-            "//tools/bazel/config:push_deploy": ["__COMMIT_SHA__", "live"],
-            "//conditions:default": ["__COMMIT_SHA__"],
-        }),
+        content = ["__COMMIT_SHA__", "live"],
     )
 
     expand_template(

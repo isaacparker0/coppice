@@ -1,5 +1,0 @@
-config_setting(
-    name = "push_deploy",
-    define_values = {"push_deploy": "true"},
-    visibility = ["//visibility:public"],
-)

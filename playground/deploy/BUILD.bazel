@@ -1,7 +1,0 @@
-load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
-
-sh_binary(
-    name = "configure_docr_auth",
-    srcs = ["configure_docr_auth.sh"],
-    visibility = ["//visibility:public"],
-)
