@@ -23,12 +23,14 @@ actions:
                   exit 0
                 fi
                 : "${DOCR_TOKEN:?DOCR_TOKEN must be set}"
-                mkdir -p ~/.docker
+                export DOCKER_CONFIG="${HOME}/.docker"
+                mkdir -p "${DOCKER_CONFIG}"
                 AUTH="$(printf "doctl:%s" "$DOCR_TOKEN" | base64 -w 0 2>/dev/null || printf "doctl:%s" "$DOCR_TOKEN" | base64)"
-                printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "$AUTH" > ~/.docker/config.json
+                printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "$AUTH" > "${DOCKER_CONFIG}/config.json"
           - run: |
                 set -euo pipefail
                 if [[ "${GIT_PR_NUMBER:-0}" -gt 0 ]]; then
                   exit 0
                 fi
+                export DOCKER_CONFIG="${HOME}/.docker"
                 bazel run --stamp --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 //playground:playground_push
