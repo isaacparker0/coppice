@@ -5,7 +5,8 @@ use compiler__reports::ReportFormat;
 use runfiles::{Runfiles, rlocation};
 use serde_json::Value;
 use tests__snapshot_fixture_helpers::{
-    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths, read_snapshot_fixture_file,
+    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths,
+    normalize_snapshot_fixture_process_output, read_snapshot_fixture_file,
     snapshot_fixture_run_mode_from_environment, write_snapshot_fixture_file_if_changed,
 };
 
@@ -127,15 +128,12 @@ fn run_check(compiler: &Path, input_directory: &Path, format: ReportFormat) -> C
         .output()
         .unwrap();
 
-    let mut combined = String::new();
-    combined.push_str(&String::from_utf8_lossy(&output.stdout));
-    combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    if combined.ends_with('\n') {
-        combined.pop();
-    }
+    let mut combined_output = String::new();
+    combined_output.push_str(&String::from_utf8_lossy(&output.stdout));
+    combined_output.push_str(&String::from_utf8_lossy(&output.stderr));
     CheckRun {
         exit_code: output.status.code().unwrap_or(1),
-        output: combined,
+        output: normalize_snapshot_fixture_process_output(&combined_output),
     }
 }
 
