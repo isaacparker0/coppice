@@ -12,13 +12,14 @@ use axum::{Json, Router};
 use tokio::fs;
 
 use crate::compiler_adapter::{
-    build_workspace_binary, check_workspace, run_binary, write_workspace_source,
+    check_workspace_via_cli, run_workspace_via_cli, write_workspace_source,
 };
 use crate::models::{
-    CheckRequest, CheckResponse, DiagnosticResponse, ErrorResponse, HealthResponse, RunRequest,
-    RunResponse, SessionResponse, failure_response,
+    CheckRequest, CheckResponse, ErrorResponse, HealthResponse, RunRequest, RunResponse,
+    SessionResponse,
 };
 use crate::session_store::SessionStore;
+use compiler__reports::CompilerFailure;
 
 const MAX_SOURCE_BYTES: usize = 128 * 1024;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
@@ -179,19 +180,27 @@ async fn check(
     let source = request.source;
     let result = tokio::task::spawn_blocking(move || {
         write_workspace_source(&session_directory, &source)?;
-        check_workspace(&session_directory)
+        Ok::<PathBuf, CompilerFailure>(session_directory)
     })
     .await;
 
-    let checked_target = match result {
-        Ok(Ok(checked_target)) => checked_target,
+    let session_directory = match result {
+        Ok(Ok(session_directory)) => session_directory,
         Ok(Err(error)) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(CheckResponse {
                     ok: false,
                     diagnostics: Vec::new(),
-                    error: Some(failure_response(&error)),
+                    error: Some(ErrorResponse {
+                        kind: format!("{:?}", error.kind),
+                        message: error.message,
+                        details: error
+                            .details
+                            .into_iter()
+                            .map(|detail| detail.message)
+                            .collect(),
+                    }),
                 }),
             );
         }
@@ -211,25 +220,96 @@ async fn check(
         }
     };
 
-    let diagnostics = checked_target
-        .diagnostics
-        .iter()
-        .map(DiagnosticResponse::from_rendered)
-        .collect::<Vec<_>>();
-    (
-        StatusCode::OK,
-        Json(CheckResponse {
-            ok: diagnostics.is_empty(),
-            diagnostics,
-            error: None,
-        }),
-    )
+    match check_workspace_via_cli(&session_directory, Duration::from_secs(5), MAX_OUTPUT_BYTES)
+        .await
+    {
+        Ok(execution) => {
+            if execution.timed_out {
+                return (
+                    StatusCode::OK,
+                    Json(CheckResponse {
+                        ok: false,
+                        diagnostics: Vec::new(),
+                        error: Some(ErrorResponse {
+                            kind: "check_timeout".to_string(),
+                            message: execution.stderr,
+                            details: Vec::new(),
+                        }),
+                    }),
+                );
+            }
+
+            if execution.exit_code != 0 {
+                let message = if execution.stderr.is_empty() {
+                    "check failed".to_string()
+                } else {
+                    execution.stderr
+                };
+                return (
+                    StatusCode::OK,
+                    Json(CheckResponse {
+                        ok: false,
+                        diagnostics: Vec::new(),
+                        error: Some(ErrorResponse {
+                            kind: "check_failed".to_string(),
+                            message,
+                            details: Vec::new(),
+                        }),
+                    }),
+                );
+            }
+
+            (
+                StatusCode::OK,
+                Json(CheckResponse {
+                    ok: true,
+                    diagnostics: Vec::new(),
+                    error: None,
+                }),
+            )
+        }
+        Err(error) => (
+            StatusCode::BAD_REQUEST,
+            Json(CheckResponse {
+                ok: false,
+                diagnostics: Vec::new(),
+                error: Some(ErrorResponse {
+                    kind: format!("{:?}", error.kind),
+                    message: error.message,
+                    details: error
+                        .details
+                        .into_iter()
+                        .map(|detail| detail.message)
+                        .collect(),
+                }),
+            }),
+        ),
+    }
 }
 
 async fn run(
     State(state): State<AppState>,
     Json(request): Json<RunRequest>,
 ) -> (StatusCode, Json<RunResponse>) {
+    if request.source.len() > MAX_SOURCE_BYTES {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(RunResponse {
+                ok: false,
+                exit_code: 1,
+                stdout: String::new(),
+                stderr: String::new(),
+                diagnostics: Vec::new(),
+                timed_out: false,
+                error: Some(ErrorResponse {
+                    kind: "payload_too_large".to_string(),
+                    message: "source exceeds maximum payload size".to_string(),
+                    details: vec![format!("max bytes: {MAX_SOURCE_BYTES}")],
+                }),
+            }),
+        );
+    }
+
     let Some(session_directory) = state.session_store.session_directory(&request.session_id) else {
         return (
             StatusCode::BAD_REQUEST,
@@ -250,21 +330,14 @@ async fn run(
     };
 
     let source = request.source;
-    let build_result = tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         write_workspace_source(&session_directory, &source)?;
-
-        let checked_target = check_workspace(&session_directory)?;
-        if !checked_target.diagnostics.is_empty() {
-            return Ok((checked_target, None));
-        }
-
-        let binary_path = build_workspace_binary(&session_directory)?;
-        Ok((checked_target, Some(binary_path)))
+        Ok::<PathBuf, CompilerFailure>(session_directory)
     })
     .await;
 
-    let (checked_target, binary_path) = match build_result {
-        Ok(Ok((checked_target, binary_path))) => (checked_target, binary_path),
+    let session_directory = match result {
+        Ok(Ok(session_directory)) => session_directory,
         Ok(Err(error)) => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -275,7 +348,15 @@ async fn run(
                     stderr: String::new(),
                     diagnostics: Vec::new(),
                     timed_out: false,
-                    error: Some(failure_response(&error)),
+                    error: Some(ErrorResponse {
+                        kind: format!("{:?}", error.kind),
+                        message: error.message,
+                        details: error
+                            .details
+                            .into_iter()
+                            .map(|detail| detail.message)
+                            .collect(),
+                    }),
                 }),
             );
         }
@@ -299,47 +380,8 @@ async fn run(
         }
     };
 
-    let diagnostics = checked_target
-        .diagnostics
-        .iter()
-        .map(DiagnosticResponse::from_rendered)
-        .collect::<Vec<_>>();
-
-    if !diagnostics.is_empty() {
-        return (
-            StatusCode::OK,
-            Json(RunResponse {
-                ok: false,
-                exit_code: 1,
-                stdout: String::new(),
-                stderr: String::new(),
-                diagnostics,
-                timed_out: false,
-                error: None,
-            }),
-        );
-    }
-
-    let Some(binary_path) = binary_path else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(RunResponse {
-                ok: false,
-                exit_code: 1,
-                stdout: String::new(),
-                stderr: String::new(),
-                diagnostics: Vec::new(),
-                timed_out: false,
-                error: Some(ErrorResponse {
-                    kind: "internal".to_string(),
-                    message: "missing built binary for run request".to_string(),
-                    details: Vec::new(),
-                }),
-            }),
-        );
-    };
-
-    match run_binary(&binary_path, Duration::from_secs(5), MAX_OUTPUT_BYTES).await {
+    match run_workspace_via_cli(&session_directory, Duration::from_secs(5), MAX_OUTPUT_BYTES).await
+    {
         Ok(execution) => (
             StatusCode::OK,
             Json(RunResponse {
@@ -361,7 +403,15 @@ async fn run(
                 stderr: String::new(),
                 diagnostics: Vec::new(),
                 timed_out: false,
-                error: Some(failure_response(&error)),
+                error: Some(ErrorResponse {
+                    kind: format!("{:?}", error.kind),
+                    message: error.message,
+                    details: error
+                        .details
+                        .into_iter()
+                        .map(|detail| detail.message)
+                        .collect(),
+                }),
             }),
         ),
     }

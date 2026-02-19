@@ -11,18 +11,21 @@ rust_library(
     ],
     visibility = ["//:__subpackages__"],
     deps = [
-        "//compiler/driver",
         "//compiler/reports",
         "@crates//:axum",
         "@crates//:serde",
         "@crates//:tokio",
+        "@rules_rust//tools/runfiles",
     ],
 )
 
 rust_binary(
     name = "main",
     srcs = ["main.rs"],
-    data = ["//playground/web:web_assets"],
+    data = [
+        "//compiler/cli:main",
+        "//playground/web:web_assets",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         ":api",
