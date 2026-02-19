@@ -2,7 +2,7 @@ actions:
     - name: CI
       container_image: "ubuntu-24.04"
       env:
-          DOCKER_CONFIG: "/root/.docker"
+          DOCKER_CONFIG: "/home/buildbuddy/.docker"
       triggers:
           push:
               branches:
