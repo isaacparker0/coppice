@@ -1,13 +1,18 @@
+load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 pkg_tar(
-    name = "playground_bundle",
-    srcs = [
-        "//playground/api:main",
-        "//playground/deploy:deploy_files",
-    ],
-    extension = "tar.gz",
+    name = "playground_image_layer_amd64",
+    srcs = ["//playground/api:main"],
     include_runfiles = True,
-    package_dir = "coppice-playground",
+    package_dir = "/app",
+)
+
+oci_image(
+    name = "playground_image_amd64",
+    base = "@debian_bookworm_slim_linux_amd64",
+    entrypoint = ["/app/main"],
+    tags = ["manual"],
+    tars = [":playground_image_layer_amd64"],
     visibility = ["//visibility:public"],
 )
