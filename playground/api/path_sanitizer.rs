@@ -1,5 +1,6 @@
 use std::path::Path;
 
+#[must_use]
 pub fn sanitize_workspace_path(path: &str, session_directory: &Path) -> String {
     let raw_prefix = session_directory.to_string_lossy();
     if raw_prefix.is_empty() {
