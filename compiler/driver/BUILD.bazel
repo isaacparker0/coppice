@@ -5,6 +5,7 @@ rust_library(
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
     deps = [
+        "//compiler/cranelift_backend",
         "//compiler/diagnostics",
         "//compiler/executable_lowering",
         "//compiler/file_role_rules",
@@ -14,7 +15,6 @@ rust_library(
         "//compiler/phase_results",
         "//compiler/reports",
         "//compiler/resolution",
-        "//compiler/rust_backend",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
         "//compiler/source",

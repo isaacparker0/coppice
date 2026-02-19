@@ -2,27 +2,24 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "rust_backend",
+    name = "cranelift_backend",
     srcs = ["lib.rs"],
-    data = [
-        "@rules_rust//rust/toolchain:current_rustc_files",
-        "@toolchains_llvm_bootstrapped//tools:clang",
-    ],
-    rustc_env = {
-        "HERMETIC_CLANG": "$(rlocationpath @toolchains_llvm_bootstrapped//tools:clang)",
-        "HERMETIC_RUSTC": "$(rlocationpath @rules_rust//rust/toolchain:current_rustc_files)",
-    },
     visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/executable_program",
         "//compiler/reports",
         "//compiler/runtime_interface",
-        "@rules_rust//tools/runfiles",
+        "@crates//:cranelift-codegen",
+        "@crates//:cranelift-frontend",
+        "@crates//:cranelift-jit",
+        "@crates//:cranelift-module",
+        "@crates//:serde",
+        "@crates//:serde_json",
     ],
 )
 
 dependency_enforcement_test(
-    name = "rust_backend_forbidden_dependencies",
+    name = "cranelift_backend_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
         "//compiler/diagnostics",
@@ -46,5 +43,5 @@ dependency_enforcement_test(
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-    target = ":rust_backend",
+    target = ":cranelift_backend",
 )

@@ -11,6 +11,7 @@ dependency_enforcement_test(
     name = "runtime_interface_forbidden_dependencies",
     forbidden = [
         "//compiler/binding",
+        "//compiler/cranelift_backend",
         "//compiler/diagnostics",
         "//compiler/driver",
         "//compiler/executable_lowering",
@@ -24,7 +25,6 @@ dependency_enforcement_test(
         "//compiler/phase_results",
         "//compiler/reports",
         "//compiler/resolution",
-        "//compiler/rust_backend",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
         "//compiler/semantic_types",

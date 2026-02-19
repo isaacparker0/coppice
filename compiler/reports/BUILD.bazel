@@ -14,6 +14,7 @@ rust_library(
 dependency_enforcement_test(
     name = "reports_forbidden_dependencies",
     forbidden = [
+        "//compiler/cranelift_backend",
         "//compiler/binding",
         "//compiler/diagnostics",
         "//compiler/driver",

@@ -101,8 +101,7 @@ Compiler packages (planned additions):
 1. `compiler/executable_program`
 2. `compiler/executable_lowering`
 3. `compiler/runtime_interface`
-4. `compiler/rust_backend` (optional first backend target)
-5. `compiler/cranelift_backend` (future backend target)
+4. `compiler/cranelift_backend`
 
 Runtime packages (planned additions):
 
@@ -129,5 +128,3 @@ When describing pipeline stages:
 
 1. Whether to keep `runtime_interface` as the canonical term or adopt
    `runtime_boundary`.
-2. Whether backend package names should remain target-specific (`rust_backend`,
-   `cranelift_backend`) or follow `backend_<target>`.

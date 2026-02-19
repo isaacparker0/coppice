@@ -104,17 +104,12 @@ Decision:
   naming policy; these remain backend implementation details unless later
   promoted to a shared linkage contract.
 
-4. `compiler/rust_backend` (optional first backend target)
-
-- Emits Rust from `executable_program`.
-- Exists to accelerate runnable iteration while preserving backend replacement.
-
-5. `compiler/cranelift_backend` (future target)
+4. `compiler/cranelift_backend` (future target)
 
 - Emits machine code/object output from the same `executable_program` and
   `runtime_interface` contracts.
 
-6. `compiler/build_driver` (or extension of `compiler/driver`)
+5. `compiler/build_driver` (or extension of `compiler/driver`)
 
 - Orchestrates backend phases for `build`/`run`.
 
@@ -265,7 +260,7 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 - `compiler/executable_lowering`
 - `compiler/type_annotated_program`
 - `compiler/runtime_interface`
-- `compiler/rust_backend`
+- `compiler/cranelift_backend`
 
 2. CLI supports runnable flow:
 
@@ -312,10 +307,8 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 
 ## Open Decisions
 
-1. First backend target choice for phase 1 execution (`rust_backend` vs direct
-   Cranelift in phase 1).
-2. Artifact format and workspace output location policy.
-3. Debug info policy for generated artifacts in early phases.
-4. Exact strictness for unsupported-in-build diagnostics vs fallback behavior.
-5. Interface rollout sequencing after current runnable subset expansion
+1. Artifact format and workspace output location policy.
+2. Debug info policy for generated artifacts in early phases.
+3. Exact strictness for unsupported-in-build diagnostics vs fallback behavior.
+4. Interface rollout sequencing after current runnable subset expansion
    (`implements` in frontend first vs backend coverage in same phase).

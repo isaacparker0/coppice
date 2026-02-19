@@ -1,10 +1,12 @@
-#[derive(Clone, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableProgram {
     pub struct_declarations: Vec<ExecutableStructDeclaration>,
     pub function_declarations: Vec<ExecutableFunctionDeclaration>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableFunctionDeclaration {
     pub name: String,
     pub parameters: Vec<ExecutableParameterDeclaration>,
@@ -12,26 +14,26 @@ pub struct ExecutableFunctionDeclaration {
     pub statements: Vec<ExecutableStatement>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableParameterDeclaration {
     pub name: String,
     pub type_reference: ExecutableTypeReference,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableStructDeclaration {
     pub name: String,
     pub fields: Vec<ExecutableStructFieldDeclaration>,
     pub methods: Vec<ExecutableMethodDeclaration>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableStructFieldDeclaration {
     pub name: String,
     pub type_reference: ExecutableTypeReference,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableMethodDeclaration {
     pub name: String,
     pub self_mutable: bool,
@@ -40,7 +42,7 @@ pub struct ExecutableMethodDeclaration {
     pub statements: Vec<ExecutableStatement>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutableTypeReference {
     Int64,
     Boolean,
@@ -50,7 +52,7 @@ pub enum ExecutableTypeReference {
     Named { name: String },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutableStatement {
     Binding {
         name: String,
@@ -80,7 +82,7 @@ pub enum ExecutableStatement {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutableExpression {
     IntegerLiteral {
         value: i64,
@@ -118,7 +120,7 @@ pub enum ExecutableExpression {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutableBinaryOperator {
     Add,
     Subtract,
@@ -134,13 +136,13 @@ pub enum ExecutableBinaryOperator {
     Or,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutableUnaryOperator {
     Not,
     Negate,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableStructLiteralField {
     pub name: String,
     pub value: ExecutableExpression,
