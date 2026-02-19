@@ -1,16 +1,13 @@
-use std::env;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use compiler__reports::ReportFormat;
 use runfiles::{Runfiles, rlocation};
 use serde_json::Value;
-
-enum Mode {
-    Check,
-    Update { workspace_directory: PathBuf },
-}
+use tests__snapshot_fixture_helpers::{
+    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths, read_snapshot_fixture_file,
+    snapshot_fixture_run_mode_from_environment, write_snapshot_fixture_file_if_changed,
+};
 
 #[test]
 fn diagnostics_cases() {
@@ -18,19 +15,13 @@ fn diagnostics_cases() {
     let compiler = rlocation!(runfiles, "_main/compiler/cli/main").unwrap();
     let runfiles_directory = runfiles::find_runfiles_dir().unwrap().join("_main");
 
-    let mode = if env::var("UPDATE_SNAPSHOTS").is_ok() {
-        let workspace_directory = env::var("BUILD_WORKSPACE_DIRECTORY").unwrap();
-        Mode::Update {
-            workspace_directory: PathBuf::from(workspace_directory),
-        }
-    } else {
-        Mode::Check
-    };
+    let mode = snapshot_fixture_run_mode_from_environment();
 
     let mut case_paths = Vec::new();
-    collect_cases(
+    collect_snapshot_fixture_case_paths(
         &runfiles_directory.join("tests/diagnostics"),
         &runfiles_directory,
+        "expect.text",
         &mut case_paths,
     );
     assert!(!case_paths.is_empty(), "no diagnostics cases found");
@@ -40,22 +31,12 @@ fn diagnostics_cases() {
     }
 }
 
-fn collect_cases(dir: &Path, runfiles_directory: &Path, case_paths: &mut Vec<PathBuf>) {
-    for entry in fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_dir() {
-            if path.join("expect.text").is_file() {
-                let case_path = path.strip_prefix(runfiles_directory).unwrap();
-                case_paths.push(case_path.to_path_buf());
-            } else {
-                collect_cases(&path, runfiles_directory, case_paths);
-            }
-        }
-    }
-}
-
-fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: &Mode) {
+fn run_case(
+    compiler: &Path,
+    runfiles_directory: &Path,
+    case_path: &Path,
+    mode: &SnapshotFixtureRunMode,
+) {
     let case_directory = runfiles_directory.join(case_path);
     let input_directory = case_directory.join("input");
     assert!(
@@ -67,24 +48,24 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     let json_run = run_check(compiler, &input_directory, ReportFormat::Json);
     let expected_exit = expected_exit_code(case_path);
     match mode {
-        Mode::Update {
+        SnapshotFixtureRunMode::Update {
             workspace_directory,
         } => {
             let source_expect_text = workspace_directory.join(case_path).join("expect.text");
-            let existing_text = fs::read_to_string(&source_expect_text).unwrap_or_default();
-            if existing_text != format!("{}\n", text_run.output) {
-                fs::write(&source_expect_text, format!("{}\n", text_run.output)).unwrap();
-                println!("updated: {}", case_path.display());
-            }
+            write_snapshot_fixture_file_if_changed(
+                &source_expect_text,
+                format!("{}\n", text_run.output),
+                case_path,
+            );
 
             let source_expect_json = workspace_directory.join(case_path).join("expect.json");
-            let existing_json = fs::read_to_string(&source_expect_json).unwrap_or_default();
-            if existing_json != format!("{}\n", json_run.output) {
-                fs::write(&source_expect_json, format!("{}\n", json_run.output)).unwrap();
-                println!("updated: {}", case_path.display());
-            }
+            write_snapshot_fixture_file_if_changed(
+                &source_expect_json,
+                format!("{}\n", json_run.output),
+                case_path,
+            );
         }
-        Mode::Check => {
+        SnapshotFixtureRunMode::Check => {
             let expect_text_path = runfiles_directory.join(case_path).join("expect.text");
             let expect_json_path = runfiles_directory.join(case_path).join("expect.json");
             assert!(
@@ -97,8 +78,10 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 "missing expect.json for diagnostics case: {}",
                 case_path.display()
             );
-            let expected_text = read_expected_snapshot(&expect_text_path, case_path, "expect.text");
-            let expected_json = read_expected_snapshot(&expect_json_path, case_path, "expect.json");
+            let expected_text =
+                read_snapshot_fixture_file(&expect_text_path, case_path, "expect.text");
+            let expected_json =
+                read_snapshot_fixture_file(&expect_json_path, case_path, "expect.json");
             let expected_json_value: Value =
                 serde_json::from_str(&expected_json).unwrap_or_else(|error| {
                     panic!("invalid expected JSON for {}: {error}", case_path.display())
@@ -154,24 +137,6 @@ fn run_check(compiler: &Path, input_directory: &Path, format: ReportFormat) -> C
         exit_code: output.status.code().unwrap_or(1),
         output: combined,
     }
-}
-
-fn read_expected_snapshot(path: &Path, case_path: &Path, file_name: &str) -> String {
-    let raw_contents = fs::read_to_string(path).unwrap_or_else(|error| {
-        panic!(
-            "failed to read {} for diagnostics case {}: {}",
-            file_name,
-            case_path.display(),
-            error
-        )
-    });
-    assert!(
-        raw_contents.ends_with('\n'),
-        "{} must end with a trailing newline for diagnostics case {}",
-        file_name,
-        case_path.display()
-    );
-    raw_contents.strip_suffix('\n').unwrap().to_string()
 }
 
 fn expected_exit_code(case_path: &Path) -> i32 {

@@ -4,11 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use runfiles::{Runfiles, rlocation};
-
-enum Mode {
-    Check,
-    Update { workspace_directory: PathBuf },
-}
+use tests__snapshot_fixture_helpers::{
+    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths, read_snapshot_fixture_file,
+    snapshot_fixture_run_mode_from_environment, write_snapshot_fixture_file_if_changed,
+};
 
 #[test]
 fn executable_end_to_end_cases() {
@@ -16,19 +15,13 @@ fn executable_end_to_end_cases() {
     let compiler = rlocation!(runfiles, "_main/compiler/cli/main").unwrap();
     let runfiles_directory = runfiles::find_runfiles_dir().unwrap().join("_main");
 
-    let mode = if env::var("UPDATE_SNAPSHOTS").is_ok() {
-        let workspace_directory = env::var("BUILD_WORKSPACE_DIRECTORY").unwrap();
-        Mode::Update {
-            workspace_directory: PathBuf::from(workspace_directory),
-        }
-    } else {
-        Mode::Check
-    };
+    let mode = snapshot_fixture_run_mode_from_environment();
 
     let mut case_paths = Vec::new();
-    collect_cases(
+    collect_snapshot_fixture_case_paths(
         &runfiles_directory.join("tests/executable_end_to_end"),
         &runfiles_directory,
+        "expect.exit",
         &mut case_paths,
     );
     case_paths.sort();
@@ -42,22 +35,12 @@ fn executable_end_to_end_cases() {
     }
 }
 
-fn collect_cases(dir: &Path, runfiles_directory: &Path, case_paths: &mut Vec<PathBuf>) {
-    for entry in fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_dir() {
-            if path.join("expect.exit").is_file() {
-                let case_path = path.strip_prefix(runfiles_directory).unwrap();
-                case_paths.push(case_path.to_path_buf());
-            } else {
-                collect_cases(&path, runfiles_directory, case_paths);
-            }
-        }
-    }
-}
-
-fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: &Mode) {
+fn run_case(
+    compiler: &Path,
+    runfiles_directory: &Path,
+    case_path: &Path,
+    mode: &SnapshotFixtureRunMode,
+) {
     let case_directory = runfiles_directory.join(case_path);
     let input_directory = case_directory.join("input");
     assert!(
@@ -90,7 +73,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
     let actual_artifact_paths = collect_artifact_paths(&temp_output_directory);
 
     match mode {
-        Mode::Update {
+        SnapshotFixtureRunMode::Update {
             workspace_directory,
         } => {
             let source_case_directory = workspace_directory.join(case_path);
@@ -104,17 +87,17 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
                 &temp_output_directory,
                 &input_directory,
             );
-            write_if_changed(
+            write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.exit"),
                 format!("{actual_exit}\n"),
                 case_path,
             );
-            write_if_changed(
+            write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.stdout"),
                 format!("{snapshot_stdout}\n"),
                 case_path,
             );
-            write_if_changed(
+            write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.stderr"),
                 format!("{snapshot_stderr}\n"),
                 case_path,
@@ -126,31 +109,35 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path, mode: 
             } else {
                 format!("{}\n", artifact_placeholders.join("\n"))
             };
-            write_if_changed(
+            write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.artifacts"),
                 artifact_lines,
                 case_path,
             );
         }
-        Mode::Check => {
+        SnapshotFixtureRunMode::Check => {
             let expected_exit: i32 = fs::read_to_string(case_directory.join("expect.exit"))
                 .unwrap()
                 .trim()
                 .parse()
                 .unwrap();
-            let expected_stdout = read_expected_output_snapshot(
-                &case_directory.join("expect.stdout"),
+            let expected_stdout = substitute_placeholders(
+                &read_snapshot_fixture_file(
+                    &case_directory.join("expect.stdout"),
+                    case_path,
+                    "expect.stdout",
+                ),
                 &temp_output_directory,
                 &input_directory,
-                case_path,
-                "expect.stdout",
             );
-            let expected_stderr = read_expected_output_snapshot(
-                &case_directory.join("expect.stderr"),
+            let expected_stderr = substitute_placeholders(
+                &read_snapshot_fixture_file(
+                    &case_directory.join("expect.stderr"),
+                    case_path,
+                    "expect.stderr",
+                ),
                 &temp_output_directory,
                 &input_directory,
-                case_path,
-                "expect.stderr",
             );
             let artifacts_path = case_directory.join("expect.artifacts");
             assert!(
@@ -269,32 +256,6 @@ fn trim_one_trailing_newline(value: &str) -> String {
     value.strip_suffix('\n').unwrap_or(value).to_string()
 }
 
-fn read_expected_output_snapshot(
-    path: &Path,
-    temp_output_directory: &Path,
-    input_directory: &Path,
-    case_path: &Path,
-    file_name: &str,
-) -> String {
-    let raw_contents = fs::read_to_string(path).unwrap_or_else(|error| {
-        panic!(
-            "failed to read {} for executable end-to-end case {}: {}",
-            file_name,
-            case_path.display(),
-            error
-        )
-    });
-    assert!(
-        raw_contents.ends_with('\n'),
-        "{} must end with a trailing newline for executable end-to-end case {}",
-        file_name,
-        case_path.display()
-    );
-    let substituted_contents =
-        substitute_placeholders(&raw_contents, temp_output_directory, input_directory);
-    trim_one_trailing_newline(&substituted_contents)
-}
-
 fn normalize_output_for_snapshot(
     value: &str,
     temp_output_directory: &Path,
@@ -320,12 +281,4 @@ fn sanitize_case_name(case_path: &Path) -> String {
             }
         })
         .collect()
-}
-
-fn write_if_changed(path: &Path, content: String, case_path: &Path) {
-    let existing = fs::read_to_string(path).unwrap_or_default();
-    if existing != content {
-        fs::write(path, content).unwrap();
-        println!("updated: {}", case_path.display());
-    }
 }

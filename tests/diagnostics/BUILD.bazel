@@ -8,6 +8,7 @@ rust_test(
     ] + glob(["**"]),
     deps = [
         "//compiler/reports",
+        "//tests/snapshot_fixture_helpers",
         "@crates//:serde_json",
         "@rules_rust//tools/runfiles",
     ],
