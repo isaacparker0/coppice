@@ -12,12 +12,8 @@ use playground__api::session_store::SessionStore;
 
 #[tokio::main]
 async fn main() {
-    let bind_address =
-        std::env::var("PLAYGROUND_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-    let session_root = std::env::var("PLAYGROUND_SESSION_ROOT").map_or_else(
-        |_| std::env::temp_dir().join("coppice-playground"),
-        PathBuf::from,
-    );
+    let bind_address = "0.0.0.0:8080";
+    let session_root = std::env::temp_dir().join("coppice-playground");
     let web_root = resolve_web_root_from_runfiles();
 
     let session_store = Arc::new(SessionStore::new(session_root));
