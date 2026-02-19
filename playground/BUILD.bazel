@@ -1,5 +1,6 @@
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
+load("//tools/bazel/macros:docr.bzl", "docr_push")
 
 pkg_tar(
     name = "playground_image_layer_amd64",
@@ -15,4 +16,10 @@ oci_image(
     tags = ["manual"],
     tars = [":playground_image_layer_amd64"],
     visibility = ["//visibility:public"],
+)
+
+docr_push(
+    name = "playground_push",
+    image = ":playground_image_amd64",
+    repository = "playground",
 )
