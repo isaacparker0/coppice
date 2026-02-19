@@ -1,3 +1,3 @@
-lib.coppice:5:12: error: return type mismatch: expected int64, got int64 | nil
+lib.copp:5:12: error: return type mismatch: expected int64, got int64 | nil
       return value
              ^

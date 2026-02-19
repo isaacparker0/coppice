@@ -1,3 +1,3 @@
-lib.coppice:5:25: error: only struct types can declare implements clauses; 'Outcome' is not a struct
+lib.copp:5:25: error: only struct types can declare implements clauses; 'Outcome' is not a struct
   type Outcome implements Printable :: enum {
                           ^

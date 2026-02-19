@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "match pattern type 'boolean' is not in target type",
             "span": {
                 "start": 121,

@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "missing return in function body",
             "span": {
                 "start": 36,

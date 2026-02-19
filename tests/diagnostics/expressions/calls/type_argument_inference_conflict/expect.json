@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "cannot infer consistent type arguments for generic function 'pair' (conflicting inferences for: T)",
             "span": {
                 "start": 131,

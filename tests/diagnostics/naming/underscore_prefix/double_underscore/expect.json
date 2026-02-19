@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "variable name must be camelCase",
             "span": {
                 "start": 31,

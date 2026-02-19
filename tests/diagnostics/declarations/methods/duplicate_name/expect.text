@@ -1,3 +1,3 @@
-lib.coppice:6:14: error: duplicate method 'User.idValue'
+lib.copp:6:14: error: duplicate method 'User.idValue'
       function idValue(self) -> int64 {
                ^

@@ -136,8 +136,8 @@ Owns role-dependent policy rules.
 
 Examples:
 
-1. `PACKAGE.coppice` declaration constraints
-2. `.bin.coppice` `main` placement/signature constraints
+1. `PACKAGE.copp` declaration constraints
+2. `.bin.copp` `main` placement/signature constraints
 3. role-specific visibility restrictions
 
 Output: `PhaseOutput<()>`.

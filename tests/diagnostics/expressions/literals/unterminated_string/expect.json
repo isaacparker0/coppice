@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "unterminated string literal",
             "span": {
                 "start": 36,

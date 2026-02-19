@@ -133,10 +133,10 @@ fn analyze_target_with_workspace_root(
             details: Vec::new(),
         });
     }
-    if !workspace_root.join("PACKAGE.coppice").is_file() {
+    if !workspace_root.join("PACKAGE.copp").is_file() {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::WorkspaceRootMissingManifest,
-            message: "not a Coppice workspace root (missing PACKAGE.coppice)".to_string(),
+            message: "not a Coppice workspace root (missing PACKAGE.copp)".to_string(),
             path: Some(workspace_root_display),
             details: Vec::new(),
         });
@@ -179,7 +179,7 @@ fn analyze_target_with_workspace_root(
     {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::PackageNotFound,
-            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            message: "target is not inside a package (missing PACKAGE.copp)".to_string(),
             path: Some(path.to_string()),
             details: Vec::new(),
         });
@@ -506,7 +506,7 @@ fn scoped_package_paths_for_target(
     let Some(owning_package_root) = owning_package_root else {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::PackageNotFound,
-            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            message: "target is not inside a package (missing PACKAGE.copp)".to_string(),
             path: Some(path_to_key(absolute_target_path)),
             details: Vec::new(),
         });
@@ -515,14 +515,14 @@ fn scoped_package_paths_for_target(
     let owning_package_path = relative_package_path(workspace_root, &owning_package_root)
         .ok_or_else(|| CompilerFailure {
             kind: CompilerFailureKind::PackageNotFound,
-            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            message: "target is not inside a package (missing PACKAGE.copp)".to_string(),
             path: Some(path_to_key(absolute_target_path)),
             details: Vec::new(),
         })?;
     if workspace.package_by_path(&owning_package_path).is_none() {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::PackageNotFound,
-            message: "target is not inside a package (missing PACKAGE.coppice)".to_string(),
+            message: "target is not inside a package (missing PACKAGE.copp)".to_string(),
             path: Some(path_to_key(absolute_target_path)),
             details: Vec::new(),
         });
@@ -539,7 +539,7 @@ fn find_owning_package_root_for_directory(
 ) -> Option<PathBuf> {
     let mut directory = target_directory.to_path_buf();
     loop {
-        if directory.join("PACKAGE.coppice").is_file() {
+        if directory.join("PACKAGE.copp").is_file() {
             return Some(directory);
         }
         if directory == workspace_root {
@@ -564,7 +564,7 @@ fn relative_package_path(workspace_root: &Path, package_root: &Path) -> Option<S
 fn find_owning_package_root(workspace_root: &Path, target_path: &Path) -> Option<PathBuf> {
     let mut directory = target_path.parent()?.to_path_buf();
     loop {
-        if directory.join("PACKAGE.coppice").is_file() {
+        if directory.join("PACKAGE.copp").is_file() {
             return Some(directory);
         }
         if directory == workspace_root {
@@ -764,7 +764,7 @@ fn find_single_binary_entrypoint(
     if !target_is_file {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
-            message: "build/run target must be an explicit .bin.coppice file".to_string(),
+            message: "build/run target must be an explicit .bin.copp file".to_string(),
             path: Some(path_to_key(absolute_target_path)),
             details: Vec::new(),
         });
@@ -779,7 +779,7 @@ fn find_single_binary_entrypoint(
     if role != FileRole::BinaryEntrypoint {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
-            message: "build/run target must be a .bin.coppice file".to_string(),
+            message: "build/run target must be a .bin.copp file".to_string(),
             path: Some(path_to_key(absolute_target_path)),
             details: Vec::new(),
         });
@@ -830,10 +830,10 @@ fn executable_stem_for_binary_entrypoint(
             path: Some(path_to_key(binary_entrypoint)),
             details: Vec::new(),
         })?;
-    let Some(executable_stem) = file_name.strip_suffix(".bin.coppice") else {
+    let Some(executable_stem) = file_name.strip_suffix(".bin.copp") else {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
-            message: "binary entrypoint file must end with .bin.coppice".to_string(),
+            message: "binary entrypoint file must end with .bin.copp".to_string(),
             path: Some(path_to_key(binary_entrypoint)),
             details: Vec::new(),
         });
@@ -841,7 +841,7 @@ fn executable_stem_for_binary_entrypoint(
     if executable_stem.is_empty() {
         return Err(CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
-            message: "binary entrypoint file name must include executable name before .bin.coppice"
+            message: "binary entrypoint file name must include executable name before .bin.copp"
                 .to_string(),
             path: Some(path_to_key(binary_entrypoint)),
             details: Vec::new(),

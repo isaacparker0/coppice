@@ -1,3 +1,3 @@
-main.bin.coppice:1:20: error: main in .bin.coppice must return nil
+main.bin.copp:1:20: error: main in .bin.copp must return nil
   function main() -> int64 {
                      ^

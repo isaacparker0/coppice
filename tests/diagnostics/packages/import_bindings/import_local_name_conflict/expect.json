@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "top-level declaration 'Token' conflicts with imported name",
             "span": {
                 "start": 38,

@@ -3,8 +3,8 @@
     "diagnostics": [
         {
             "phase": "file_role_rules",
-            "path": "main.bin.coppice",
-            "message": "visible declarations are not allowed in .bin.coppice files",
+            "path": "main.bin.copp",
+            "message": "visible declarations are not allowed in .bin.copp files",
             "span": {
                 "start": 51,
                 "end": 70,

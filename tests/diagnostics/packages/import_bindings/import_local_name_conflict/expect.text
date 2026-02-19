@@ -1,3 +1,3 @@
-lib.coppice:3:6: error: top-level declaration 'Token' conflicts with imported name
+lib.copp:3:6: error: top-level declaration 'Token' conflicts with imported name
   type Token :: struct {}
        ^

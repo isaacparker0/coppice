@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "imported symbol 'helper' in package 'workspace' must be declared visible",
             "span": {
                 "start": 19,

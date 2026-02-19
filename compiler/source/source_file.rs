@@ -15,16 +15,16 @@ impl FileRole {
     #[must_use]
     pub fn from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_str()?;
-        if file_name == "PACKAGE.coppice" {
+        if file_name == "PACKAGE.copp" {
             return Some(Self::PackageManifest);
         }
-        if file_name.ends_with(".bin.coppice") {
+        if file_name.ends_with(".bin.copp") {
             return Some(Self::BinaryEntrypoint);
         }
-        if file_name.ends_with(".test.coppice") {
+        if file_name.ends_with(".test.copp") {
             return Some(Self::Test);
         }
-        if file_name.ends_with(".coppice") {
+        if file_name.ends_with(".copp") {
             return Some(Self::Library);
         }
         None

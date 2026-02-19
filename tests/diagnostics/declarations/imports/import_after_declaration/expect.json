@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "syntax_rules",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "import declarations must appear before top-level declarations",
             "span": {
                 "start": 45,

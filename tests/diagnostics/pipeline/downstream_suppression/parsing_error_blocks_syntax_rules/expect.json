@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "constants require an explicit type annotation",
             "span": {
                 "start": 7,

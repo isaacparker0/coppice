@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "enum declaration must include at least one variant",
             "span": {
                 "start": 25,

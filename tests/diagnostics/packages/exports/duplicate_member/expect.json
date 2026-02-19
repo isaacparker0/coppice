@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "PACKAGE.coppice",
+            "path": "PACKAGE.copp",
             "message": "duplicate exported symbol 'Token'",
             "span": {
                 "start": 17,

@@ -1,2 +1,2 @@
-main.bin.coppice: error: build mode does not support this program yet
-main.bin.coppice: error: build mode does not support this expression yet (line 2, column 10)
+main.bin.copp: error: build mode does not support this program yet
+main.bin.copp: error: build mode does not support this expression yet (line 2, column 10)

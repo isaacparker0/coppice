@@ -12,7 +12,7 @@ use compiler__syntax::{
 /// `type_checker` is reserved for role-agnostic type semantics only.
 ///
 /// In particular, `main` entrypoint constraints stay in this pass:
-/// - placement (`main` only in `.bin.coppice`)
+/// - placement (`main` only in `.bin.copp`)
 /// - binary contract (exactly one `main`, no parameters, returns `nil`)
 ///
 /// Keeping role-conditional rules in one owner pass avoids brittle cross-pass
@@ -51,7 +51,7 @@ fn check_exports_declaration_roles(
                 continue;
             }
             diagnostics.push(PhaseDiagnostic::new(
-                "PACKAGE.coppice may only contain exports declarations",
+                "PACKAGE.copp may only contain exports declarations",
                 declaration_span(declaration).clone(),
             ));
             continue;
@@ -61,7 +61,7 @@ fn check_exports_declaration_roles(
             && matches!(declaration, SyntaxDeclaration::Exports(_))
         {
             diagnostics.push(PhaseDiagnostic::new(
-                "exports declarations are only allowed in PACKAGE.coppice",
+                "exports declarations are only allowed in PACKAGE.copp",
                 declaration_span(declaration).clone(),
             ));
         }
@@ -83,8 +83,8 @@ fn check_visible_declaration_roles(
         return;
     }
     let message = match file.role {
-        FileRole::BinaryEntrypoint => "visible declarations are not allowed in .bin.coppice files",
-        FileRole::Test => "visible declarations are not allowed in .test.coppice files",
+        FileRole::BinaryEntrypoint => "visible declarations are not allowed in .bin.copp files",
+        FileRole::Test => "visible declarations are not allowed in .test.copp files",
         FileRole::Library | FileRole::PackageManifest => {
             unreachable!("visible declaration role checks are only run for binary or test files")
         }
@@ -131,7 +131,7 @@ fn check_main_function_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<Phas
         FileRole::BinaryEntrypoint => {
             if main_functions.is_empty() {
                 diagnostics.push(PhaseDiagnostic::new(
-                    ".bin.coppice files must declare exactly one main function",
+                    ".bin.copp files must declare exactly one main function",
                     fallback_file_span(file),
                 ));
                 return;
@@ -139,7 +139,7 @@ fn check_main_function_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<Phas
             if main_functions.len() > 1 {
                 for function in main_functions {
                     diagnostics.push(PhaseDiagnostic::new(
-                        ".bin.coppice files must declare exactly one main function",
+                        ".bin.copp files must declare exactly one main function",
                         function.name_span.clone(),
                     ));
                 }
@@ -150,7 +150,7 @@ fn check_main_function_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<Phas
         FileRole::Library | FileRole::Test | FileRole::PackageManifest => {
             for function in main_functions {
                 diagnostics.push(PhaseDiagnostic::new(
-                    "main is only allowed in .bin.coppice files",
+                    "main is only allowed in .bin.copp files",
                     function.name_span.clone(),
                 ));
             }
@@ -164,13 +164,13 @@ fn check_binary_main_signature(
 ) {
     if !main_function_declaration.parameters.is_empty() {
         diagnostics.push(PhaseDiagnostic::new(
-            "main in .bin.coppice must not declare parameters",
+            "main in .bin.copp must not declare parameters",
             main_function_declaration.name_span.clone(),
         ));
     }
     if !is_nil_type(&main_function_declaration.return_type) {
         diagnostics.push(PhaseDiagnostic::new(
-            "main in .bin.coppice must return nil",
+            "main in .bin.copp must return nil",
             main_function_declaration.return_type.span.clone(),
         ));
     }

@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "expected keyword 'type' before type declaration",
             "span": {
                 "start": 0,

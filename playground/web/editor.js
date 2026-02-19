@@ -131,7 +131,7 @@ function applyInlineMarkers(diagnostics) {
 
     const markers = [];
     for (const diagnostic of diagnostics || []) {
-        if (diagnostic.path && !diagnostic.path.endsWith("main.bin.coppice")) {
+        if (diagnostic.path && !diagnostic.path.endsWith("main.bin.copp")) {
             continue;
         }
 

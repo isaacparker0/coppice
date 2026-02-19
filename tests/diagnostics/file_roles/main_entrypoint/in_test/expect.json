@@ -3,8 +3,8 @@
     "diagnostics": [
         {
             "phase": "file_role_rules",
-            "path": "lib.test.coppice",
-            "message": "main is only allowed in .bin.coppice files",
+            "path": "lib.test.copp",
+            "message": "main is only allowed in .bin.copp files",
             "span": {
                 "start": 9,
                 "end": 13,

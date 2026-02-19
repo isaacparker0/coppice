@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "cannot call method 'missing' on non-struct type int64",
             "span": {
                 "start": 39,

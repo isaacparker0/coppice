@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "reserved keyword 'mut' cannot be used as an identifier",
             "span": {
                 "start": 9,

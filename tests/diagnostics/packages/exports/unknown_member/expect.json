@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "PACKAGE.coppice",
+            "path": "PACKAGE.copp",
             "message": "exported symbol 'Missing' is not declared in this package",
             "span": {
                 "start": 10,

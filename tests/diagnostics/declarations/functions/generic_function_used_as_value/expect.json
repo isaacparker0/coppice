@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "type_analysis",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "generic function 'identity' cannot be used as a value",
             "span": {
                 "start": 95,

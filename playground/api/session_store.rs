@@ -100,7 +100,7 @@ impl SessionStore {
 }
 
 pub fn ensure_workspace_manifest(session_directory: &Path) -> std::io::Result<()> {
-    let manifest_path = session_directory.join("PACKAGE.coppice");
+    let manifest_path = session_directory.join("PACKAGE.copp");
     if manifest_path.is_file() {
         return Ok(());
     }

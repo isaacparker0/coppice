@@ -1,3 +1,3 @@
-lib.coppice:4:9: error: unreachable code
+lib.copp:4:9: error: unreachable code
           return 1
           ^

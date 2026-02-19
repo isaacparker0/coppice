@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "PACKAGE.coppice",
+            "path": "PACKAGE.copp",
             "message": "exported symbol 'Token' must be declared visible",
             "span": {
                 "start": 10,

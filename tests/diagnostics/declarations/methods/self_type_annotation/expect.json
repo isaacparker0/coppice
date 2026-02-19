@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "parsing",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "method receiver 'self' must not have a type annotation",
             "span": {
                 "start": 62,

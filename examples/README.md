@@ -7,5 +7,5 @@ Run all commands from workspace root.
 ```bash
 bazel run --run_in_cwd //compiler/cli:main -- \
   --workspace-root "examples/hello_world" \
-  run main.bin.coppice
+  run main.bin.copp
 ```

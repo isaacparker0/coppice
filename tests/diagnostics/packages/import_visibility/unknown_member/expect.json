@@ -3,7 +3,7 @@
     "diagnostics": [
         {
             "phase": "resolution",
-            "path": "lib.coppice",
+            "path": "lib.copp",
             "message": "imported symbol 'Missing' is not declared in package 'workspace/auth'",
             "span": {
                 "start": 24,
