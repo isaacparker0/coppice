@@ -23,9 +23,6 @@ jobs:
               with:
                   ref: ${{ github.ref }}
 
-            - name: Set up Bazel
-              uses: bazel-contrib/setup-bazel@v0.15.0
-
             - name: Cache Bazel repository downloads
               uses: actions/cache@v4
               with:
