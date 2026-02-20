@@ -1,0 +1,5 @@
+steps:
+    - label: ":bazel: test"
+      command: bazel test //...
+      agents:
+          queue: default
