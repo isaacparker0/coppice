@@ -22,7 +22,7 @@ tags="queue=default,role=ci-runner"
 build-path="/var/lib/buildkite-agent/builds"
 CONFIG
 
-chown root:root /etc/buildkite-agent/buildkite-agent.cfg
+chown buildkite-agent:buildkite-agent /etc/buildkite-agent/buildkite-agent.cfg
 chmod 0600 /etc/buildkite-agent/buildkite-agent.cfg
 
 systemctl enable buildkite-agent
