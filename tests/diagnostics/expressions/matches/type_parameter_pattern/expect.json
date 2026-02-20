@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "match patterns must not use type parameters",
+            "span": {
+                "start": 68,
+                "end": 69,
+                "line": 2,
+                "column": 26
+            }
+        }
+    ]
+}

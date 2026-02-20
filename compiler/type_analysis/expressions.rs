@@ -475,17 +475,26 @@ impl TypeChecker<'_> {
             self.error("match must have at least one arm", span.clone());
             return Type::Unknown;
         }
+        let target_variants = match &target_type {
+            Type::Union(variants) => Some(variants.clone()),
+            _ => None,
+        };
+        if arms.len() == 1 {
+            let should_report_single_arm = match &target_variants {
+                Some(variants) => variants.len() <= 1,
+                None => target_type != Type::Unknown,
+            };
+            if should_report_single_arm {
+                self.error("match must have at least two arms", span.clone());
+                return Type::Unknown;
+            }
+        }
         if Self::is_boolean_membership_match(arms) {
             self.error(
                 "use 'matches' for single-pattern boolean checks",
                 span.clone(),
             );
         }
-
-        let target_variants = match &target_type {
-            Type::Union(variants) => Some(variants.clone()),
-            _ => None,
-        };
 
         let mut seen_patterns = std::collections::HashSet::new();
         let mut result_type: Option<Type> = None;
@@ -596,6 +605,10 @@ impl TypeChecker<'_> {
         let resolved = self.resolve_type_name(type_name);
         if matches!(resolved, Type::Union(_)) {
             self.error("match patterns must be concrete types", span.clone());
+            return Type::Unknown;
+        }
+        if matches!(resolved, Type::TypeParameter(_)) {
+            self.error("match patterns must not use type parameters", span.clone());
             return Type::Unknown;
         }
         if matches!(resolved, Type::Applied { .. }) {

@@ -496,7 +496,7 @@ impl Parser {
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
             }
-            if self.peek_is_identifier() {
+            if self.peek_is_identifier() || self.peek_is_keyword(Keyword::Nil) {
                 continue;
             }
             break;
@@ -522,8 +522,14 @@ impl Parser {
     }
 
     pub(super) fn parse_match_pattern(&mut self) -> ParseResult<SyntaxMatchPattern> {
-        let (name, name_span) = self.expect_identifier()?;
-        if self.peek_is_symbol(Symbol::Colon) {
+        let (name, name_span, can_be_binding_name) = if self.peek_is_keyword(Keyword::Nil) {
+            let (name, span) = self.expect_type_name_part()?;
+            (name, span, false)
+        } else {
+            let (name, span) = self.expect_identifier()?;
+            (name, span, true)
+        };
+        if can_be_binding_name && self.peek_is_symbol(Symbol::Colon) {
             self.advance();
             let type_name = self.parse_type_name()?;
             if type_name

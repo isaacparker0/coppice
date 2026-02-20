@@ -264,6 +264,24 @@ function area(s: Shape) -> f64 {
 
 Exhaustive matching enforced by the compiler.
 
+Canonical rules:
+
+1. `match` arm patterns and `matches` patterns must be concrete types (builtins,
+   named types) or enum variants.
+2. Generic type parameters are not valid in pattern position.
+3. `match` must have at least two arms.
+4. Use `matches` for boolean membership checks.
+
+Rationale:
+
+1. Avoids instantiation-dependent overlap/redundancy behavior in generic
+   functions.
+2. Keeps diagnostics local and deterministic instead of producing call-site
+   errors about callee-internal match-arm structure.
+3. Preserves one canonical model: concrete type/variant decomposition in
+   `match`, and generic branching expressed through regular control flow
+   constructs rather than type-parameter patterns.
+
 ### Control Flow
 
 One loop construct:
@@ -920,6 +938,8 @@ No syntax alternatives. No feature overlaps.
 - One fatal unrecoverable failure construct: `abort(...)`.
 - One union branching form: `match`.
 - One union boolean membership check: `matches`.
+- One pattern model: concrete type/variant patterns (not generic type-parameter
+  patterns).
 - One constrained value-set declaration form: `enum { ... }` (not literal
   singleton types).
 - One union composition form: `A | B` over already-declared types or builtins.
@@ -937,6 +957,7 @@ No syntax alternatives. No feature overlaps.
 - No literal singleton types (`"foo"`, `1`, `true` as types).
 - No general intersection types (`A & B`) in v1.
 - No polymorphic function values in v1.
+- No generic type-parameter patterns in `match` / `matches`.
 - No implicit enum-variant synthesis from unresolved union members.
 - No implicit returns.
 - No single-statement braceless `if`.

@@ -1,0 +1,3 @@
+lib.copp:3:9: error: match patterns must not use type parameters
+          T => 1
+          ^

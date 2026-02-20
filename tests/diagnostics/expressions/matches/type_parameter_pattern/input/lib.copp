@@ -1,0 +1,3 @@
+function run[T](value: int64) -> boolean {
+    return value matches T
+}
