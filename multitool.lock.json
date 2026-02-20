@@ -38,6 +38,26 @@
             }
         ]
     },
+    "tofu": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/opentofu/opentofu/releases/download/v1.11.5/tofu_1.11.5_darwin_arm64.tar.gz",
+                "sha256": "abf2be18c49b7b8338d4addc5f64bcf68b3af03ca860b414b3705c20c4b455a6",
+                "file": "tofu",
+                "os": "macos",
+                "cpu": "arm64"
+            },
+            {
+                "kind": "archive",
+                "url": "https://github.com/opentofu/opentofu/releases/download/v1.11.5/tofu_1.11.5_linux_amd64.tar.gz",
+                "sha256": "e73868ab8abaca15d3c974dcf6a5e878860d6f2212867433aa3d8f2b43a492d9",
+                "file": "tofu",
+                "os": "linux",
+                "cpu": "x86_64"
+            }
+        ]
+    },
     "shfmt": {
         "binaries": [
             {
