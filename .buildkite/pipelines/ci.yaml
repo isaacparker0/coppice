@@ -1,5 +1,13 @@
+env:
+    BUILDBUDDY_API_KEY: "${BUILDBUDDY_API_KEY}"
+
 steps:
     - label: ":bazel: test"
-      command: bazel test //...
+      command: |
+          bazel test \
+            --config=remote \
+            --remote_header="x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}" \
+            --bes_header="x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}" \
+            //...
       agents:
           queue: default

@@ -40,5 +40,13 @@ ssh-keyscan -H github.com > /var/lib/buildkite-agent/.ssh/known_hosts
 chown buildkite-agent:buildkite-agent /var/lib/buildkite-agent/.ssh/known_hosts
 chmod 0644 /var/lib/buildkite-agent/.ssh/known_hosts
 
+install -d -m 0755 /etc/systemd/system/buildkite-agent.service.d
+cat > /etc/systemd/system/buildkite-agent.service.d/buildbuddy.conf <<'CONFIG'
+[Service]
+Environment=BUILDBUDDY_API_KEY=${buildbuddy_api_key}
+CONFIG
+chmod 0600 /etc/systemd/system/buildkite-agent.service.d/buildbuddy.conf
+
+systemctl daemon-reload
 systemctl enable buildkite-agent
 systemctl restart buildkite-agent

@@ -1,3 +1,8 @@
+variable "buildbuddy_api_key" {
+  type      = string
+  sensitive = true
+}
+
 resource "buildkite_team" "default" {
   name                          = "Everyone"
   privacy                       = "VISIBLE"
@@ -49,6 +54,7 @@ resource "digitalocean_droplet" "buildkite_runner" {
 
   user_data = templatefile("${path.module}/buildkite_runner_setup.sh.tftpl", {
     buildkite_agent_token           = buildkite_cluster_agent_token.ci_runner.token
+    buildbuddy_api_key              = var.buildbuddy_api_key
     github_checkout_private_key_pem = tls_private_key.buildkite_checkout.private_key_openssh
   })
 }
