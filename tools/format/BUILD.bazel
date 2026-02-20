@@ -19,6 +19,7 @@ rust_binary(
         "@multitool//tools/deno",
         "@multitool//tools/keep-sorted",
         "@multitool//tools/shfmt",
+        "@multitool//tools/tofu",
         "@rules_rust//rust/toolchain:current_rustfmt_toolchain",
     ],
     rustc_env = {
@@ -26,6 +27,7 @@ rust_binary(
         "DENO": "$(rlocationpath @multitool//tools/deno)",
         "GOFMT": "$(rlocationpath @go_sdk//:bin/gofmt)",
         "KEEP_SORTED": "$(rlocationpath @multitool//tools/keep-sorted)",
+        "TOFU": "$(rlocationpath @multitool//tools/tofu)",
         "RUSTFMT": "$(rlocationpath @rules_rust//rust/toolchain:current_rustfmt_toolchain)",
         "SHFMT": "$(rlocationpath @multitool//tools/shfmt)",
         "TAPLO": "$(rlocationpath :taplo_tool)",

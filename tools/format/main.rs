@@ -32,6 +32,7 @@ enum Tool {
     Buildifier,
     Taplo,
     KeepSorted,
+    Tofu,
 }
 
 enum FileSelector {
@@ -60,7 +61,7 @@ enum FormatterOutcome {
     Failure,
 }
 
-const FORMATTERS: [Formatter; 7] = [
+const FORMATTERS: [Formatter; 8] = [
     Formatter {
         name: "JSON/Markdown/HTML/CSS/JS/YAML",
         tool: Tool::Deno,
@@ -110,6 +111,13 @@ const FORMATTERS: [Formatter; 7] = [
         fix_args: &["--mode=fix"],
         selector: FileSelector::AllFiles,
     },
+    Formatter {
+        name: "Terraform",
+        tool: Tool::Tofu,
+        check_args: &["fmt", "-check", "-diff"],
+        fix_args: &["fmt"],
+        selector: FileSelector::Extensions(&["tf"]),
+    },
 ];
 
 fn main() -> ExitCode {
@@ -134,6 +142,7 @@ fn main() -> ExitCode {
                 Tool::Buildifier => tools.buildifier.clone(),
                 Tool::Taplo => tools.taplo.clone(),
                 Tool::KeepSorted => tools.keep_sorted.clone(),
+                Tool::Tofu => tools.tofu.clone(),
             },
             args: match mode {
                 Mode::Check => formatter.check_args,
@@ -292,6 +301,7 @@ struct Tools {
     buildifier: PathBuf,
     taplo: PathBuf,
     keep_sorted: PathBuf,
+    tofu: PathBuf,
 }
 
 fn read_tools_from_build() -> Tools {
@@ -308,6 +318,7 @@ fn read_tools_from_build() -> Tools {
         buildifier: rlocation_from(&runfiles, env!("BUILDIFIER"), "BUILDIFIER"),
         taplo: rlocation_from(&runfiles, env!("TAPLO"), "TAPLO"),
         keep_sorted: rlocation_from(&runfiles, env!("KEEP_SORTED"), "KEEP_SORTED"),
+        tofu: rlocation_from(&runfiles, env!("TOFU"), "TOFU"),
     }
 }
 
