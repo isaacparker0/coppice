@@ -46,6 +46,8 @@ Planned direction:
    shared IR boundaries (not an ad hoc transpiler path).
 5. Defer intersection types and advanced async/runtime details until core
    ownership/safety contracts are stable.
+6. Preserve deterministic semantics across all builds (no mode-dependent
+   language behavior differences).
 
 ---
 
@@ -248,6 +250,94 @@ Scope note:
 - Detailed language semantics, examples, and future-admission criteria are
   tracked in `specs/LANGUAGE_DESIGN.md`.
 
+### 9) MVP Numeric Operator Semantics
+
+Options considered:
+
+1. Wrapping integer arithmetic by default.
+2. Checked integer arithmetic by default (trap on invalid operations).
+3. Build-mode dependent behavior (for example debug traps, release wrap).
+
+Direction:
+
+- Choose **Option 2**.
+- Reject Option 3 to preserve deterministic semantics across all builds.
+
+Semantics for v1 `int64` operators:
+
+1. `+`, `-`, `*`, and unary `-` are checked and trap on overflow.
+2. `/` traps on division by zero and on `i64::MIN / -1`.
+3. `%` is the canonical modular arithmetic operator; no separate wrapping
+   arithmetic escape hatch is provided in v1.
+4. `%` uses Euclidean modulo semantics and traps on zero divisor.
+
+Rationale:
+
+1. Best aligned with correctness-first goals.
+2. Avoids silent arithmetic corruption in backend/service code.
+3. Maintains one canonical model for modular arithmetic.
+
+### 10) Executable Program Invariants
+
+Options considered:
+
+1. Backend performs broad semantic validation and recovers from malformed IR.
+2. `executable_program` carries strong compile-time invariants; backend treats
+   violations as internal contract failures.
+3. Mixed ownership with optional backend recovery for selected cases.
+
+Direction:
+
+- Choose **Option 2**.
+
+Contract:
+
+1. Invariants are compile-time pipeline contracts, not runtime behavior.
+2. User-code invalidity must be reported by owning frontend/lowering phases.
+3. If malformed executable artifacts reach backend codegen, backend fails
+   compilation as an invariant breach (`CompilerFailure`-class failure), not as
+   language diagnostics.
+4. Invariant enforcement is always-on in every build mode (no debug-only checks,
+   no mode-dependent behavior).
+
+Rationale:
+
+1. Keeps phase ownership clear and deterministic.
+2. Prevents backend semantic drift and hidden fallback paths.
+3. Preserves parity across build modes and toolchain consumers.
+
+### 11) Runtime ABI and Value Representation (MVP)
+
+Options considered:
+
+1. Backend-specific ABI/representation during initial implementation.
+2. Stable language-internal ABI contract with explicit runtime boundary types.
+3. Fully boxed/tagged uniform value representation for all MVP values.
+
+Direction:
+
+- Choose **Option 2** for ABI stability.
+- Use typed MVP representation (not fully boxed uniform values) for core scalar
+  lowering.
+
+MVP contract decisions:
+
+1. Keep an explicit, backend-agnostic internal calling contract for executable
+   artifacts.
+2. Represent `int64` and `boolean` using native scalar lowering.
+3. Represent `string` at ABI boundaries as an opaque runtime-managed handle;
+   runtime owns concrete layout details.
+4. Treat `nil` as unit-like language semantics; avoid introducing user-visible
+   fake payload semantics.
+5. Keep `abort` behavior process-terminating and explicit in the runtime
+   contract.
+
+Rationale:
+
+1. Protects multi-backend compatibility.
+2. Avoids locking unstable runtime layout internals too early.
+3. Keeps MVP codegen tractable while preserving long-term architecture.
+
 ---
 
 ## V1 Semantic Contract (Proposed)
@@ -267,7 +357,8 @@ Enforcement model in v1:
 Runtime checks allowed in v1 (examples):
 
 1. Bounds checks.
-2. Selected numeric checks per operator policy.
+2. Numeric checks per locked operator policy: overflow checks for `+`, `-`, `*`,
+   unary `-`; division/modulo zero checks; `i64::MIN / -1` check.
 3. Other explicitly documented deferred checks.
 
 Non-goals for v1:
@@ -303,12 +394,10 @@ Required before broad backend implementation:
 4. Runtime interface contract finalized.
 5. Executable program invariants documented.
 6. Runnable MVP feature cut documented.
+7. MVP numeric operator policy is locked and fixture-tested.
 
 ---
 
 ## Open Questions
 
 1. Exact ARC/shared surface syntax and synchronization primitives.
-2. Numeric overflow policy (trap/wrap/checked by operator family).
-3. Whether first backend target should be Rust emitter or direct Cranelift,
-   given team velocity and debugging preferences.

@@ -30,6 +30,10 @@
   surfaces, and isolated side effects.
 - Favor decoupling. Small, focused modules/packages are good; do not optimize
   for fewer files by default.
+- Prefer a strict, non-defensive style by default: when an invariant should
+  hold, assert/fail fast instead of adding fallback handling for "impossible"
+  states. Defensive handling should be rare, intentional, and guided by
+  context-specific judgment.
 - Prefer globally unambiguous names for shared/public types. Avoid introducing
   overlapping names that require local import aliasing for disambiguation when a
   clearer unique name is practical.
