@@ -13,7 +13,8 @@ use compiler__syntax::{
 ///
 /// In particular, `main` entrypoint constraints stay in this pass:
 /// - placement (`main` only in `.bin.copp`)
-/// - binary contract (exactly one `main`, no parameters, returns `nil`)
+/// - binary contract (exactly one `main`, no type parameters, no parameters,
+///   returns `nil`)
 ///
 /// Keeping role-conditional rules in one owner pass avoids brittle cross-pass
 /// suppression ("emit in one pass, silence in another") and keeps diagnostic
@@ -162,6 +163,12 @@ fn check_binary_main_signature(
     main_function_declaration: &SyntaxFunctionDeclaration,
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) {
+    if !main_function_declaration.type_parameters.is_empty() {
+        diagnostics.push(PhaseDiagnostic::new(
+            "main in .bin.copp must not declare type parameters",
+            main_function_declaration.name_span.clone(),
+        ));
+    }
     if !main_function_declaration.parameters.is_empty() {
         diagnostics.push(PhaseDiagnostic::new(
             "main in .bin.copp must not declare parameters",
