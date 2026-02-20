@@ -29,3 +29,14 @@ resource "buildkite_pipeline" "ci" {
   default_team_id = buildkite_team.default.id
   steps           = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
 }
+
+resource "digitalocean_droplet" "buildkite_runner" {
+  name   = "coppice-ci-runner-01"
+  region = "nyc3"
+  size   = "s-2vcpu-4gb"
+  image  = "ubuntu-24-04-x64"
+
+  user_data = templatefile("${path.module}/buildkite_agent_bootstrap.sh.tftpl", {
+    buildkite_agent_token = buildkite_cluster_agent_token.ci_runner.token
+  })
+}

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y ca-certificates curl gnupg
+
+install -m 0755 -d /usr/share/keyrings
+curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/32A37959C2FA5C3C99EFBC32A79206696452D198 \
+  | gpg --dearmor -o /usr/share/keyrings/buildkite-agent-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/buildkite-agent-archive-keyring.gpg] https://apt.buildkite.com/buildkite-agent stable main" \
+  > /etc/apt/sources.list.d/buildkite-agent.list
+
+apt-get update
+apt-get install -y buildkite-agent git
+
+cat > /etc/buildkite-agent/buildkite-agent.cfg <<'CONFIG'
+token="${buildkite_agent_token}"
+name="%hostname"
+tags="queue=default,role=ci-runner"
+build-path="/var/lib/buildkite-agent/builds"
+CONFIG
+
+chown root:root /etc/buildkite-agent/buildkite-agent.cfg
+chmod 0600 /etc/buildkite-agent/buildkite-agent.cfg
+
+systemctl enable buildkite-agent
+systemctl restart buildkite-agent

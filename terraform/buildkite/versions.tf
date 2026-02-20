@@ -6,5 +6,9 @@ terraform {
       source  = "buildkite/buildkite"
       version = "~> 1.30"
     }
+    digitalocean = {
+      source  = "digitalocean/digitalocean"
+      version = "~> 2.76"
+    }
   }
 }
