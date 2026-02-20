@@ -65,6 +65,7 @@ jobs:
               run: |
                   set -euo pipefail
                   bazel run --config=remote \
+                    --remote_header="x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}" \
                     --stamp \
                     --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 \
                     //playground:playground_push
