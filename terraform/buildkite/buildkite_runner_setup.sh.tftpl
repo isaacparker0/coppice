@@ -15,6 +15,11 @@ echo "deb [signed-by=/usr/share/keyrings/buildkite-agent-archive-keyring.gpg] ht
 apt-get update
 apt-get install -y buildkite-agent git
 
+curl -fsSL -o /usr/local/bin/bazelisk \
+  https://github.com/bazelbuild/bazelisk/releases/download/v1.28.1/bazelisk-linux-amd64
+chmod 0755 /usr/local/bin/bazelisk
+ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
+
 cat > /etc/buildkite-agent/buildkite-agent.cfg <<'CONFIG'
 token="${buildkite_agent_token}"
 name="%hostname"
@@ -24,6 +29,16 @@ CONFIG
 
 chown buildkite-agent:buildkite-agent /etc/buildkite-agent/buildkite-agent.cfg
 chmod 0600 /etc/buildkite-agent/buildkite-agent.cfg
+
+install -d -m 0700 -o buildkite-agent -g buildkite-agent /var/lib/buildkite-agent/.ssh
+cat > /var/lib/buildkite-agent/.ssh/id_ed25519 <<'KEY'
+${github_checkout_private_key_pem}
+KEY
+chown buildkite-agent:buildkite-agent /var/lib/buildkite-agent/.ssh/id_ed25519
+chmod 0600 /var/lib/buildkite-agent/.ssh/id_ed25519
+ssh-keyscan -H github.com > /var/lib/buildkite-agent/.ssh/known_hosts
+chown buildkite-agent:buildkite-agent /var/lib/buildkite-agent/.ssh/known_hosts
+chmod 0644 /var/lib/buildkite-agent/.ssh/known_hosts
 
 systemctl enable buildkite-agent
 systemctl restart buildkite-agent

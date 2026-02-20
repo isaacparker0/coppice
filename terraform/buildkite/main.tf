@@ -30,13 +30,25 @@ resource "buildkite_pipeline" "ci" {
   steps           = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
 }
 
+resource "tls_private_key" "buildkite_checkout" {
+  algorithm = "ED25519"
+}
+
+resource "github_repository_deploy_key" "buildkite_checkout" {
+  repository = "coppice"
+  title      = "buildkite-checkout"
+  key        = tls_private_key.buildkite_checkout.public_key_openssh
+  read_only  = true
+}
+
 resource "digitalocean_droplet" "buildkite_runner" {
   name   = "coppice-ci-runner-01"
   region = "nyc3"
   size   = "s-2vcpu-4gb"
   image  = "ubuntu-24-04-x64"
 
-  user_data = templatefile("${path.module}/buildkite_agent_bootstrap.sh.tftpl", {
-    buildkite_agent_token = buildkite_cluster_agent_token.ci_runner.token
+  user_data = templatefile("${path.module}/buildkite_runner_setup.sh.tftpl", {
+    buildkite_agent_token           = buildkite_cluster_agent_token.ci_runner.token
+    github_checkout_private_key_pem = tls_private_key.buildkite_checkout.private_key_openssh
   })
 }

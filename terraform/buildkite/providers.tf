@@ -3,3 +3,7 @@ provider "buildkite" {
 }
 
 provider "digitalocean" {}
+
+provider "github" {
+  owner = "isaacparker0"
+}
