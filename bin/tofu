@@ -2,4 +2,4 @@
 
 set -euo pipefail
 
-exec bazel run @multitool//tools/tofu -- "$@"
+exec bazel run --run_in_cwd @multitool//tools/tofu -- "$@"

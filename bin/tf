@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: tf <module> <tofu-args...>" >&2
+  exit 1
+fi
+
+module="$1"
+shift
+
+exec tofu -chdir="terraform/${module}" "$@"

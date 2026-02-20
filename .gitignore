@@ -1,6 +1,10 @@
 # keep-sorted start
 .DS_Store
 .coppice
+.env.local
+.terraform
 bazel-*
 target
+terraform.tfstate
+terraform.tfstate.backup
 # keep-sorted end
