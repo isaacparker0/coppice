@@ -1,0 +1,45 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Set up Bazel
+              uses: bazel-contrib/setup-bazel@v0.15.0
+
+            - name: Cache Bazel repository downloads
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cache/bazel-repo
+                  key: coppice-bazel-repo-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+                  restore-keys: |
+                      coppice-bazel-repo-${{ runner.os }}-
+
+            - name: Run checks, build, and tests
+              env:
+                  BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+              run: |
+                  set -euo pipefail
+                  bazel --config=remote mod deps --lockfile_mode=error
+                  bazel --config=remote run //:gazelle -- -mode=diff
+                  bazel --config=remote run //:format -- check
+                  bazel --config=remote build //...
+                  bazel --config=remote test //...
+                  bazel --config=remote run --run_in_cwd @multitool//tools/typos
+                  bazel --config=remote run //tools/filename_linter:main

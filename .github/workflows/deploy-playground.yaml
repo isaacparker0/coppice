@@ -1,0 +1,72 @@
+name: Deploy Playground
+
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: deploy-playground
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+            DOCKER_CONFIG: /home/runner/.docker
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  ref: ${{ github.ref }}
+
+            - name: Set up Bazel
+              uses: bazel-contrib/setup-bazel@v0.15.0
+
+            - name: Cache Bazel repository downloads
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cache/bazel-repo
+                  key: coppice-bazel-repo-${{ runner.os }}-${{ hashFiles('MODULE.bazel.lock') }}
+                  restore-keys: |
+                      coppice-bazel-repo-${{ runner.os }}-
+
+            - name: Ensure commit is latest on main
+              if: github.event_name == 'push'
+              id: main_head
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags --prune --depth=1 origin main
+                  main_sha="$(git rev-parse origin/main)"
+                  if [[ "${main_sha}" == "${GITHUB_SHA}" ]]; then
+                    echo "is_latest=true" >> "${GITHUB_OUTPUT}"
+                  else
+                    echo "is_latest=false" >> "${GITHUB_OUTPUT}"
+                    echo "Skipping deploy: ${GITHUB_SHA} is not current main head (${main_sha})."
+                  fi
+
+            - name: Log in to DOCR
+              if: github.event_name != 'push' || steps.main_head.outputs.is_latest == 'true'
+              env:
+                  DOCR_TOKEN: ${{ secrets.DOCR_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  : "${DOCR_TOKEN:?DOCR_TOKEN must be set}"
+                  mkdir -p "${DOCKER_CONFIG}"
+                  auth="$(printf "doctl:%s" "${DOCR_TOKEN}" | base64 -w 0 2>/dev/null || printf "doctl:%s" "${DOCR_TOKEN}" | base64)"
+                  printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "${auth}" >"${DOCKER_CONFIG}/config.json"
+
+            - name: Deploy playground image
+              if: github.event_name != 'push' || steps.main_head.outputs.is_latest == 'true'
+              env:
+                  BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+              run: |
+                  set -euo pipefail
+                  bazel --config=remote run \
+                    --stamp \
+                    --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 \
+                    //playground:playground_push
