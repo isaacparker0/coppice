@@ -4,6 +4,15 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "cranelift_backend",
     srcs = ["lib.rs"],
+    data = [
+        "@toolchains_llvm_bootstrapped//tools:clang++",
+        "@toolchains_llvm_bootstrapped//tools:ld.lld",
+        "@toolchains_llvm_bootstrapped//tools:ld64.lld",
+        "@toolchains_llvm_bootstrapped//tools:lld",
+    ],
+    rustc_env = {
+        "COPPICE_LLVM_CLANGXX": "$(rlocationpath @toolchains_llvm_bootstrapped//tools:clang++)",
+    },
     visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/executable_program",
@@ -11,10 +20,10 @@ rust_library(
         "//compiler/runtime_interface",
         "@crates//:cranelift-codegen",
         "@crates//:cranelift-frontend",
-        "@crates//:cranelift-jit",
         "@crates//:cranelift-module",
-        "@crates//:serde",
-        "@crates//:serde_json",
+        "@crates//:cranelift-native",
+        "@crates//:cranelift-object",
+        "@rules_rust//tools/runfiles",
     ],
 )
 
