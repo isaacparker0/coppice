@@ -33,10 +33,10 @@ jobs:
                   BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
               run: |
                   set -euo pipefail
-                  bazel --config=remote mod deps --lockfile_mode=error
-                  bazel --config=remote run //:gazelle -- -mode=diff
-                  bazel --config=remote run //:format -- check
-                  bazel --config=remote build //...
-                  bazel --config=remote test //...
-                  bazel --config=remote run --run_in_cwd @multitool//tools/typos
-                  bazel --config=remote run //tools/filename_linter:main
+                  bazel mod deps --config=remote --lockfile_mode=error
+                  bazel run --config=remote //:gazelle -- -mode=diff
+                  bazel run --config=remote //:format -- check
+                  bazel build --config=remote //...
+                  bazel test --config=remote //...
+                  bazel run --config=remote --run_in_cwd @multitool//tools/typos
+                  bazel run --config=remote //tools/filename_linter:main
