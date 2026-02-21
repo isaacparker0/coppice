@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+: "${BUILDKITE_BUILD_CHECKOUT_PATH:?missing checkout path}"
+export DOCKER_CONFIG="${BUILDKITE_BUILD_CHECKOUT_PATH}/.docker"
+
 if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
   cat > .bazelrc.auth <<EOF
 common --remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}
