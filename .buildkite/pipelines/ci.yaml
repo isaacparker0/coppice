@@ -6,7 +6,7 @@ steps:
       secrets:
           - BUILDBUDDY_API_KEY
       command: |
-          bazel mod deps --lockfile_mode=error
+          bazel mod deps
           bazel run //:gazelle -- -mode=diff
           bazel run //:format -- check
           bazel build //...

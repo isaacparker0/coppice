@@ -1,6 +1,8 @@
 startup --max_idle_secs=0
 startup --host_jvm_args=-Xmx1500m
 
+common --lockfile_mode=error
+
 common --remote_cache=grpcs://remote.buildbuddy.io
 common --bes_backend=grpcs://remote.buildbuddy.io
 common --remote_accept_cached=true
