@@ -44,6 +44,21 @@ resource "buildkite_pipeline" "ci" {
   }
 }
 
+resource "github_repository_webhook" "buildkite_ci" {
+  repository = "coppice"
+  active     = true
+  events = [
+    "pull_request",
+    "push",
+  ]
+
+  configuration {
+    url          = buildkite_pipeline.ci.webhook_url
+    content_type = "json"
+    insecure_ssl = "0"
+  }
+}
+
 resource "tls_private_key" "buildkite_checkout" {
   algorithm = "ED25519"
 }
