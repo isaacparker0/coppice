@@ -1,7 +1,10 @@
 steps:
-    - label: ":bazel: ci"
+    - key: ci
+      label: ":bazel: ci"
       env:
           BAZELRC: .buildkite/.bazelrc
+      secrets:
+          - BUILDBUDDY_API_KEY
       command: |
           bazel mod deps --lockfile_mode=error
           bazel run //:gazelle -- -mode=diff
@@ -12,3 +15,12 @@ steps:
           bazel run //tools/filename_linter:main
       agents:
           queue: default
+
+    - label: ":rocket: deploy playground"
+      trigger: "playground-deploy"
+      branches: "main"
+      depends_on: ci
+      async: false
+      build:
+          branch: "$$BUILDKITE_BRANCH"
+          commit: "$$BUILDKITE_COMMIT"

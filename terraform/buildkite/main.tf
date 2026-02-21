@@ -3,6 +3,11 @@ variable "buildbuddy_api_key" {
   sensitive = true
 }
 
+variable "docr_push_token" {
+  type      = string
+  sensitive = true
+}
+
 resource "buildkite_team" "default" {
   name                          = "Everyone"
   privacy                       = "VISIBLE"
@@ -27,13 +32,42 @@ resource "buildkite_cluster_agent_token" "ci_runner" {
   description = "coppice-ci-runner-01"
 }
 
+resource "buildkite_cluster_secret" "buildbuddy_api_key" {
+  cluster_id = buildkite_cluster.default.uuid
+  key        = "BUILDBUDDY_API_KEY"
+  value      = var.buildbuddy_api_key
+  policy     = <<-EOT
+    - pipeline_slug: ci
+    - pipeline_slug: playground-deploy
+      build_branch: main
+  EOT
+}
+
+resource "buildkite_cluster_secret" "docr_push_token" {
+  cluster_id = buildkite_cluster.default.uuid
+  key        = "DOCR_PUSH_TOKEN"
+  value      = var.docr_push_token
+  policy     = <<-EOT
+    - pipeline_slug: playground-deploy
+      build_branch: main
+  EOT
+}
+
 resource "buildkite_pipeline" "ci" {
-  name                 = "ci"
-  repository           = "git@github.com:isaacparker0/coppice.git"
-  cluster_id           = buildkite_cluster.default.id
-  default_team_id      = buildkite_team.default.id
+  name       = "ci"
+  repository = "git@github.com:isaacparker0/coppice.git"
+
+  cluster_id      = buildkite_cluster.default.id
+  default_team_id = buildkite_team.default.id
+
   branch_configuration = "main"
-  steps                = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
+
+  skip_intermediate_builds                 = true
+  skip_intermediate_builds_branch_filter   = "!main"
+  cancel_intermediate_builds               = true
+  cancel_intermediate_builds_branch_filter = "!main"
+
+  steps = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
 
   provider_settings = {
     trigger_mode                   = "code"
@@ -59,6 +93,21 @@ resource "github_repository_webhook" "buildkite_ci" {
   }
 }
 
+resource "buildkite_pipeline" "playground_deploy" {
+  name       = "playground-deploy"
+  repository = "git@github.com:isaacparker0/coppice.git"
+
+  cluster_id      = buildkite_cluster.default.id
+  default_team_id = buildkite_team.default.id
+
+  branch_configuration = "main"
+
+  skip_intermediate_builds               = true
+  skip_intermediate_builds_branch_filter = "main"
+
+  steps = file("${path.module}/../../.buildkite/pipelines/playground_deploy.yaml")
+}
+
 resource "tls_private_key" "buildkite_checkout" {
   algorithm = "ED25519"
 }
@@ -78,7 +127,6 @@ resource "digitalocean_droplet" "buildkite_runner" {
 
   user_data = templatefile("${path.module}/buildkite_runner_setup.sh.tftpl", {
     buildkite_agent_token           = buildkite_cluster_agent_token.ci_runner.token
-    buildbuddy_api_key              = var.buildbuddy_api_key
     github_checkout_private_key_pem = tls_private_key.buildkite_checkout.private_key_openssh
   })
 }

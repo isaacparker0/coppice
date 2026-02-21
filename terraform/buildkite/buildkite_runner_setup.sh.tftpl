@@ -40,12 +40,5 @@ ssh-keyscan -H github.com > /var/lib/buildkite-agent/.ssh/known_hosts
 chown buildkite-agent:buildkite-agent /var/lib/buildkite-agent/.ssh/known_hosts
 chmod 0644 /var/lib/buildkite-agent/.ssh/known_hosts
 
-cat > /etc/buildkite-agent/buildbuddy-auth.bazelrc <<'CONFIG'
-common --remote_header=x-buildbuddy-api-key=${buildbuddy_api_key}
-common --bes_header=x-buildbuddy-api-key=${buildbuddy_api_key}
-CONFIG
-chown buildkite-agent:buildkite-agent /etc/buildkite-agent/buildbuddy-auth.bazelrc
-chmod 0600 /etc/buildkite-agent/buildbuddy-auth.bazelrc
-
 systemctl enable buildkite-agent
 systemctl restart buildkite-agent

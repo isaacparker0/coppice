@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
+  cat > .bazelrc.auth <<EOF
+common --remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}
+common --bes_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}
+EOF
+fi

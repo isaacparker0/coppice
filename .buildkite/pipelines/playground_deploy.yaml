@@ -1,0 +1,23 @@
+steps:
+    - label: ":rocket: deploy playground"
+      key: deploy_playground
+      env:
+          BAZELRC: .buildkite/.bazelrc
+          DOCKER_CONFIG: "/home/buildkite-agent/.docker"
+      secrets:
+          - BUILDBUDDY_API_KEY
+          - DOCR_PUSH_TOKEN
+      command: |
+          : "$${DOCR_PUSH_TOKEN:?DOCR_PUSH_TOKEN must be set}"
+          mkdir -p "$${DOCKER_CONFIG}"
+          auth="$$(printf "doctl:%s" "$${DOCR_PUSH_TOKEN}" | base64 -w 0 2>/dev/null || printf "doctl:%s" "$${DOCR_PUSH_TOKEN}" | base64)"
+          printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "$${auth}" >"$${DOCKER_CONFIG}/config.json"
+
+          bazel run \
+            --stamp \
+            --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 \
+            //playground:playground_push
+      concurrency_group: "playground-deploy-main"
+      concurrency: 1
+      agents:
+          queue: default
