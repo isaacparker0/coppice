@@ -28,11 +28,20 @@ resource "buildkite_cluster_agent_token" "ci_runner" {
 }
 
 resource "buildkite_pipeline" "ci" {
-  name            = "ci"
-  repository      = "git@github.com:isaacparker0/coppice.git"
-  cluster_id      = buildkite_cluster.default.id
-  default_team_id = buildkite_team.default.id
-  steps           = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
+  name                 = "ci"
+  repository           = "git@github.com:isaacparker0/coppice.git"
+  cluster_id           = buildkite_cluster.default.id
+  default_team_id      = buildkite_team.default.id
+  branch_configuration = "main"
+  steps                = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
+
+  provider_settings = {
+    trigger_mode                   = "code"
+    build_branches                 = true
+    build_pull_requests            = true
+    publish_commit_status          = true
+    publish_commit_status_per_step = false
+  }
 }
 
 resource "tls_private_key" "buildkite_checkout" {
