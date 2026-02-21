@@ -11,7 +11,7 @@ path = "placeholder.rs"
 [dependencies]
 # keep-sorted start
 axum = { version = "^0.8.8" }
-clap = { version = "^4.5.59", features = ["derive"] }
+clap = { version = "^4.5.60", features = ["derive"] }
 cranelift-codegen = { version = "^0.128.3" }
 cranelift-frontend = { version = "^0.128.3" }
 cranelift-jit = { version = "^0.128.3" }
