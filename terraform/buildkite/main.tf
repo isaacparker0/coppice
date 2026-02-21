@@ -97,10 +97,8 @@ resource "buildkite_pipeline" "playground_deploy" {
 
   branch_configuration = "main"
 
-  skip_intermediate_builds                 = true
-  skip_intermediate_builds_branch_filter   = "main"
-  cancel_intermediate_builds               = true
-  cancel_intermediate_builds_branch_filter = "main"
+  skip_intermediate_builds               = true
+  skip_intermediate_builds_branch_filter = "main"
 
   steps = file("${path.module}/../../.buildkite/pipelines/playground_deploy.yaml")
 }
