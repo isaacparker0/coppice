@@ -6,5 +6,4 @@ if [ -n "${BUILDBUDDY_API_KEY:-}" ]; then
 common --remote_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}
 common --bes_header=x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}
 EOF
-  chmod 0600 .bazelrc.auth
 fi

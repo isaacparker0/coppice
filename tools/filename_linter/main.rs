@@ -56,6 +56,7 @@ const RULES: &[Rule] = &[
         },
         exclude_patterns: Some(&[
             // keep-sorted start
+            ".buildkite/hooks/**",
             ".pre-commit-config.yaml",
             "Cargo.lock",
             "Cargo.toml",
