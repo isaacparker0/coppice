@@ -3,6 +3,7 @@ steps:
       key: deploy_playground
       env:
           BAZELRC: .buildkite/.bazelrc
+          DOCKER_CONFIG: "/var/lib/buildkite-agent/.docker"
       secrets:
           - BUILDBUDDY_API_KEY
           - DOCR_PUSH_TOKEN
