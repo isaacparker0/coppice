@@ -48,8 +48,6 @@ resource "github_repository_webhook" "buildkite_ci" {
   repository = "coppice"
   active     = true
   events = [
-    "deployment",
-    "merge_group",
     "pull_request",
     "push",
   ]
