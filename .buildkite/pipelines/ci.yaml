@@ -1,13 +1,14 @@
-env:
-    BUILDBUDDY_API_KEY: "${BUILDBUDDY_API_KEY}"
-
 steps:
-    - label: ":bazel: test"
+    - label: ":bazel: ci"
+      env:
+          BAZELRC: .buildkite/.bazelrc
       command: |
-          bazel test \
-            --config=remote \
-            --remote_header="x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}" \
-            --bes_header="x-buildbuddy-api-key=${BUILDBUDDY_API_KEY}" \
-            //...
+          bazel mod deps --lockfile_mode=error
+          bazel run //:gazelle -- -mode=diff
+          bazel run //:format -- check
+          bazel build //...
+          bazel test //...
+          bazel run --run_in_cwd @multitool//tools/typos
+          bazel run //tools/filename_linter:main
       agents:
           queue: default

@@ -1,0 +1,5 @@
+common --remote_cache=grpcs://remote.buildbuddy.io
+common --bes_backend=grpcs://remote.buildbuddy.io
+common --remote_accept_cached=true
+common --remote_upload_local_results=true
+try-import /etc/buildkite-agent/buildbuddy-auth.bazelrc
