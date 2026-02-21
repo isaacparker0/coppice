@@ -30,8 +30,3 @@ common --action_env=DOCKER_CONFIG
 common --remote_download_outputs=minimal
 common --remote_accept_cached=false
 common --remote_upload_local_results=false
-
-common:remote --remote_cache=grpcs://remote.buildbuddy.io
-common:remote --bes_backend=grpcs://remote.buildbuddy.io
-common:remote --remote_accept_cached=true
-common:remote --remote_upload_local_results=true
