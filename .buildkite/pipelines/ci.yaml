@@ -6,16 +6,6 @@ steps:
       secrets:
           - BUILDBUDDY_API_KEY
       command: |
-          if [ -n "$${BUILDBUDDY_API_KEY:-}" ]; then
-            echo "BUILDBUDDY_API_KEY present len=$${#BUILDBUDDY_API_KEY}"
-          else
-            echo "BUILDBUDDY_API_KEY missing"
-          fi
-          ls -l .bazelrc .bazelrc.auth .buildkite/hooks/pre-command || true
-          if [ -f .bazelrc.auth ]; then
-            sed -n '1,20p' .bazelrc.auth | sed 's/=.*/=<redacted>/'
-          fi
-
           bazel mod deps --lockfile_mode=error
           bazel run //:gazelle -- -mode=diff
           bazel run //:format -- check
