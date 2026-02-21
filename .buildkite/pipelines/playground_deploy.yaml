@@ -3,7 +3,6 @@ steps:
       key: deploy_playground
       env:
           BAZELRC: .buildkite/.bazelrc
-          DOCKER_CONFIG: "/home/buildkite-agent/.docker"
       secrets:
           - BUILDBUDDY_API_KEY
           - DOCR_PUSH_TOKEN
@@ -12,6 +11,13 @@ steps:
           mkdir -p "$${DOCKER_CONFIG}"
           auth="$$(printf "doctl:%s" "$${DOCR_PUSH_TOKEN}" | base64 -w 0 2>/dev/null || printf "doctl:%s" "$${DOCR_PUSH_TOKEN}" | base64)"
           printf '{"auths":{"registry.digitalocean.com":{"auth":"%s"}}}\n' "$${auth}" >"$${DOCKER_CONFIG}/config.json"
+          echo "DOCKER_CONFIG=$${DOCKER_CONFIG}"
+          if [ -f "$${DOCKER_CONFIG}/config.json" ]; then
+            echo "config exists"
+            sed 's/"auth":"[^"]*"/"auth":"<redacted>"/g' "$${DOCKER_CONFIG}/config.json"
+          else
+            echo "config missing"
+          fi
 
           bazel run \
             --stamp \
