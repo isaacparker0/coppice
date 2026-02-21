@@ -62,6 +62,11 @@ resource "buildkite_pipeline" "ci" {
 
   branch_configuration = "main"
 
+  skip_intermediate_builds                 = true
+  skip_intermediate_builds_branch_filter   = "!main"
+  cancel_intermediate_builds               = true
+  cancel_intermediate_builds_branch_filter = "!main"
+
   steps = file("${path.module}/../../.buildkite/pipelines/ci.yaml")
 
   provider_settings = {
