@@ -22,5 +22,5 @@ steps:
       depends_on: ci
       async: false
       build:
-          branch: "$$BUILDKITE_BRANCH"
-          commit: "$$BUILDKITE_COMMIT"
+          branch: "${BUILDKITE_BRANCH}"
+          commit: "${BUILDKITE_COMMIT}"
