@@ -3,7 +3,12 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
     name = "cranelift_backend",
-    srcs = ["lib.rs"],
+    srcs = [
+        "lib.rs",
+        "linker_bridge.rs",
+        "object_emission.rs",
+        "runtime_interface_emission.rs",
+    ],
     visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/executable_program",
@@ -11,10 +16,9 @@ rust_library(
         "//compiler/runtime_interface",
         "@crates//:cranelift-codegen",
         "@crates//:cranelift-frontend",
-        "@crates//:cranelift-jit",
         "@crates//:cranelift-module",
-        "@crates//:serde",
-        "@crates//:serde_json",
+        "@crates//:cranelift-native",
+        "@crates//:cranelift-object",
     ],
 )
 

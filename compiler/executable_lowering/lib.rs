@@ -134,12 +134,20 @@ fn lower_struct_declarations(
 ) -> Vec<ExecutableStructDeclaration> {
     let mut lowered = Vec::new();
     for struct_declaration in struct_declarations {
+        let type_parameter_names = struct_declaration
+            .type_parameters
+            .iter()
+            .map(|type_parameter| type_parameter.name.clone())
+            .collect::<Vec<_>>();
         let mut executable_fields = Vec::new();
         let mut struct_supported = true;
         for field in &struct_declaration.fields {
-            let Some(type_reference) =
-                lower_type_name_to_type_reference(&field.type_name, false, &[], diagnostics)
-            else {
+            let Some(type_reference) = lower_type_name_to_type_reference(
+                &field.type_name,
+                false,
+                &type_parameter_names,
+                diagnostics,
+            ) else {
                 struct_supported = false;
                 continue;
             };
@@ -149,11 +157,6 @@ fn lower_struct_declarations(
             });
         }
         if struct_supported {
-            let type_parameter_names = struct_declaration
-                .type_parameters
-                .iter()
-                .map(|type_parameter| type_parameter.name.clone())
-                .collect::<Vec<_>>();
             lowered.push(ExecutableStructDeclaration {
                 name: struct_declaration.name.clone(),
                 struct_reference: ExecutableStructReference {
