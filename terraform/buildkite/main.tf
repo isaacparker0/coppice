@@ -63,7 +63,7 @@ resource "buildkite_pipeline" "ci" {
   branch_configuration = "main"
 
   skip_intermediate_builds                 = true
-  skip_intermediate_builds_branch_filter   = "!main"
+  skip_intermediate_builds_branch_filter   = "*"
   cancel_intermediate_builds               = true
   cancel_intermediate_builds_branch_filter = "!main"
 

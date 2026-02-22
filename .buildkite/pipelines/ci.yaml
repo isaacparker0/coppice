@@ -19,7 +19,7 @@ steps:
       trigger: "playground-deploy"
       branches: "main"
       depends_on: ci
-      async: false
+      async: true
       build:
           branch: "${BUILDKITE_BRANCH}"
           commit: "${BUILDKITE_COMMIT}"
