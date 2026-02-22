@@ -989,6 +989,10 @@ fn evaluate_binary_expression(
                     runtime_int64_from_value(&left_value)?
                         / runtime_int64_from_value(&right_value)?,
                 )),
+                ExecutableBinaryOperator::Modulo => Ok(RuntimeValue::Int64(
+                    runtime_int64_from_value(&left_value)?
+                        % runtime_int64_from_value(&right_value)?,
+                )),
                 ExecutableBinaryOperator::EqualEqual => {
                     Ok(RuntimeValue::Boolean(left_value == right_value))
                 }

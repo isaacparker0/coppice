@@ -267,6 +267,7 @@ pub enum SemanticBinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     EqualEqual,
     NotEqual,
     LessThan,

@@ -88,6 +88,7 @@ pub(crate) enum Symbol {
     Less,
     LessEqual,
     Minus,
+    Percent,
     Pipe,
     Plus,
     RightBrace,
@@ -235,6 +236,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             b'+' => self.single(Symbol::Plus, 1, start, line, column),
+            b'%' => self.single(Symbol::Percent, 1, start, line, column),
             b'*' => self.single(Symbol::Star, 1, start, line, column),
             b'/' => {
                 if self.match_bytes(b"///") {

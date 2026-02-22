@@ -203,6 +203,7 @@ pub enum ExecutableBinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     EqualEqual,
     NotEqual,
     LessThan,

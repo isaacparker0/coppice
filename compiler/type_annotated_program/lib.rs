@@ -236,6 +236,7 @@ pub enum TypeAnnotatedBinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     EqualEqual,
     NotEqual,
     LessThan,

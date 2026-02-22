@@ -509,6 +509,7 @@ fn lower_binary_operator(
         syntax::SyntaxBinaryOperator::Subtract => semantic::SemanticBinaryOperator::Subtract,
         syntax::SyntaxBinaryOperator::Multiply => semantic::SemanticBinaryOperator::Multiply,
         syntax::SyntaxBinaryOperator::Divide => semantic::SemanticBinaryOperator::Divide,
+        syntax::SyntaxBinaryOperator::Modulo => semantic::SemanticBinaryOperator::Modulo,
         syntax::SyntaxBinaryOperator::EqualEqual => semantic::SemanticBinaryOperator::EqualEqual,
         syntax::SyntaxBinaryOperator::NotEqual => semantic::SemanticBinaryOperator::NotEqual,
         syntax::SyntaxBinaryOperator::LessThan => semantic::SemanticBinaryOperator::LessThan,

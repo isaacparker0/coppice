@@ -303,6 +303,7 @@ pub enum SyntaxBinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     EqualEqual,
     NotEqual,
     LessThan,

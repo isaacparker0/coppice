@@ -4,6 +4,7 @@ function main() -> nil {
         and ((7 - 2) == 5)
         and ((3 * 4) == 12)
         and ((8 / 2) == 4)
+        and ((8 % 3) == 2)
         and (false or true) {
         print("operators ok")
         return nil

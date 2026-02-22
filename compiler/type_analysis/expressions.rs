@@ -353,7 +353,8 @@ impl TypeChecker<'_> {
                     SemanticBinaryOperator::Add
                     | SemanticBinaryOperator::Subtract
                     | SemanticBinaryOperator::Multiply
-                    | SemanticBinaryOperator::Divide => {
+                    | SemanticBinaryOperator::Divide
+                    | SemanticBinaryOperator::Modulo => {
                         if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("arithmetic operators require int64 operands", left.span());
                             return Type::Unknown;

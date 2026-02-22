@@ -627,6 +627,24 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 span: span.clone(),
             },
+            SemanticBinaryOperator::Modulo => TypeAnnotatedExpression::Binary {
+                operator: TypeAnnotatedBinaryOperator::Modulo,
+                left: Box::new(type_annotated_expression_from_semantic_expression(
+                    left,
+                    call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
+                    struct_reference_by_expression_id,
+                    enum_variant_reference_by_expression_id,
+                )),
+                right: Box::new(type_annotated_expression_from_semantic_expression(
+                    right,
+                    call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
+                    struct_reference_by_expression_id,
+                    enum_variant_reference_by_expression_id,
+                )),
+                span: span.clone(),
+            },
             SemanticBinaryOperator::EqualEqual => TypeAnnotatedExpression::Binary {
                 operator: TypeAnnotatedBinaryOperator::EqualEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(

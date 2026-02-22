@@ -196,6 +196,8 @@ impl Parser {
                 SyntaxBinaryOperator::Multiply
             } else if self.peek_is_symbol(Symbol::Slash) {
                 SyntaxBinaryOperator::Divide
+            } else if self.peek_is_symbol(Symbol::Percent) {
+                SyntaxBinaryOperator::Modulo
             } else {
                 break;
             };

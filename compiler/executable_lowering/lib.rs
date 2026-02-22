@@ -460,6 +460,7 @@ fn lower_expression(
                 TypeAnnotatedBinaryOperator::Subtract => ExecutableBinaryOperator::Subtract,
                 TypeAnnotatedBinaryOperator::Multiply => ExecutableBinaryOperator::Multiply,
                 TypeAnnotatedBinaryOperator::Divide => ExecutableBinaryOperator::Divide,
+                TypeAnnotatedBinaryOperator::Modulo => ExecutableBinaryOperator::Modulo,
                 TypeAnnotatedBinaryOperator::EqualEqual => ExecutableBinaryOperator::EqualEqual,
                 TypeAnnotatedBinaryOperator::NotEqual => ExecutableBinaryOperator::NotEqual,
                 TypeAnnotatedBinaryOperator::LessThan => ExecutableBinaryOperator::LessThan,
