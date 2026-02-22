@@ -908,6 +908,7 @@ fn compile_binary_expression(
         | ExecutableBinaryOperator::Subtract
         | ExecutableBinaryOperator::Multiply
         | ExecutableBinaryOperator::Divide
+        | ExecutableBinaryOperator::Modulo
         | ExecutableBinaryOperator::LessThan
         | ExecutableBinaryOperator::LessThanOrEqual
         | ExecutableBinaryOperator::GreaterThan
@@ -937,6 +938,10 @@ fn compile_binary_expression(
                 }),
                 ExecutableBinaryOperator::Divide => Ok(TypedValue {
                     value: Some(function_builder.ins().sdiv(left_value, right_value)),
+                    type_reference: ExecutableTypeReference::Int64,
+                }),
+                ExecutableBinaryOperator::Modulo => Ok(TypedValue {
+                    value: Some(function_builder.ins().srem(left_value, right_value)),
                     type_reference: ExecutableTypeReference::Int64,
                 }),
                 ExecutableBinaryOperator::LessThan
