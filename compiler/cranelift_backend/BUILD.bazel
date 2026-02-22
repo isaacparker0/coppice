@@ -23,7 +23,6 @@ rust_library(
         "@crates//:cranelift-module",
         "@crates//:cranelift-native",
         "@crates//:cranelift-object",
-        "@rules_rust//tools/runfiles",
     ],
 )
 
