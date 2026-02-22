@@ -42,8 +42,10 @@ Planned direction:
    guarantees.
 3. Define **executable program + runtime interface contracts before significant
    backend implementation**.
-4. Implement first runnable backend as a **replaceable backend target** behind
-   shared IR boundaries (not an ad hoc transpiler path).
+4. Implement first runnable backend behind shared IR boundaries (not an ad hoc
+   transpiler path), with the planned successor backend being direct AOT
+   Cranelift and any multi-backend overlap treated as temporary migration state
+   only.
 5. Defer intersection types and advanced async/runtime details until core
    ownership/safety contracts are stable.
 6. Preserve deterministic semantics across all builds (no mode-dependent
@@ -175,7 +177,7 @@ Scope:
 Rationale:
 
 1. Prevents backend/language semantic drift.
-2. Enables multiple backend targets against the same contract.
+2. Enables temporary migration overlap without semantic drift.
 
 ### 6) Backend Implementation Strategy
 
@@ -183,7 +185,7 @@ Options considered:
 
 1. Direct Cranelift implementation immediately.
 2. Ad hoc transpiler path to validate quickly.
-3. Shared executable program with replaceable backend targets.
+3. Shared executable program with temporary backend replacement path.
 
 Direction:
 
@@ -195,12 +197,17 @@ Clarification:
   shared executable program and runtime contracts. This is a backend
   implementation choice, not a semantic fork and not a throwaway transpiler
   architecture.
+- If more than one backend implementation exists during migration, that overlap
+  is temporary and should be removed after transition.
+- Current transition target is direct AOT Cranelift, but this does not commit
+  long-term backend strategy permanently.
 
 Rationale:
 
 1. Maintains long-term architecture integrity.
 2. Enables faster runnable-language feedback loops.
-3. Keeps path open to direct Cranelift backend without semantic rewrite.
+3. Keeps path open to direct AOT Cranelift transition without semantic rewrite,
+   while allowing long-term backend strategy to evolve later if needed.
 
 ### 7) Interfaces and Intersection Types
 
@@ -334,7 +341,7 @@ MVP contract decisions:
 
 Rationale:
 
-1. Protects multi-backend compatibility.
+1. Protects migration compatibility during temporary backend overlap.
 2. Avoids locking unstable runtime layout internals too early.
 3. Keeps MVP codegen tractable while preserving long-term architecture.
 

@@ -20,12 +20,30 @@ Status: Draft.
 
 1. Add runnable backend capability without compromising current frontend
    architecture.
-2. Preserve a clean path to long-term direct backend targets.
+2. Preserve a clean path to one long-term production backend, with any
+   intermediate backend overlap treated as temporary migration scaffolding.
 3. Keep `check` fast and frontend-only.
 4. Enforce explicit ownership boundaries between compiler and runtime concerns.
 
 Toolchain policy for build/run execution is defined in
 `specs/TOOLCHAIN_EXECUTION_MODEL.md`.
+
+---
+
+## Backend Transition Policy
+
+1. Long-term steady state is one production backend path.
+2. The currently planned successor backend for transition is direct AOT
+   Cranelift.
+3. This planned successor does not permanently lock the ultimate long-term
+   backend choice.
+4. Any period with more than one backend implementation is temporary migration
+   state only.
+5. Temporary overlap is allowed only to derisk migration and must be removed
+   once the planned AOT Cranelift path reaches required coverage for the
+   supported language slice.
+6. Multi-backend parity testing, when present, is migration validation, not a
+   permanent product contract.
 
 ---
 
@@ -42,7 +60,7 @@ Layout:
 Pros:
 
 1. Strong separation of concerns.
-2. Scales with multiple backend targets.
+2. Supports short-lived temporary overlap during backend migration.
 3. Avoids compiler-runtime dependency bleed.
 4. Aligns with current crate-per-phase structure.
 
@@ -216,10 +234,13 @@ Optional developer flags (non-user-contract initially):
 1. Expand construct support (control flow, types, package edges).
 2. Improve diagnostics for unsupported codegen paths.
 
-### Phase 3: Backend Diversification
+### Phase 3: Backend Replacement (Temporary Transition Only)
 
-1. Introduce/expand direct backend target(s) against same IR contract.
-2. Keep behavior parity tests between backends.
+1. Introduce direct AOT Cranelift backend against the same IR contract.
+2. If temporary overlap is required, keep migration parity tests between old and
+   new backend paths only for the overlap window.
+3. Remove transitional backend path once AOT Cranelift coverage and behavior
+   requirements are met.
 
 ---
 
@@ -299,7 +320,8 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 ### Critical gaps to address next
 
 1. Runtime interface v0 contract details are still being finalized.
-2. Cross-backend parity testing is still planned (single backend currently).
+2. Migration validation scope and temporary overlap parity tests are still being
+   finalized.
 3. Executable lowering and type-annotated artifact coverage is intentionally
    narrow and should expand with language feature support.
 
