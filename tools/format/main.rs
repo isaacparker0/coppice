@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::mpsc;
@@ -17,42 +19,37 @@ struct CommandLine {
 
 #[derive(Copy, Clone, Subcommand)]
 enum Mode {
-    /// Check formatting without modifying files.
     Check,
-    /// Format files in place.
     Fix,
 }
 
 #[derive(Copy, Clone)]
-enum Tool {
-    Deno,
-    Gofmt,
-    Rustfmt,
-    Shfmt,
-    Buildifier,
-    Taplo,
-    KeepSorted,
-    Tofu,
+enum Selector {
+    Extension(&'static str),
+    ExactFirstLine(&'static str),
 }
 
-enum FileSelector {
-    Extensions(&'static [&'static str]),
+#[derive(Copy, Clone)]
+enum Scope {
     AllFiles,
+    Selectors(&'static [Selector]),
 }
 
-struct Formatter {
-    name: &'static str,
-    tool: Tool,
+#[derive(Copy, Clone)]
+struct ToolConfig {
+    display_name: &'static str,
+    runfile_path: &'static str,
     check_args: &'static [&'static str],
     fix_args: &'static [&'static str],
-    selector: FileSelector,
+    scope: Scope,
 }
 
-struct FormatterInvocation {
-    name: &'static str,
+struct RuntimeToolConfig {
+    display_name: &'static str,
     bin: PathBuf,
-    args: Vec<String>,
-    selector: FileSelector,
+    check_args: &'static [&'static str],
+    fix_args: &'static [&'static str],
+    scope: Scope,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -61,62 +58,72 @@ enum FormatterOutcome {
     Failure,
 }
 
-const FORMATTERS: [Formatter; 8] = [
-    Formatter {
-        name: "JSON/Markdown/HTML/CSS/JS/YAML",
-        tool: Tool::Deno,
+const TOOL_CONFIGS: [ToolConfig; 8] = [
+    ToolConfig {
+        display_name: "deno fmt",
+        runfile_path: env!("DENO"),
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        selector: FileSelector::Extensions(&["json", "md", "html", "css", "js", "yaml"]),
+        scope: Scope::Selectors(&[
+            Selector::Extension("json"),
+            Selector::Extension("md"),
+            Selector::Extension("html"),
+            Selector::Extension("css"),
+            Selector::Extension("js"),
+            Selector::Extension("yaml"),
+        ]),
     },
-    Formatter {
-        name: "Go",
-        tool: Tool::Gofmt,
+    ToolConfig {
+        display_name: "gofmt",
+        runfile_path: env!("GOFMT"),
         check_args: &["-d"],
         fix_args: &["-w"],
-        selector: FileSelector::Extensions(&["go"]),
+        scope: Scope::Selectors(&[Selector::Extension("go")]),
     },
-    Formatter {
-        name: "Rust",
-        tool: Tool::Rustfmt,
+    ToolConfig {
+        display_name: "rustfmt",
+        runfile_path: env!("RUSTFMT"),
         check_args: &["--check"],
         fix_args: &[],
-        selector: FileSelector::Extensions(&["rs"]),
+        scope: Scope::Selectors(&[Selector::Extension("rs")]),
     },
-    Formatter {
-        name: "Shell",
-        tool: Tool::Shfmt,
+    ToolConfig {
+        display_name: "shfmt",
+        runfile_path: env!("SHFMT"),
         check_args: &["-d"],
         fix_args: &["-w"],
-        selector: FileSelector::Extensions(&["sh"]),
+        scope: Scope::Selectors(&[
+            Selector::Extension("sh"),
+            Selector::ExactFirstLine("#!/usr/bin/env bash"),
+        ]),
     },
-    Formatter {
-        name: "Starlark",
-        tool: Tool::Buildifier,
+    ToolConfig {
+        display_name: "buildifier",
+        runfile_path: env!("BUILDIFIER"),
         check_args: &["-lint=off", "-mode=check"],
         fix_args: &["-lint=off", "-mode=fix"],
-        selector: FileSelector::Extensions(&["bzl", "bazel"]),
+        scope: Scope::Selectors(&[Selector::Extension("bzl"), Selector::Extension("bazel")]),
     },
-    Formatter {
-        name: "TOML",
-        tool: Tool::Taplo,
+    ToolConfig {
+        display_name: "taplo",
+        runfile_path: env!("TAPLO"),
         check_args: &["fmt", "--check"],
         fix_args: &["fmt"],
-        selector: FileSelector::Extensions(&["toml"]),
+        scope: Scope::Selectors(&[Selector::Extension("toml")]),
     },
-    Formatter {
-        name: "keep-sorted",
-        tool: Tool::KeepSorted,
+    ToolConfig {
+        display_name: "keep-sorted",
+        runfile_path: env!("KEEP_SORTED"),
         check_args: &["--mode=lint"],
         fix_args: &["--mode=fix"],
-        selector: FileSelector::AllFiles,
+        scope: Scope::AllFiles,
     },
-    Formatter {
-        name: "Terraform",
-        tool: Tool::Tofu,
+    ToolConfig {
+        display_name: "tofu fmt",
+        runfile_path: env!("TOFU"),
         check_args: &["fmt", "-check", "-diff"],
         fix_args: &["fmt"],
-        selector: FileSelector::Extensions(&["tf"]),
+        scope: Scope::Selectors(&[Selector::Extension("tf")]),
     },
 ];
 
@@ -129,62 +136,69 @@ fn main() -> ExitCode {
         std::process::exit(1);
     });
 
-    let tools = read_tools_from_build();
-    let formatter_invocations: Vec<FormatterInvocation> = FORMATTERS
-        .iter()
-        .map(|formatter| FormatterInvocation {
-            name: formatter.name,
-            bin: match formatter.tool {
-                Tool::Deno => tools.deno.clone(),
-                Tool::Gofmt => tools.gofmt.clone(),
-                Tool::Rustfmt => tools.rustfmt.clone(),
-                Tool::Shfmt => tools.shfmt.clone(),
-                Tool::Buildifier => tools.buildifier.clone(),
-                Tool::Taplo => tools.taplo.clone(),
-                Tool::KeepSorted => tools.keep_sorted.clone(),
-                Tool::Tofu => tools.tofu.clone(),
-            },
-            args: match mode {
-                Mode::Check => formatter.check_args,
-                Mode::Fix => formatter.fix_args,
-            }
-            .iter()
-            .map(|arg| (*arg).to_string())
-            .collect(),
-            selector: match formatter.selector {
-                FileSelector::Extensions(extensions) => FileSelector::Extensions(extensions),
-                FileSelector::AllFiles => FileSelector::AllFiles,
-            },
-        })
-        .collect();
+    let runfiles = Runfiles::create().unwrap_or_else(|e| {
+        eprintln!("error: failed to initialize runfiles: {e}");
+        std::process::exit(1);
+    });
+    let mut runtime_tool_configs = Vec::with_capacity(TOOL_CONFIGS.len());
+    for tool_config in &TOOL_CONFIGS {
+        let bin = runfiles
+            .rlocation_from(tool_config.runfile_path, env!("REPOSITORY_NAME"))
+            .unwrap_or_else(|| {
+                eprintln!(
+                    "error: failed to resolve runfile for {}: {}",
+                    tool_config.display_name, tool_config.runfile_path
+                );
+                std::process::exit(1);
+            });
+        runtime_tool_configs.push(RuntimeToolConfig {
+            display_name: tool_config.display_name,
+            check_args: tool_config.check_args,
+            fix_args: tool_config.fix_args,
+            scope: tool_config.scope,
+            bin,
+        });
+    }
 
-    // Build routing tables for extension-based and all-file formatters.
-    let mut formatter_index_by_extension: HashMap<&str, usize> = HashMap::new();
-    let mut formatter_indices_for_all_files: Vec<usize> = Vec::new();
-    let mut formatter_indices_for_extension_files: Vec<usize> = Vec::new();
-    for (index, invocation) in formatter_invocations.iter().enumerate() {
-        match invocation.selector {
-            FileSelector::Extensions(extensions) => {
-                formatter_indices_for_extension_files.push(index);
-                for extension in extensions {
-                    if let Some(existing_index) =
-                        formatter_index_by_extension.insert(extension, index)
-                    {
-                        eprintln!(
-                            "error: extension '.{extension}' is configured for multiple formatters: {} and {}",
-                            formatter_invocations[existing_index].name,
-                            formatter_invocations[index].name
-                        );
-                        std::process::exit(1);
+    // Build derived routing indexes from tool configs.
+    let mut tool_indices_for_all_files: Vec<usize> = Vec::new();
+    let mut tool_index_by_extension: HashMap<&str, usize> = HashMap::new();
+    let mut tool_index_by_exact_first_line: HashMap<&str, usize> = HashMap::new();
+    for (tool_index, runtime_tool_config) in runtime_tool_configs.iter().enumerate() {
+        match runtime_tool_config.scope {
+            Scope::AllFiles => tool_indices_for_all_files.push(tool_index),
+            Scope::Selectors(selectors) => {
+                for selector in selectors {
+                    match selector {
+                        Selector::Extension(extension) => {
+                            if let Some(existing_tool_index) =
+                                tool_index_by_extension.insert(extension, tool_index)
+                            {
+                                eprintln!(
+                                    "error: extension '.{extension}' is configured for multiple tools: {} and {}",
+                                    runtime_tool_configs[existing_tool_index].display_name,
+                                    runtime_tool_configs[tool_index].display_name
+                                );
+                                std::process::exit(1);
+                            }
+                        }
+                        Selector::ExactFirstLine(exact_first_line) => {
+                            if let Some(existing_tool_index) =
+                                tool_index_by_exact_first_line.insert(exact_first_line, tool_index)
+                            {
+                                eprintln!(
+                                    "error: exact first line '{}' is configured for multiple tools: {} and {}",
+                                    exact_first_line,
+                                    runtime_tool_configs[existing_tool_index].display_name,
+                                    runtime_tool_configs[tool_index].display_name
+                                );
+                                std::process::exit(1);
+                            }
+                        }
                     }
                 }
             }
-            FileSelector::AllFiles => formatter_indices_for_all_files.push(index),
         }
-    }
-
-    if formatter_index_by_extension.is_empty() && formatter_indices_for_all_files.is_empty() {
-        return ExitCode::SUCCESS;
     }
 
     // Single `git ls-files` to discover all tracked + untracked, non-ignored
@@ -209,71 +223,82 @@ fn main() -> ExitCode {
         .output()
         .expect("failed to run git ls-files --deleted");
 
-    let deleted: std::collections::HashSet<String> =
-        String::from_utf8_lossy(&deleted_output.stdout)
-            .lines()
-            .map(String::from)
-            .collect();
+    let deleted: HashSet<String> = String::from_utf8_lossy(&deleted_output.stdout)
+        .lines()
+        .map(String::from)
+        .collect();
 
-    // Partition files into per-formatter file lists.
-    let mut files_by_formatter_index: Vec<Vec<String>> = vec![vec![]; formatter_invocations.len()];
+    // Partition files into per-tool file lists.
+    let mut files_by_tool_index: Vec<Vec<String>> = vec![Vec::new(); runtime_tool_configs.len()];
+    let mut first_line_by_file: HashMap<String, Option<String>> = HashMap::new();
 
     for line in String::from_utf8_lossy(&git_output.stdout).lines() {
         if deleted.contains(line) {
             continue;
         }
 
-        for &index in &formatter_indices_for_all_files {
-            files_by_formatter_index[index].push(line.to_string());
+        for &tool_index in &tool_indices_for_all_files {
+            files_by_tool_index[tool_index].push(line.to_string());
         }
 
         let path = Path::new(line);
-        if let Some(extension) = path.extension().and_then(|e| e.to_str())
-            && let Some(&formatter_index) = formatter_index_by_extension.get(extension)
+        if let Some(extension) = path.extension().and_then(|value| value.to_str())
+            && let Some(&tool_index) = tool_index_by_extension.get(extension)
         {
-            files_by_formatter_index[formatter_index].push(line.to_string());
+            files_by_tool_index[tool_index].push(line.to_string());
+        }
+
+        if path.extension().is_none()
+            && let Some(first_line) =
+                first_line_from_file(line, &workspace_directory, &mut first_line_by_file)
+        {
+            let exact_first_line = first_line.trim_end_matches(['\r', '\n']);
+            if let Some(&tool_index) = tool_index_by_exact_first_line.get(exact_first_line) {
+                files_by_tool_index[tool_index].push(line.to_string());
+            }
         }
     }
 
-    // Run all all-file formatters sequentially to avoid concurrent edits.
+    // Run all-file tools sequentially to avoid concurrent edits.
     let mut failed = false;
-    for &index in &formatter_indices_for_all_files {
-        let formatter_invocation = &formatter_invocations[index];
-        let files = &files_by_formatter_index[index];
+    for &tool_index in &tool_indices_for_all_files {
+        let files = &files_by_tool_index[tool_index];
         if files.is_empty() {
             continue;
         }
 
-        failed |= run_and_report_formatter(mode, formatter_invocation, files, &workspace_directory)
-            == FormatterOutcome::Failure;
+        failed |= run_and_report_tool(
+            mode,
+            &runtime_tool_configs[tool_index],
+            files,
+            &workspace_directory,
+        ) == FormatterOutcome::Failure;
     }
 
-    // Run extension-based formatters in parallel.
+    // Run tools with selectors in parallel.
     let (sender, receiver) = mpsc::channel();
-
     thread::scope(|scope| {
-        for &index in &formatter_indices_for_extension_files {
-            let formatter_invocation = &formatter_invocations[index];
-            let files = &files_by_formatter_index[index];
+        for (tool_index, files) in files_by_tool_index.iter().enumerate() {
             if files.is_empty() {
                 continue;
             }
-
+            if matches!(runtime_tool_configs[tool_index].scope, Scope::AllFiles) {
+                continue;
+            }
             let sender = sender.clone();
             let workspace = &workspace_directory;
-
+            let runtime_tool_config = &runtime_tool_configs[tool_index];
             scope.spawn(move || {
                 sender
-                    .send(run_and_report_formatter(
+                    .send(run_and_report_tool(
                         mode,
-                        formatter_invocation,
+                        runtime_tool_config,
                         files,
                         workspace,
                     ))
                     .unwrap();
             });
         }
-
         drop(sender);
 
         for formatter_outcome in receiver {
@@ -293,74 +318,38 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-struct Tools {
-    deno: PathBuf,
-    gofmt: PathBuf,
-    rustfmt: PathBuf,
-    shfmt: PathBuf,
-    buildifier: PathBuf,
-    taplo: PathBuf,
-    keep_sorted: PathBuf,
-    tofu: PathBuf,
-}
-
-fn read_tools_from_build() -> Tools {
-    let runfiles = Runfiles::create().unwrap_or_else(|e| {
-        eprintln!("error: failed to initialize runfiles: {e}");
-        std::process::exit(1);
-    });
-
-    Tools {
-        deno: rlocation_from(&runfiles, env!("DENO"), "DENO"),
-        gofmt: rlocation_from(&runfiles, env!("GOFMT"), "GOFMT"),
-        rustfmt: rlocation_from(&runfiles, env!("RUSTFMT"), "RUSTFMT"),
-        shfmt: rlocation_from(&runfiles, env!("SHFMT"), "SHFMT"),
-        buildifier: rlocation_from(&runfiles, env!("BUILDIFIER"), "BUILDIFIER"),
-        taplo: rlocation_from(&runfiles, env!("TAPLO"), "TAPLO"),
-        keep_sorted: rlocation_from(&runfiles, env!("KEEP_SORTED"), "KEEP_SORTED"),
-        tofu: rlocation_from(&runfiles, env!("TOFU"), "TOFU"),
-    }
-}
-
-fn rlocation_from(runfiles: &Runfiles, path: &str, name: &str) -> PathBuf {
-    runfiles
-        .rlocation_from(path, env!("REPOSITORY_NAME"))
-        .unwrap_or_else(|| {
-            eprintln!("error: failed to resolve runfile for {name}: {path}");
-            std::process::exit(1);
-        })
-}
-
-fn run_and_report_formatter(
+fn run_and_report_tool(
     mode: Mode,
-    formatter_invocation: &FormatterInvocation,
+    runtime_tool_config: &RuntimeToolConfig,
     files: &[String],
     workspace_directory: &str,
 ) -> FormatterOutcome {
+    let args = match mode {
+        Mode::Check => runtime_tool_config.check_args,
+        Mode::Fix => runtime_tool_config.fix_args,
+    };
+
     let start = Instant::now();
 
-    let output = Command::new(&formatter_invocation.bin)
-        .args(&formatter_invocation.args)
+    let output = Command::new(&runtime_tool_config.bin)
+        .args(args)
         .args(files)
         .current_dir(workspace_directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
-        .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", formatter_invocation.name));
+        .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", runtime_tool_config.display_name));
 
     let elapsed_ms = start.elapsed().as_millis();
-    let formatter_name = formatter_invocation.name;
+    let tool_name = runtime_tool_config.display_name;
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     if output.status.success() {
-        match mode {
-            Mode::Check => eprintln!("Checked {formatter_name} in {elapsed_ms}ms"),
-            Mode::Fix => eprintln!("Formatted {formatter_name} in {elapsed_ms}ms"),
-        }
+        eprintln!("Ran {tool_name} in {elapsed_ms}ms");
         return FormatterOutcome::Success;
     }
 
-    eprintln!("FAILED {formatter_name} in {elapsed_ms}ms");
+    eprintln!("FAILED {tool_name} in {elapsed_ms}ms");
     if !stderr.is_empty() {
         eprint!("{stderr}");
     }
@@ -368,4 +357,24 @@ fn run_and_report_formatter(
         eprint!("{stdout}");
     }
     FormatterOutcome::Failure
+}
+
+fn first_line_from_file(
+    relative_path: &str,
+    workspace_directory: &str,
+    first_line_by_file: &mut HashMap<String, Option<String>>,
+) -> Option<String> {
+    if let Some(first_line) = first_line_by_file.get(relative_path) {
+        return first_line.clone();
+    }
+
+    let full_path = Path::new(workspace_directory).join(relative_path);
+    let first_line = File::open(full_path).ok().and_then(|file| {
+        let mut first_line = String::new();
+        let mut reader = BufReader::new(file);
+        reader.read_line(&mut first_line).ok()?;
+        Some(first_line)
+    });
+    first_line_by_file.insert(relative_path.to_string(), first_line.clone());
+    first_line
 }
