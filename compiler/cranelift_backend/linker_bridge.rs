@@ -32,6 +32,7 @@ pub(crate) fn link_executable(
             .arg(object_path)
             .arg("-o")
             .arg(executable_path)
+            .arg("-fuse-ld=lld")
             .output()
             .map_err(|error| {
                 build_failed(

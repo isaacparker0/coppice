@@ -36,21 +36,12 @@ resource "buildkite_cluster_secret" "buildbuddy_api_key" {
   cluster_id = buildkite_cluster.default.uuid
   key        = "BUILDBUDDY_API_KEY"
   value      = var.buildbuddy_api_key
-  policy     = <<-EOT
-    - pipeline_slug: ci
-    - pipeline_slug: playground-deploy
-      build_branch: main
-  EOT
 }
 
 resource "buildkite_cluster_secret" "docr_push_token" {
   cluster_id = buildkite_cluster.default.uuid
   key        = "DOCR_PUSH_TOKEN"
   value      = var.docr_push_token
-  policy     = <<-EOT
-    - pipeline_slug: playground-deploy
-      build_branch: main
-  EOT
 }
 
 resource "buildkite_pipeline" "ci" {
