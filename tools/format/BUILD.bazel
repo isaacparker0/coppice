@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
-load("//tools/bazel/macros:rust.bzl", "rust_binary")
+load("//tools/bazel/macros:rust.bzl", "rust_binary", "rust_library")
 
 copy_file(
     name = "taplo_tool",
@@ -12,6 +12,21 @@ copy_file(
 rust_binary(
     name = "main",
     srcs = ["main.rs"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":format",
+        "@crates//:clap",
+    ],
+)
+
+rust_library(
+    name = "format",
+    srcs = [
+        "built_in_tools/mod.rs",
+        "built_in_tools/normalize_line_endings.rs",
+        "built_in_tools/normalize_trailing_newlines.rs",
+        "lib.rs",
+    ],
     data = [
         ":taplo_tool",
         "@buildifier_prebuilt//:buildifier",
@@ -32,7 +47,7 @@ rust_binary(
         "SHFMT": "$(rlocationpath @multitool//tools/shfmt)",
         "TAPLO": "$(rlocationpath :taplo_tool)",
     },
-    visibility = ["//visibility:public"],
+    visibility = ["//:__subpackages__"],
     deps = [
         "@crates//:clap",
         "@rules_rust//tools/runfiles",
