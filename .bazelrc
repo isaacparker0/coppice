@@ -2,7 +2,7 @@ common --enable_bzlmod
 
 common --incompatible_strict_action_env
 common --sandbox_default_allow_network=false
-common --@rules_rust//rust/settings:experimental_use_sh_toolchain_for_bootstrap_process_wrapper
+# common --@rules_rust//rust/settings:experimental_use_sh_toolchain_for_bootstrap_process_wrapper
 common --@toolchains_llvm_bootstrapped//config:experimental_stub_libgcc_s=True
 common --@rules_go//go/config:pure
 

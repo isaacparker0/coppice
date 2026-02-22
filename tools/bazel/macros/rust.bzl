@@ -1,6 +1,10 @@
 # buildifier: disable=bzl-visibility
 load("@rules_rs//rs/private:rust_deps.bzl", "rust_deps")
-load("@rules_rust//rust:defs.bzl", _rust_binary = "rust_binary", _rust_library = "rust_library", _rust_test = "rust_test")
+# load("@rules_rust//rust:defs.bzl", _rust_binary = "rust_binary", _rust_library = "rust_library", _rust_test = "rust_test")
+
+load('@rules_rs//rs:rust_binary.bzl',  _rust_binary = "rust_binary")
+load('@rules_rs//rs:rust_library.bzl',  _rust_library= "rust_library")
+load('@rules_rs//rs:rust_test.bzl',  _rust_test= "rust_test")
 
 def rust_binary(
         name,
