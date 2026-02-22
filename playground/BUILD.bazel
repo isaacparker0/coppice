@@ -13,13 +13,13 @@ pkg_tar(
     # TODO(isaac): Remove this temporary image layer once compiler linking is
     # fully hermetic and no longer depends on `clang++` on PATH.
     name = "playground_llvm_toolchain_layer",
-    include_runfiles = True,
     srcs = [
         "@toolchains_llvm_bootstrapped//tools:clang",
         "@toolchains_llvm_bootstrapped//tools:clang++",
         "@toolchains_llvm_bootstrapped//tools:ld.lld",
         "@toolchains_llvm_bootstrapped//tools:lld",
     ],
+    include_runfiles = True,
     package_dir = "/opt/coppice-llvm/bin",
 )
 
