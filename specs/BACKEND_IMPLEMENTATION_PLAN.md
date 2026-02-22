@@ -122,7 +122,7 @@ Decision:
   naming policy; these remain backend implementation details unless later
   promoted to a shared linkage contract.
 
-4. `compiler/cranelift_backend` (future target)
+4. `compiler/cranelift_backend`
 
 - Emits machine code/object output from the same `executable_program` and
   `runtime_interface` contracts.
@@ -289,10 +289,16 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 - `coppice run <path-to-bin.copp> [--output-dir ...]`
 - `build`/`run` require an explicit `.bin.copp` file path.
 
-3. Toolchain execution for Rust emission is hermetic in monorepo CLI mode:
+3. Toolchain execution intent is fully hermetic across all supported execution
+   modes:
 
 - compiler resolves tool binaries from Bazel-provided runfiles/runtime data.
-- compiler does not shell out to host `rustc`/`clang`.
+- backend code generation is in-process (no host `rustc` shell-out).
+- final executable linking currently uses a temporary host-linker bridge
+  (`xcrun clang++` on macOS, `clang++` on Linux) isolated in
+  `compiler/cranelift_backend/linker_bridge.rs`.
+- this temporary bridge is implementation debt, not accepted steady-state
+  behavior.
 
 4. Runnable subset coverage extends beyond the original minimal slice:
 
@@ -307,7 +313,9 @@ slice. It is intentionally narrow and is expected to expand incrementally.
 ### Where this is aligned
 
 1. Matches planned backend package boundaries and keeps `check` frontend-first.
-2. Matches `specs/TOOLCHAIN_EXECUTION_MODEL.md` hermetic toolchain policy.
+2. Aligns with `specs/TOOLCHAIN_EXECUTION_MODEL.md` package boundaries and
+   execution model direction, with one explicitly scoped temporary linker
+   exception.
 3. Driver orchestration is single-pass per command and reused by `check` and
    `build`/`run`, avoiding split correctness contracts.
 4. Executable lowering consumes `type_annotated_program` (typed artifact
@@ -324,6 +332,8 @@ slice. It is intentionally narrow and is expected to expand incrementally.
    finalized.
 3. Executable lowering and type-annotated artifact coverage is intentionally
    narrow and should expand with language feature support.
+4. Replace the temporary host-linker bridge with a fully hermetic linker
+   integration for monorepo CLI `build`/`run`.
 
 ---
 

@@ -9,12 +9,31 @@ pkg_tar(
     package_dir = "/app",
 )
 
+pkg_tar(
+    # TODO(isaac): Remove this temporary image layer once compiler linking is
+    # fully hermetic and no longer depends on `clang++` on PATH.
+    name = "playground_llvm_toolchain_layer",
+    srcs = [
+        "@toolchains_llvm_bootstrapped//tools:clang",
+        "@toolchains_llvm_bootstrapped//tools:clang++",
+        "@toolchains_llvm_bootstrapped//tools:ld.lld",
+        "@toolchains_llvm_bootstrapped//tools:lld",
+    ],
+    package_dir = "/opt/coppice-llvm/bin",
+)
+
 oci_image(
     name = "playground_image_amd64",
     base = "@debian_bookworm_slim_linux_amd64",
     entrypoint = ["/app/main"],
+    env = {
+        "PATH": "/opt/coppice-llvm/bin:/usr/bin:/bin",
+    },
     tags = ["manual"],
-    tars = [":playground_image_layer_amd64"],
+    tars = [
+        ":playground_llvm_toolchain_layer",
+        ":playground_image_layer_amd64",
+    ],
     visibility = ["//visibility:public"],
 )
 
