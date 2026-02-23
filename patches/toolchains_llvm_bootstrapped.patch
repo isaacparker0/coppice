@@ -1,7 +1,7 @@
 diff --git toolchain/BUILD.bazel toolchain/BUILD.bazel
 --- toolchain/BUILD.bazel
 +++ toolchain/BUILD.bazel
-@@ -329,6 +329,17 @@ cc_artifact_name_pattern(
+@@ -329,6 +329,46 @@ cc_artifact_name_pattern(
      visibility = ["//visibility:public"],
  )
  
@@ -16,9 +16,48 @@ diff --git toolchain/BUILD.bazel toolchain/BUILD.bazel
 +    visibility = ["//visibility:public"],
 +)
 +
++alias(
++    name = "linker_contract",
++    actual = select({
++        "//platforms/config:macos_aarch64": "//tools/internal:linker-contract-macos-aarch64",
++        "//platforms/config:linux_x86_64": "//tools/internal:linker-contract-linux-x86_64",
++        "//platforms/config:linux_aarch64": "//tools/internal:linker-contract-linux-aarch64",
++        "//conditions:default": "//tools/internal:linker-contract-macos-aarch64",
++    }),
++    visibility = ["//visibility:public"],
++)
++
++alias(
++    name = "linker_contract_macos_aarch64",
++    actual = "//tools/internal:linker-contract-macos-aarch64",
++    visibility = ["//visibility:public"],
++)
++
++alias(
++    name = "linker_contract_linux_x86_64",
++    actual = "//tools/internal:linker-contract-linux-x86_64",
++    visibility = ["//visibility:public"],
++)
++
++alias(
++    name = "linker_contract_linux_aarch64",
++    actual = "//tools/internal:linker-contract-linux-aarch64",
++    visibility = ["//visibility:public"],
++)
++
  cc_action_type_set(
      name = "cpp_compile_actions_without_header_parsing",
      # See https://github.com/bazelbuild/rules_cc/blob/6dd2ef1fefbca004da449578c00d8ffb91a459ca/cc/toolchains/actions/BUILD#L224
+@@ -370,8 +410,8 @@ bzl_library(
+     name = "exec_stage0_binary",
+     srcs = ["exec_stage0_binary.bzl"],
+     deps = [
++        "@llvm//toolchain/runtimes:with_cfg_runtimes_common",
+         "@rules_cc//cc:core_rules",
+-        "@toolchains_llvm_bootstrapped//toolchain/runtimes:with_cfg_runtimes_common",
+         "@with_cfg.bzl//:with_cfg",
+     ],
+ )
 diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 --- tools/internal/BUILD.bazel
 +++ tools/internal/BUILD.bazel
@@ -28,10 +67,105 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
  
  cc_binary(
      name = "header-parser",
-@@ -11,3 +12,154 @@ cc_binary(
+@@ -11,3 +12,253 @@ cc_binary(
      srcs = ["static_library_validator.cc"],
      visibility = ["//visibility:public"],
  )
++
++genrule(
++    name = "linker_contract_macos_aarch64",
++    outs = ["linker_contract_macos_aarch64.txt"],
++    cmd = """
++cat > $@ <<'CONTRACT'
++# directive<TAB>payload
++setenv\tZERO_AR_DATE\t1
++arg\t-target
++arg\taarch64-apple-darwin
++arg\t-fuse-ld=lld
++arg\t-resource-dir
++runfile\t$(rlocationpath //runtimes:resource_directory)
++arg\t-rtlib=compiler-rt
++runfile_prefix\t--sysroot=\t$(rlocationpath @macosx15.4.sdk//sysroot)
++arg\t-mmacosx-version-min=14.0
++arg\t-headerpad_max_install_names
++arg\t-Wl,-no_warn_duplicate_libraries
++arg\t-Wl,-oso_prefix,.
++CONTRACT
++""",
++    target_compatible_with = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
++    tools = [
++        "//runtimes:resource_directory",
++        "@macosx15.4.sdk//sysroot",
++    ],
++)
++
++genrule(
++    name = "linker_contract_linux_x86_64",
++    outs = ["linker_contract_linux_x86_64.txt"],
++    cmd = """
++cat > $@ <<'CONTRACT'
++# directive<TAB>payload
++arg\t-target
++arg\tx86_64-linux-gnu
++arg\t-fuse-ld=lld
++arg\t-resource-dir
++runfile\t$(rlocationpath //runtimes:resource_directory)
++arg\t-rtlib=compiler-rt
++arg\t--sysroot=/dev/null
++arg\t-nostdlib++
++arg\t--unwindlib=none
++arg\t-Wl,-no-as-needed
++arg\t-Wl,-z,relro,-z,now
++runfile_prefix\t-B\t$(rlocationpath //runtimes:crt_objects_directory)
++runfile_prefix\t-L\t$(rlocationpath //runtimes/glibc:glibc_library_search_directory)
++arg\t-Wl,--push-state
++arg\t-Wl,--as-needed
++arg\t-lpthread
++arg\t-ldl
++arg\t-Wl,--pop-state
++CONTRACT
++""",
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
++    tools = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++    ],
++)
++
++genrule(
++    name = "linker_contract_linux_aarch64",
++    outs = ["linker_contract_linux_aarch64.txt"],
++    cmd = """
++cat > $@ <<'CONTRACT'
++# directive<TAB>payload
++arg\t-target
++arg\taarch64-linux-gnu
++arg\t-fuse-ld=lld
++arg\t-resource-dir
++runfile\t$(rlocationpath //runtimes:resource_directory)
++arg\t-rtlib=compiler-rt
++arg\t--sysroot=/dev/null
++arg\t-nostdlib++
++arg\t--unwindlib=none
++arg\t-Wl,-no-as-needed
++arg\t-Wl,-z,relro,-z,now
++runfile_prefix\t-B\t$(rlocationpath //runtimes:crt_objects_directory)
++runfile_prefix\t-L\t$(rlocationpath //runtimes/glibc:glibc_library_search_directory)
++arg\t-Wl,--push-state
++arg\t-Wl,--as-needed
++arg\t-lpthread
++arg\t-ldl
++arg\t-Wl,--pop-state
++CONTRACT
++""",
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
++    tools = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++    ],
++)
 +
 +genrule(
 +    name = "linker_wrapper_config_macos_aarch64",
@@ -42,22 +176,16 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +
 +namespace llvm_toolchain {
 +
-+const bool kLinkerWrapperPlatformIsMacos = true;
-+const char* kLinkerWrapperTargetTriple = "aarch64-apple-darwin";
 +const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
-+const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
-+const char* kLinkerWrapperMacosSysrootRlocation = "$(rlocationpath @macosx15.4.sdk//sysroot)";
-+const char* kLinkerWrapperCrtDirectoryRlocation = "";
-+const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "";
++const char* kLinkerWrapperContractRlocation = "$(rlocationpath :linker_contract_macos_aarch64)";
 +
 +}  // namespace llvm_toolchain
 +CONFIG
 +""",
 +    target_compatible_with = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
 +    tools = [
-+        "//runtimes:resource_directory",
 +        "//tools:clang++",
-+        "@macosx15.4.sdk//sysroot",
++        ":linker_contract_macos_aarch64",
 +    ],
 +)
 +
@@ -70,23 +198,16 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +
 +namespace llvm_toolchain {
 +
-+const bool kLinkerWrapperPlatformIsMacos = false;
-+const char* kLinkerWrapperTargetTriple = "x86_64-linux-gnu";
 +const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
-+const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
-+const char* kLinkerWrapperMacosSysrootRlocation = "";
-+const char* kLinkerWrapperCrtDirectoryRlocation = "$(rlocationpath //runtimes:crt_objects_directory)";
-+const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "$(rlocationpath //runtimes/glibc:glibc_library_search_directory)";
++const char* kLinkerWrapperContractRlocation = "$(rlocationpath :linker_contract_linux_x86_64)";
 +
 +}  // namespace llvm_toolchain
 +CONFIG
 +""",
 +    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
 +    tools = [
-+        "//runtimes:crt_objects_directory",
-+        "//runtimes/glibc:glibc_library_search_directory",
-+        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        ":linker_contract_linux_x86_64",
 +    ],
 +)
 +
@@ -99,24 +220,38 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +
 +namespace llvm_toolchain {
 +
-+const bool kLinkerWrapperPlatformIsMacos = false;
-+const char* kLinkerWrapperTargetTriple = "aarch64-linux-gnu";
 +const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
-+const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
-+const char* kLinkerWrapperMacosSysrootRlocation = "";
-+const char* kLinkerWrapperCrtDirectoryRlocation = "$(rlocationpath //runtimes:crt_objects_directory)";
-+const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "$(rlocationpath //runtimes/glibc:glibc_library_search_directory)";
++const char* kLinkerWrapperContractRlocation = "$(rlocationpath :linker_contract_linux_aarch64)";
 +
 +}  // namespace llvm_toolchain
 +CONFIG
 +""",
 +    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
 +    tools = [
-+        "//runtimes:crt_objects_directory",
-+        "//runtimes/glibc:glibc_library_search_directory",
-+        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        ":linker_contract_linux_aarch64",
 +    ],
++)
++
++filegroup(
++    name = "linker-contract-macos-aarch64",
++    srcs = [":linker_contract_macos_aarch64"],
++    target_compatible_with = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
++    visibility = ["//visibility:public"],
++)
++
++filegroup(
++    name = "linker-contract-linux-x86_64",
++    srcs = [":linker_contract_linux_x86_64"],
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
++    visibility = ["//visibility:public"],
++)
++
++filegroup(
++    name = "linker-contract-linux-aarch64",
++    srcs = [":linker_contract_linux_aarch64"],
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
++    visibility = ["//visibility:public"],
 +)
 +
 +cc_library(
@@ -135,6 +270,7 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
 +        "@macosx15.4.sdk//sysroot",
++        ":linker_contract_macos_aarch64",
 +    ],
 +    deps = [
 +        ":linker_wrapper_config_header",
@@ -155,6 +291,7 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        ":linker_contract_linux_x86_64",
 +    ],
 +    deps = [
 +        ":linker_wrapper_config_header",
@@ -175,6 +312,7 @@ diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        ":linker_contract_linux_aarch64",
 +    ],
 +    deps = [
 +        ":linker_wrapper_config_header",
@@ -187,13 +325,14 @@ diff --git tools/internal/linker_wrapper.cc tools/internal/linker_wrapper.cc
 new file mode 100644
 --- /dev/null
 +++ tools/internal/linker_wrapper.cc
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,179 @@
 +#include <errno.h>
 +#include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
 +#include <unistd.h>
 +
++#include <fstream>
 +#include <string>
 +#include <vector>
 +
@@ -208,7 +347,10 @@ new file mode 100644
 +                               const char* runfile_key,
 +                               const char* description) {
 +  if (runfile_key == nullptr || runfile_key[0] == '\0') {
-+    return "";
++    fprintf(stderr,
++            "linker_wrapper: empty runfile key for %s\n",
++            description);
++    exit(2);
 +  }
 +
 +  std::string resolved_path = runfiles.Rlocation(runfile_key);
@@ -222,53 +364,96 @@ new file mode 100644
 +  exit(2);
 +}
 +
-+void AppendLinkerContractArguments(const Runfiles& runfiles,
-+                                   std::vector<std::string>* arguments) {
-+  using namespace llvm_toolchain;
++std::vector<std::string> SplitByTab(const std::string& line) {
++  std::vector<std::string> fields;
++  size_t start = 0;
++  while (true) {
++    const size_t separator = line.find('\t', start);
++    if (separator == std::string::npos) {
++      fields.push_back(line.substr(start));
++      return fields;
++    }
++    fields.push_back(line.substr(start, separator - start));
++    start = separator + 1;
++  }
++}
 +
-+  const std::string resource_dir =
-+      ResolveRunfilePath(runfiles, kLinkerWrapperResourceDirRlocation,
-+                         "resource directory");
-+
-+  arguments->push_back("-target");
-+  arguments->push_back(kLinkerWrapperTargetTriple);
-+  arguments->push_back("-fuse-ld=lld");
-+  arguments->push_back("-resource-dir");
-+  arguments->push_back(resource_dir);
-+  arguments->push_back("-rtlib=compiler-rt");
-+
-+  if (kLinkerWrapperPlatformIsMacos) {
-+    const std::string macos_sysroot =
-+        ResolveRunfilePath(runfiles, kLinkerWrapperMacosSysrootRlocation,
-+                           "macOS sysroot");
-+
-+    arguments->push_back("--sysroot=" + macos_sysroot);
-+    arguments->push_back("-mmacosx-version-min=14.0");
-+    arguments->push_back("-headerpad_max_install_names");
-+    arguments->push_back("-Wl,-no_warn_duplicate_libraries");
-+    arguments->push_back("-Wl,-oso_prefix,.");
++void ApplyContractLine(const Runfiles& runfiles,
++                       const std::vector<std::string>& fields,
++                       std::vector<std::string>* arguments) {
++  if (fields.empty()) {
 +    return;
 +  }
 +
-+  const std::string crt_directory =
-+      ResolveRunfilePath(runfiles, kLinkerWrapperCrtDirectoryRlocation,
-+                         "CRT objects directory");
-+  const std::string glibc_library_directory =
-+      ResolveRunfilePath(runfiles, kLinkerWrapperGlibcLibraryDirectoryRlocation,
-+                         "glibc library search directory");
++  if (fields[0] == "arg") {
++    if (fields.size() != 2) {
++      fprintf(stderr,
++              "linker_wrapper: invalid contract arg directive (expected 2 fields)\n");
++      exit(2);
++    }
++    arguments->push_back(fields[1]);
++    return;
++  }
 +
-+  arguments->push_back("--sysroot=/dev/null");
-+  arguments->push_back("-nostdlib++");
-+  arguments->push_back("--unwindlib=none");
-+  arguments->push_back("-Wl,-no-as-needed");
-+  arguments->push_back("-Wl,-z,relro,-z,now");
-+  arguments->push_back("-B" + crt_directory);
-+  arguments->push_back("-L" + glibc_library_directory);
-+  arguments->push_back("-Wl,--push-state");
-+  arguments->push_back("-Wl,--as-needed");
-+  arguments->push_back("-lpthread");
-+  arguments->push_back("-ldl");
-+  arguments->push_back("-Wl,--pop-state");
++  if (fields[0] == "runfile") {
++    if (fields.size() != 2) {
++      fprintf(stderr,
++              "linker_wrapper: invalid contract runfile directive (expected 2 fields)\n");
++      exit(2);
++    }
++    arguments->push_back(
++        ResolveRunfilePath(runfiles, fields[1].c_str(), "contract runfile"));
++    return;
++  }
++
++  if (fields[0] == "runfile_prefix") {
++    if (fields.size() != 3) {
++      fprintf(stderr,
++              "linker_wrapper: invalid contract runfile_prefix directive "
++              "(expected 3 fields)\n");
++      exit(2);
++    }
++    arguments->push_back(fields[1] +
++                         ResolveRunfilePath(runfiles, fields[2].c_str(),
++                                            "contract runfile_prefix"));
++    return;
++  }
++
++  if (fields[0] == "setenv") {
++    if (fields.size() != 3) {
++      fprintf(stderr,
++              "linker_wrapper: invalid contract setenv directive "
++              "(expected 3 fields)\n");
++      exit(2);
++    }
++    setenv(fields[1].c_str(), fields[2].c_str(), 1);
++    return;
++  }
++
++  fprintf(stderr,
++          "linker_wrapper: unknown contract directive '%s'\n",
++          fields[0].c_str());
++  exit(2);
++}
++
++void AppendLinkerContractArguments(const Runfiles& runfiles,
++                                   const std::string& contract_path,
++                                   std::vector<std::string>* arguments) {
++  std::ifstream contract_stream(contract_path);
++  if (!contract_stream.is_open()) {
++    fprintf(stderr,
++            "linker_wrapper: failed to open linker contract at '%s'\n",
++            contract_path.c_str());
++    exit(2);
++  }
++
++  std::string line;
++  while (std::getline(contract_stream, line)) {
++    if (line.empty() || line[0] == '#') {
++      continue;
++    }
++    ApplyContractLine(runfiles, SplitByTab(line), arguments);
++  }
 +}
 +
 +}  // namespace
@@ -280,10 +465,6 @@ new file mode 100644
 +            "Example: %s input.o -o output_binary\n",
 +            argv[0], argv[0]);
 +    return 2;
-+  }
-+
-+  if (llvm_toolchain::kLinkerWrapperPlatformIsMacos) {
-+    setenv("ZERO_AR_DATE", "1", 1);
 +  }
 +
 +  std::string runfiles_error;
@@ -298,12 +479,15 @@ new file mode 100644
 +  const std::string clang_path =
 +      ResolveRunfilePath(*runfiles, llvm_toolchain::kLinkerWrapperClangRlocation,
 +                         "platform clang++");
++  const std::string contract_path = ResolveRunfilePath(
++      *runfiles, llvm_toolchain::kLinkerWrapperContractRlocation,
++      "linker contract");
 +
 +  std::vector<std::string> argument_storage;
 +  argument_storage.reserve(static_cast<size_t>(argc) + 24);
 +  argument_storage.push_back(clang_path);
 +
-+  AppendLinkerContractArguments(*runfiles, &argument_storage);
++  AppendLinkerContractArguments(*runfiles, contract_path, &argument_storage);
 +
 +  for (int index = 1; index < argc; ++index) {
 +    argument_storage.push_back(argv[index]);
@@ -325,17 +509,12 @@ diff --git tools/internal/linker_wrapper_config.h tools/internal/linker_wrapper_
 new file mode 100644
 --- /dev/null
 +++ tools/internal/linker_wrapper_config.h
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,8 @@
 +#pragma once
 +
 +namespace llvm_toolchain {
 +
-+extern const bool kLinkerWrapperPlatformIsMacos;
-+extern const char* kLinkerWrapperTargetTriple;
 +extern const char* kLinkerWrapperClangRlocation;
-+extern const char* kLinkerWrapperResourceDirRlocation;
-+extern const char* kLinkerWrapperMacosSysrootRlocation;
-+extern const char* kLinkerWrapperCrtDirectoryRlocation;
-+extern const char* kLinkerWrapperGlibcLibraryDirectoryRlocation;
++extern const char* kLinkerWrapperContractRlocation;
 +
 +}  // namespace llvm_toolchain
