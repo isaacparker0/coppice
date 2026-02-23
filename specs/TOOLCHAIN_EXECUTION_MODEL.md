@@ -79,6 +79,11 @@ Note:
 
 - `toolchains_llvm_bootstrapped` is primarily a hermetic LLVM/C/C++ toolchain
   ecosystem, with explicit guidance for Rust integration in Bazel workflows.
+- Current repository state includes one explicitly scoped temporary exception:
+  the Cranelift backend uses a host-linker bridge for final executable linking
+  (`xcrun clang++` on macOS, `clang++` on Linux). This is isolated in
+  `compiler/cranelift_backend/linker_bridge.rs` and is intended to be replaced
+  with Bazel-managed hermetic linker resolution.
 
 ---
 

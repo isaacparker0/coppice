@@ -4,7 +4,7 @@ load("@rules_oci//oci:defs.bzl", "oci_push")
 
 DOCR_REGISTRY = "registry.digitalocean.com/coppice"
 
-def docr_push(name, image, repository):
+def docr_push(name, image, repository, target_compatible_with = None):
     """
     Push an OCI image to DOCR.
 
@@ -17,12 +17,14 @@ def docr_push(name, image, repository):
         name = tags_template_name,
         out = tags_template_name + ".txt",
         content = ["__COMMIT_SHA__", "live"],
+        target_compatible_with = target_compatible_with,
     )
 
     expand_template(
         name = tags_name,
         template = ":" + tags_template_name,
         stamp_substitutions = {"__COMMIT_SHA__": "{{STABLE_COMMIT_SHA}}"},
+        target_compatible_with = target_compatible_with,
     )
 
     oci_push(
@@ -31,4 +33,5 @@ def docr_push(name, image, repository):
         remote_tags = ":" + tags_name,
         repository = DOCR_REGISTRY + "/" + repository,
         tags = ["manual"],
+        target_compatible_with = target_compatible_with,
     )

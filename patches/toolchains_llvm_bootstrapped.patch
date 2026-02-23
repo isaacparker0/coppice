@@ -1,0 +1,345 @@
+diff --git toolchain/BUILD.bazel toolchain/BUILD.bazel
+index 61aea9f..a50b58b 100644
+--- toolchain/BUILD.bazel
++++ toolchain/BUILD.bazel
+@@ -329,6 +329,17 @@ cc_artifact_name_pattern(
+     visibility = ["//visibility:public"],
+ )
+ 
++alias(
++    name = "linker_wrapper",
++    actual = select({
++        "//platforms/config:macos_aarch64": "//tools/internal:linker-wrapper-macos-aarch64",
++        "//platforms/config:linux_x86_64": "//tools/internal:linker-wrapper-linux-x86_64",
++        "//platforms/config:linux_aarch64": "//tools/internal:linker-wrapper-linux-aarch64",
++        "//conditions:default": "//tools/internal:linker-wrapper-macos-aarch64",
++    }),
++    visibility = ["//visibility:public"],
++)
++
+ cc_action_type_set(
+     name = "cpp_compile_actions_without_header_parsing",
+     # See https://github.com/bazelbuild/rules_cc/blob/6dd2ef1fefbca004da449578c00d8ffb91a459ca/cc/toolchains/actions/BUILD#L224
+diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
+index 6f6c211..4d8a32c 100644
+--- tools/internal/BUILD.bazel
++++ tools/internal/BUILD.bazel
+@@ -1,4 +1,5 @@
+ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
++load("@rules_cc//cc:cc_library.bzl", "cc_library")
+ 
+ cc_binary(
+     name = "header-parser",
+@@ -11,3 +12,154 @@ cc_binary(
+     srcs = ["static_library_validator.cc"],
+     visibility = ["//visibility:public"],
+ )
++
++genrule(
++    name = "linker_wrapper_config_macos_aarch64",
++    outs = ["linker_wrapper_config_macos_aarch64.cc"],
++    cmd = """
++cat > $@ <<'CONFIG'
++#include "tools/internal/linker_wrapper_config.h"
++
++namespace llvm_toolchain {
++
++const bool kLinkerWrapperPlatformIsMacos = true;
++const char* kLinkerWrapperTargetTriple = "aarch64-apple-darwin";
++const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
++const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
++const char* kLinkerWrapperMacosSysrootRlocation = "$(rlocationpath @macos_sdk//sysroot)";
++const char* kLinkerWrapperCrtDirectoryRlocation = "";
++const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "";
++
++}  // namespace llvm_toolchain
++CONFIG
++""",
++    target_compatible_with = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
++    tools = [
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++        "@macos_sdk//sysroot",
++    ],
++)
++
++genrule(
++    name = "linker_wrapper_config_linux_x86_64",
++    outs = ["linker_wrapper_config_linux_x86_64.cc"],
++    cmd = """
++cat > $@ <<'CONFIG'
++#include "tools/internal/linker_wrapper_config.h"
++
++namespace llvm_toolchain {
++
++const bool kLinkerWrapperPlatformIsMacos = false;
++const char* kLinkerWrapperTargetTriple = "x86_64-linux-gnu";
++const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
++const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
++const char* kLinkerWrapperMacosSysrootRlocation = "";
++const char* kLinkerWrapperCrtDirectoryRlocation = "$(rlocationpath //runtimes:crt_objects_directory)";
++const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "$(rlocationpath //runtimes/glibc:glibc_library_search_directory)";
++
++}  // namespace llvm_toolchain
++CONFIG
++""",
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
++    tools = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++    ],
++)
++
++genrule(
++    name = "linker_wrapper_config_linux_aarch64",
++    outs = ["linker_wrapper_config_linux_aarch64.cc"],
++    cmd = """
++cat > $@ <<'CONFIG'
++#include "tools/internal/linker_wrapper_config.h"
++
++namespace llvm_toolchain {
++
++const bool kLinkerWrapperPlatformIsMacos = false;
++const char* kLinkerWrapperTargetTriple = "aarch64-linux-gnu";
++const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
++const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
++const char* kLinkerWrapperMacosSysrootRlocation = "";
++const char* kLinkerWrapperCrtDirectoryRlocation = "$(rlocationpath //runtimes:crt_objects_directory)";
++const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "$(rlocationpath //runtimes/glibc:glibc_library_search_directory)";
++
++}  // namespace llvm_toolchain
++CONFIG
++""",
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
++    tools = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++    ],
++)
++
++cc_library(
++    name = "linker_wrapper_config_header",
++    hdrs = ["linker_wrapper_config.h"],
++    visibility = ["//visibility:private"],
++)
++
++cc_binary(
++    name = "linker-wrapper-macos-aarch64",
++    srcs = [
++        "linker_wrapper.cc",
++        ":linker_wrapper_config_macos_aarch64",
++    ],
++    data = [
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++        "@macos_sdk//sysroot",
++    ],
++    deps = [
++        ":linker_wrapper_config_header",
++        "@bazel_tools//tools/cpp/runfiles",
++    ],
++    target_compatible_with = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
++    visibility = ["//visibility:public"],
++)
++
++cc_binary(
++    name = "linker-wrapper-linux-x86_64",
++    srcs = [
++        "linker_wrapper.cc",
++        ":linker_wrapper_config_linux_x86_64",
++    ],
++    data = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++    ],
++    deps = [
++        ":linker_wrapper_config_header",
++        "@bazel_tools//tools/cpp/runfiles",
++    ],
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
++    visibility = ["//visibility:public"],
++)
++
++cc_binary(
++    name = "linker-wrapper-linux-aarch64",
++    srcs = [
++        "linker_wrapper.cc",
++        ":linker_wrapper_config_linux_aarch64",
++    ],
++    data = [
++        "//runtimes:crt_objects_directory",
++        "//runtimes/glibc:glibc_library_search_directory",
++        "//runtimes:resource_directory",
++        "//tools:clang++",
++    ],
++    deps = [
++        ":linker_wrapper_config_header",
++        "@bazel_tools//tools/cpp/runfiles",
++    ],
++    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
++    visibility = ["//visibility:public"],
++)
+diff --git tools/internal/linker_wrapper.cc tools/internal/linker_wrapper.cc
+new file mode 100644
+index 0000000..e5c5475
+--- /dev/null
++++ tools/internal/linker_wrapper.cc
+@@ -0,0 +1,133 @@
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++#include <string>
++#include <vector>
++
++#include "tools/cpp/runfiles/runfiles.h"
++#include "tools/internal/linker_wrapper_config.h"
++
++using bazel::tools::cpp::runfiles::Runfiles;
++
++namespace {
++
++std::string ResolveRunfilePath(const Runfiles& runfiles,
++                               const char* runfile_key,
++                               const char* description) {
++  if (runfile_key == nullptr || runfile_key[0] == '\0') {
++    return "";
++  }
++
++  std::string resolved_path = runfiles.Rlocation(runfile_key);
++  if (!resolved_path.empty()) {
++    return resolved_path;
++  }
++
++  fprintf(stderr,
++          "linker_wrapper: failed to resolve runfile for %s: key='%s'\n",
++          description, runfile_key);
++  exit(2);
++}
++
++void AppendLinkerContractArguments(const Runfiles& runfiles,
++                                   std::vector<std::string>* arguments) {
++  using namespace llvm_toolchain;
++
++  const std::string resource_dir =
++      ResolveRunfilePath(runfiles, kLinkerWrapperResourceDirRlocation,
++                         "resource directory");
++
++  arguments->push_back("-target");
++  arguments->push_back(kLinkerWrapperTargetTriple);
++  arguments->push_back("-fuse-ld=lld");
++  arguments->push_back("-resource-dir");
++  arguments->push_back(resource_dir);
++  arguments->push_back("-rtlib=compiler-rt");
++
++  if (kLinkerWrapperPlatformIsMacos) {
++    const std::string macos_sysroot =
++        ResolveRunfilePath(runfiles, kLinkerWrapperMacosSysrootRlocation,
++                           "macOS sysroot");
++
++    arguments->push_back("--sysroot=" + macos_sysroot);
++    arguments->push_back("-mmacosx-version-min=14.0");
++    arguments->push_back("-headerpad_max_install_names");
++    arguments->push_back("-Wl,-no_warn_duplicate_libraries");
++    arguments->push_back("-Wl,-oso_prefix,.");
++    return;
++  }
++
++  const std::string crt_directory =
++      ResolveRunfilePath(runfiles, kLinkerWrapperCrtDirectoryRlocation,
++                         "CRT objects directory");
++  const std::string glibc_library_directory =
++      ResolveRunfilePath(runfiles, kLinkerWrapperGlibcLibraryDirectoryRlocation,
++                         "glibc library search directory");
++
++  arguments->push_back("--sysroot=/dev/null");
++  arguments->push_back("-nostdlib++");
++  arguments->push_back("--unwindlib=none");
++  arguments->push_back("-Wl,-no-as-needed");
++  arguments->push_back("-Wl,-z,relro,-z,now");
++  arguments->push_back("-B" + crt_directory);
++  arguments->push_back("-L" + glibc_library_directory);
++  arguments->push_back("-Wl,--push-state");
++  arguments->push_back("-Wl,--as-needed");
++  arguments->push_back("-lpthread");
++  arguments->push_back("-ldl");
++  arguments->push_back("-Wl,--pop-state");
++}
++
++}  // namespace
++
++int main(int argc, char** argv) {
++  if (argc < 2) {
++    fprintf(stderr,
++            "Usage: %s <clang++-style-link-args...>\n"
++            "Example: %s input.o -o output_binary\n",
++            argv[0], argv[0]);
++    return 2;
++  }
++
++  if (llvm_toolchain::kLinkerWrapperPlatformIsMacos) {
++    setenv("ZERO_AR_DATE", "1", 1);
++  }
++
++  std::string runfiles_error;
++  std::unique_ptr<Runfiles> runfiles(
++      Runfiles::Create(argv[0], BAZEL_CURRENT_REPOSITORY, &runfiles_error));
++  if (!runfiles) {
++    fprintf(stderr, "linker_wrapper: failed to initialize runfiles: %s\n",
++            runfiles_error.c_str());
++    return 2;
++  }
++
++  const std::string clang_path =
++      ResolveRunfilePath(*runfiles, llvm_toolchain::kLinkerWrapperClangRlocation,
++                         "platform clang++");
++
++  std::vector<std::string> argument_storage;
++  argument_storage.reserve(static_cast<size_t>(argc) + 24);
++  argument_storage.push_back(clang_path);
++
++  AppendLinkerContractArguments(*runfiles, &argument_storage);
++
++  for (int index = 1; index < argc; ++index) {
++    argument_storage.push_back(argv[index]);
++  }
++
++  std::vector<char*> exec_arguments;
++  exec_arguments.reserve(argument_storage.size() + 1);
++  for (std::string& argument : argument_storage) {
++    exec_arguments.push_back(const_cast<char*>(argument.c_str()));
++  }
++  exec_arguments.push_back(nullptr);
++
++  execv(clang_path.c_str(), exec_arguments.data());
++  fprintf(stderr, "linker_wrapper: execv failed for '%s': %s\n",
++          clang_path.c_str(), strerror(errno));
++  return 2;
++}
+diff --git tools/internal/linker_wrapper_config.h tools/internal/linker_wrapper_config.h
+new file mode 100644
+index 0000000..5175083
+--- /dev/null
++++ tools/internal/linker_wrapper_config.h
+@@ -0,0 +1,13 @@
++#pragma once
++
++namespace llvm_toolchain {
++
++extern const bool kLinkerWrapperPlatformIsMacos;
++extern const char* kLinkerWrapperTargetTriple;
++extern const char* kLinkerWrapperClangRlocation;
++extern const char* kLinkerWrapperResourceDirRlocation;
++extern const char* kLinkerWrapperMacosSysrootRlocation;
++extern const char* kLinkerWrapperCrtDirectoryRlocation;
++extern const char* kLinkerWrapperGlibcLibraryDirectoryRlocation;
++
++}  // namespace llvm_toolchain

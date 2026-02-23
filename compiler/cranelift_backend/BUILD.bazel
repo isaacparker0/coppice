@@ -9,6 +9,12 @@ rust_library(
         "object_emission.rs",
         "runtime_interface_emission.rs",
     ],
+    data = [
+        "@toolchains_llvm_bootstrapped//toolchain:linker_wrapper",
+    ],
+    rustc_env = {
+        "COPPICE_LINKER_WRAPPER_RUNFILE": "$(rlocationpath @toolchains_llvm_bootstrapped//toolchain:linker_wrapper)",
+    },
     visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/executable_program",
@@ -19,6 +25,7 @@ rust_library(
         "@crates//:cranelift-module",
         "@crates//:cranelift-native",
         "@crates//:cranelift-object",
+        "@rules_rust//tools/runfiles",
     ],
 )
 

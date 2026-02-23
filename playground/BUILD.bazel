@@ -7,13 +7,20 @@ pkg_tar(
     srcs = ["//playground/api:main"],
     include_runfiles = True,
     package_dir = "/app",
+    target_compatible_with = [
+        "@@platforms//os:linux",
+        "@@platforms//cpu:x86_64",
+    ],
 )
 
 oci_image(
     name = "playground_image_amd64",
     base = "@debian_bookworm_slim_linux_amd64",
     entrypoint = ["/app/main"],
-    tags = ["manual"],
+    target_compatible_with = [
+        "@@platforms//os:linux",
+        "@@platforms//cpu:x86_64",
+    ],
     tars = [":playground_image_layer_amd64"],
     visibility = ["//visibility:public"],
 )
@@ -22,4 +29,8 @@ docr_push(
     name = "playground_push",
     image = ":playground_image_amd64",
     repository = "playground",
+    target_compatible_with = [
+        "@@platforms//os:linux",
+        "@@platforms//cpu:x86_64",
+    ],
 )
