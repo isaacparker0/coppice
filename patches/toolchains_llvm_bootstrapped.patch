@@ -1,5 +1,4 @@
 diff --git toolchain/BUILD.bazel toolchain/BUILD.bazel
-index 61aea9f..a50b58b 100644
 --- toolchain/BUILD.bazel
 +++ toolchain/BUILD.bazel
 @@ -329,6 +329,17 @@ cc_artifact_name_pattern(
@@ -21,7 +20,6 @@ index 61aea9f..a50b58b 100644
      name = "cpp_compile_actions_without_header_parsing",
      # See https://github.com/bazelbuild/rules_cc/blob/6dd2ef1fefbca004da449578c00d8ffb91a459ca/cc/toolchains/actions/BUILD#L224
 diff --git tools/internal/BUILD.bazel tools/internal/BUILD.bazel
-index 6f6c211..4d8a32c 100644
 --- tools/internal/BUILD.bazel
 +++ tools/internal/BUILD.bazel
 @@ -1,4 +1,5 @@
@@ -48,7 +46,7 @@ index 6f6c211..4d8a32c 100644
 +const char* kLinkerWrapperTargetTriple = "aarch64-apple-darwin";
 +const char* kLinkerWrapperClangRlocation = "$(rlocationpath //tools:clang++)";
 +const char* kLinkerWrapperResourceDirRlocation = "$(rlocationpath //runtimes:resource_directory)";
-+const char* kLinkerWrapperMacosSysrootRlocation = "$(rlocationpath @macos_sdk//sysroot)";
++const char* kLinkerWrapperMacosSysrootRlocation = "$(rlocationpath @macosx15.4.sdk//sysroot)";
 +const char* kLinkerWrapperCrtDirectoryRlocation = "";
 +const char* kLinkerWrapperGlibcLibraryDirectoryRlocation = "";
 +
@@ -59,7 +57,7 @@ index 6f6c211..4d8a32c 100644
 +    tools = [
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
-+        "@macos_sdk//sysroot",
++        "@macosx15.4.sdk//sysroot",
 +    ],
 +)
 +
@@ -136,7 +134,7 @@ index 6f6c211..4d8a32c 100644
 +    data = [
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
-+        "@macos_sdk//sysroot",
++        "@macosx15.4.sdk//sysroot",
 +    ],
 +    deps = [
 +        ":linker_wrapper_config_header",
@@ -187,7 +185,6 @@ index 6f6c211..4d8a32c 100644
 +)
 diff --git tools/internal/linker_wrapper.cc tools/internal/linker_wrapper.cc
 new file mode 100644
-index 0000000..e5c5475
 --- /dev/null
 +++ tools/internal/linker_wrapper.cc
 @@ -0,0 +1,133 @@
@@ -326,7 +323,6 @@ index 0000000..e5c5475
 +}
 diff --git tools/internal/linker_wrapper_config.h tools/internal/linker_wrapper_config.h
 new file mode 100644
-index 0000000..5175083
 --- /dev/null
 +++ tools/internal/linker_wrapper_config.h
 @@ -0,0 +1,13 @@
