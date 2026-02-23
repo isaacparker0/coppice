@@ -13,7 +13,7 @@ rust_library(
         "@toolchains_llvm_bootstrapped//toolchain:linker_wrapper",
     ],
     rustc_env = {
-        "COPPICE_LINKER_WRAPPER_RUNFILE": "$(rlocationpath @toolchains_llvm_bootstrapped//toolchain:linker_wrapper)",
+        "LINKER_WRAPPER": "$(rlocationpath @toolchains_llvm_bootstrapped//toolchain:linker_wrapper)",
     },
     visibility = ["//:__subpackages__"],
     deps = [

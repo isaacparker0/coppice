@@ -16,7 +16,7 @@ pub(crate) fn link_executable(
             Some(executable_path),
         )
     })?;
-    let linker_wrapper_runfile = env!("COPPICE_LINKER_WRAPPER_RUNFILE");
+    let linker_wrapper_runfile = env!("LINKER_WRAPPER");
     let linker_wrapper_path =
         runfiles.rlocation_from(linker_wrapper_runfile, env!("REPOSITORY_NAME"));
     let Some(linker_wrapper_path) = linker_wrapper_path else {
@@ -25,9 +25,15 @@ pub(crate) fn link_executable(
             Some(executable_path),
         ));
     };
+    let runfiles_directory = find_runfiles_dir().map_err(|error| {
+        build_failed(
+            format!("failed to locate runfiles directory for linker wrapper: {error}"),
+            Some(executable_path),
+        )
+    })?;
 
     let output = Command::new(&linker_wrapper_path)
-        .envs(linker_runfiles_environment())
+        .env("RUNFILES_DIR", &runfiles_directory)
         .arg(object_path)
         .arg("-o")
         .arg(executable_path)
@@ -56,54 +62,4 @@ pub(crate) fn link_executable(
     }
 
     Ok(())
-}
-
-fn linker_runfiles_environment() -> Vec<(String, String)> {
-    const RUNFILES_ENVIRONMENT_VARIABLES: [&str; 3] =
-        ["RUNFILES_DIR", "RUNFILES_MANIFEST_FILE", "TEST_SRCDIR"];
-
-    let mut environment: Vec<(String, String)> = RUNFILES_ENVIRONMENT_VARIABLES
-        .iter()
-        .filter_map(|name| {
-            std::env::var(name)
-                .ok()
-                .map(|value| ((*name).to_string(), value))
-        })
-        .collect();
-
-    if !environment
-        .iter()
-        .any(|(name, _)| name == "RUNFILES_DIR" || name == "RUNFILES_MANIFEST_FILE")
-    {
-        if let Ok(runfiles_directory) = find_runfiles_dir() {
-            if let Some(value) = runfiles_directory.to_str() {
-                environment.push(("RUNFILES_DIR".to_string(), value.to_string()));
-            }
-
-            let manifest_path = runfiles_directory.join("MANIFEST");
-            if manifest_path.is_file()
-                && let Some(value) = manifest_path.to_str()
-            {
-                environment.push(("RUNFILES_MANIFEST_FILE".to_string(), value.to_string()));
-            }
-        } else if let Ok(current_executable_path) = std::env::current_exe() {
-            let manifest_candidates = [
-                format!("{}.runfiles_manifest", current_executable_path.display()),
-                format!(
-                    "{}.exe.runfiles_manifest",
-                    current_executable_path.display()
-                ),
-            ];
-
-            for manifest_candidate in manifest_candidates {
-                let manifest_path = std::path::PathBuf::from(&manifest_candidate);
-                if manifest_path.is_file() {
-                    environment.push(("RUNFILES_MANIFEST_FILE".to_string(), manifest_candidate));
-                    break;
-                }
-            }
-        }
-    }
-
-    environment
 }
