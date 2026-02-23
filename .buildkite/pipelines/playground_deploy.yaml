@@ -15,7 +15,7 @@ steps:
 
           bazel run \
             --stamp \
-            --platforms=@toolchains_llvm_bootstrapped//platforms:linux_amd64 \
+            --platforms=@llvm//platforms:linux_amd64 \
             //playground:playground_push
       concurrency_group: "playground-deploy-main"
       concurrency: 1
