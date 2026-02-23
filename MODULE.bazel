@@ -4,6 +4,11 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "rules_go", version = "0.60.0")
 bazel_dep(name = "protobuf", version = "33.5")
 bazel_dep(name = "llvm", version = "0.6.0")
+local_path_override(
+    module_name = "llvm",
+    path = "/Users/isaacparker/Development/toolchains_llvm_bootstrapped",
+)
+
 bazel_dep(name = "gazelle", version = "0.47.0")
 bazel_dep(name = "rules_pkg", version = "1.2.0")
 bazel_dep(name = "rules_oci", version = "2.2.7")
