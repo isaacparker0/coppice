@@ -5,6 +5,7 @@ use std::process::Command;
 use compiler__executable_program::ExecutableProgram;
 use compiler__reports::{CompilerFailure, CompilerFailureKind};
 
+mod builtin_conversion;
 mod linker_bridge;
 mod object_emission;
 mod runtime_interface_emission;

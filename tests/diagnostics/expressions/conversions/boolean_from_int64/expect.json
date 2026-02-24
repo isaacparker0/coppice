@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot convert int64 to boolean",
+            "span": {
+                "start": 47,
+                "end": 48,
+                "line": 2,
+                "column": 20
+            }
+        }
+    ]
+}

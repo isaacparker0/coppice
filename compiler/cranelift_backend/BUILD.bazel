@@ -4,6 +4,7 @@ load("//tools/bazel/macros:rust.bzl", "rust_library")
 rust_library(
     name = "cranelift_backend",
     srcs = [
+        "builtin_conversion.rs",
         "lib.rs",
         "linker_bridge.rs",
         "object_emission.rs",

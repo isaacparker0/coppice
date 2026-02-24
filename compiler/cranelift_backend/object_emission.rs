@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::build_failed;
+use crate::builtin_conversion::convert_int64_to_string;
 use crate::runtime_interface_emission::{
     ExternalRuntimeFunctions, declare_runtime_interface_functions,
 };
@@ -77,7 +78,7 @@ struct TypeParameterWitness {
     witness_table_pointer: Value,
 }
 
-struct CompilationState {
+pub(crate) struct CompilationState {
     module: ObjectModule,
     function_record_by_callable_reference: BTreeMap<ExecutableCallableReference, FunctionRecord>,
     method_record_by_key: BTreeMap<MethodKey, MethodRecord>,
@@ -1653,6 +1654,16 @@ fn compile_call_expression(
                     });
                 }
 
+                if let Some(conversion_result) = compile_builtin_conversion_call(
+                    state,
+                    function_builder,
+                    compilation_context,
+                    function_name,
+                    arguments,
+                )? {
+                    return Ok(conversion_result);
+                }
+
                 Err(build_failed(
                     format!("unknown builtin function '{function_name}'"),
                     None,
@@ -1928,6 +1939,121 @@ fn compile_function_value_call_expression(
             terminates: false,
         })
     }
+}
+
+fn compile_builtin_conversion_call(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    function_name: &str,
+    arguments: &[ExecutableExpression],
+) -> Result<Option<TypedValue>, CompilerFailure> {
+    if function_name != "string" && function_name != "int64" && function_name != "boolean" {
+        return Ok(None);
+    }
+    if arguments.len() != 1 {
+        return Err(build_failed(
+            format!("{function_name}(...) requires exactly one argument"),
+            None,
+        ));
+    }
+
+    let argument = compile_expression(state, function_builder, compilation_context, &arguments[0])?;
+    if argument.terminates {
+        return Ok(Some(argument));
+    }
+
+    let converted = match function_name {
+        "string" => match &argument.type_reference {
+            ExecutableTypeReference::String => TypedValue {
+                value: argument.value,
+                type_reference: ExecutableTypeReference::String,
+                terminates: false,
+            },
+            ExecutableTypeReference::Int64 => {
+                let value = argument.value.ok_or_else(|| {
+                    build_failed(
+                        "int64 conversion argument produced no runtime value".to_string(),
+                        None,
+                    )
+                })?;
+                TypedValue {
+                    value: Some(convert_int64_to_string(state, function_builder, value)?),
+                    type_reference: ExecutableTypeReference::String,
+                    terminates: false,
+                }
+            }
+            ExecutableTypeReference::Boolean => {
+                let value = argument.value.ok_or_else(|| {
+                    build_failed(
+                        "boolean conversion argument produced no runtime value".to_string(),
+                        None,
+                    )
+                })?;
+                let true_string = intern_string_literal(state, function_builder, "true")?;
+                let false_string = intern_string_literal(state, function_builder, "false")?;
+                let pointer = function_builder
+                    .ins()
+                    .select(value, true_string, false_string);
+                TypedValue {
+                    value: Some(pointer),
+                    type_reference: ExecutableTypeReference::String,
+                    terminates: false,
+                }
+            }
+            ExecutableTypeReference::Nil => TypedValue {
+                value: Some(intern_string_literal(state, function_builder, "nil")?),
+                type_reference: ExecutableTypeReference::String,
+                terminates: false,
+            },
+            _ => {
+                return Err(build_failed(
+                    format!(
+                        "cannot convert {} to string",
+                        type_reference_display(&argument.type_reference)
+                    ),
+                    None,
+                ));
+            }
+        },
+        "int64" => {
+            if argument.type_reference != ExecutableTypeReference::Int64 {
+                return Err(build_failed(
+                    format!(
+                        "cannot convert {} to int64",
+                        type_reference_display(&argument.type_reference)
+                    ),
+                    None,
+                ));
+            }
+            TypedValue {
+                value: argument.value,
+                type_reference: ExecutableTypeReference::Int64,
+                terminates: false,
+            }
+        }
+        "boolean" => {
+            if argument.type_reference != ExecutableTypeReference::Boolean {
+                return Err(build_failed(
+                    format!(
+                        "cannot convert {} to boolean",
+                        type_reference_display(&argument.type_reference)
+                    ),
+                    None,
+                ));
+            }
+            TypedValue {
+                value: argument.value,
+                type_reference: ExecutableTypeReference::Boolean,
+                terminates: false,
+            }
+        }
+        _ => {
+            return Ok(None);
+        }
+    };
+
+    Ok(Some(converted))
 }
 
 fn compile_builtin_list_get_call(
@@ -3771,7 +3897,7 @@ fn enum_variant_tag(enum_variant_reference: &ExecutableEnumVariantReference) -> 
     i64::from_ne_bytes(hash.to_ne_bytes())
 }
 
-fn allocate_heap_bytes(
+pub(crate) fn allocate_heap_bytes(
     state: &mut CompilationState,
     function_builder: &mut FunctionBuilder<'_>,
     byte_count: i64,
