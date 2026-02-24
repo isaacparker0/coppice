@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot call mutating method 'List.set' on immutable binding 'values'",
+            "span": {
+                "start": 59,
+                "end": 62,
+                "line": 3,
+                "column": 12
+            }
+        }
+    ]
+}

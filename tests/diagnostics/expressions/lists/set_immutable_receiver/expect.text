@@ -1,0 +1,3 @@
+lib.copp:3:12: error: cannot call mutating method 'List.set' on immutable binding 'values'
+      values.set(1, 9)
+             ^

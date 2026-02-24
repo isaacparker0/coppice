@@ -54,6 +54,7 @@ pub enum TypeAnnotatedCallTarget {
         function_name: String,
     },
     BuiltinListGet,
+    BuiltinListSet,
     UserDefinedFunction {
         callable_reference: TypeAnnotatedCallableReference,
     },

@@ -245,6 +245,39 @@ impl TypeChecker<'_> {
                                 resolved_type_arguments: Vec::new(),
                                 call_target: Some(TypeAnnotatedCallTarget::BuiltinListGet),
                             })
+                        } else if field == "set" {
+                            if let SemanticExpression::NameReference { name, .. } = target.as_ref()
+                            {
+                                let receiver_is_mutable = self
+                                    .lookup_variable_for_assignment(name)
+                                    .is_some_and(|(is_mutable, _)| is_mutable);
+                                if !receiver_is_mutable {
+                                    if self.constants.contains_key(name)
+                                        || self.lookup_variable_type(name).is_some()
+                                    {
+                                        self.error(
+                                            format!(
+                                                "cannot call mutating method 'List.set' on immutable binding '{name}'"
+                                            ),
+                                            field_span.clone(),
+                                        );
+                                    }
+                                    return Type::Unknown;
+                                }
+                            } else {
+                                self.error(
+                                    "cannot call mutating method 'List.set' on non-binding receiver",
+                                    field_span.clone(),
+                                );
+                                return Type::Unknown;
+                            }
+                            Some(ResolvedCallTarget {
+                                display_name: "set".to_string(),
+                                parameter_types: vec![Type::Integer64, (**element_type).clone()],
+                                return_type: Type::Nil,
+                                resolved_type_arguments: Vec::new(),
+                                call_target: Some(TypeAnnotatedCallTarget::BuiltinListSet),
+                            })
                         } else {
                             self.error(
                                 format!("unknown method 'List.{field}'"),

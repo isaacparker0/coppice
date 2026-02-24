@@ -1,5 +1,5 @@
 function main() -> nil {
-    values := [1, 2, 3]
+    mut values := [1, 2, 3]
 
     if values.length == 3 {
         print("length ok")
@@ -20,6 +20,14 @@ function main() -> nil {
     } else {
         print("missing present")
     }
+
+    values.set(1, 7)
+    updated := values.get(1)
+    updatedText := match updated {
+        n: int64 => string(n)
+        nil => "updated nil"
+    }
+    print(updatedText)
 
     return nil
 }

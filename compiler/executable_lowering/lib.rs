@@ -674,6 +674,7 @@ fn lower_expression(
                         }
                     }
                     TypeAnnotatedCallTarget::BuiltinListGet => ExecutableCallTarget::BuiltinListGet,
+                    TypeAnnotatedCallTarget::BuiltinListSet => ExecutableCallTarget::BuiltinListSet,
                     TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
                         ExecutableCallTarget::UserDefinedFunction {
                             callable_reference: ExecutableCallableReference {

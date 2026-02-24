@@ -1,8 +1,9 @@
 function run() -> int64 {
-    values := [1, 2, 3]
+    mut values := [1, 2, 3]
     length: int64 := values.length
     first: int64 | nil := values.get(0)
     missing: int64 | nil := values.get(99)
+    values.set(1, 7)
 
     if first == nil {
         return 0

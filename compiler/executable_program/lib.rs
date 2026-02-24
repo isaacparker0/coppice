@@ -35,6 +35,7 @@ pub enum ExecutableCallTarget {
         function_name: String,
     },
     BuiltinListGet,
+    BuiltinListSet,
     UserDefinedFunction {
         callable_reference: ExecutableCallableReference,
     },

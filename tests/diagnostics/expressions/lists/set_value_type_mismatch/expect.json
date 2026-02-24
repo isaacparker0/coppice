@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "argument 2 to 'set' must be int64, got boolean",
+            "span": {
+                "start": 70,
+                "end": 74,
+                "line": 3,
+                "column": 19
+            }
+        }
+    ]
+}

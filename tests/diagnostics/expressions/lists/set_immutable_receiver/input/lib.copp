@@ -1,0 +1,5 @@
+function run() -> nil {
+    values := [1, 2, 3]
+    values.set(1, 9)
+    return nil
+}

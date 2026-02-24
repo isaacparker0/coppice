@@ -1,0 +1,6 @@
+function main() -> nil {
+    mut values := [1, 2, 3]
+    values.set(9, 4)
+    print("unreachable")
+    return nil
+}

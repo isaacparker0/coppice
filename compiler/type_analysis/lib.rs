@@ -700,7 +700,8 @@ fn type_annotated_expression_from_semantic_expression(
                         Some(callable_reference.clone())
                     }
                     TypeAnnotatedCallTarget::BuiltinFunction { .. }
-                    | TypeAnnotatedCallTarget::BuiltinListGet => None,
+                    | TypeAnnotatedCallTarget::BuiltinListGet
+                    | TypeAnnotatedCallTarget::BuiltinListSet => None,
                 }),
             span: span.clone(),
         },
