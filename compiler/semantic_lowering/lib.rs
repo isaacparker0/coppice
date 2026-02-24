@@ -275,6 +275,7 @@ fn lower_parameter_declaration(
 ) -> semantic::SemanticParameterDeclaration {
     semantic::SemanticParameterDeclaration {
         name: parameter.name.clone(),
+        mutable: parameter.mutable,
         type_name: lower_type_name(&parameter.type_name),
         span: parameter.span.clone(),
     }

@@ -95,6 +95,7 @@ pub struct TypeAnnotatedTypeParameter {
 #[derive(Clone)]
 pub struct TypeAnnotatedParameterDeclaration {
     pub name: String,
+    pub mutable: bool,
     pub type_name: TypeAnnotatedTypeName,
     pub span: Span,
 }

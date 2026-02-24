@@ -42,6 +42,7 @@ pub enum ExecutableCallTarget {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableParameterDeclaration {
     pub name: String,
+    pub mutable: bool,
     pub type_reference: ExecutableTypeReference,
 }
 

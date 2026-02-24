@@ -1,8 +1,13 @@
+function writeAt(mut values: List[int64], index: int64, value: int64) -> nil {
+    values[index] = value
+    return nil
+}
+
 function run() -> int64 {
     mut values := [1, 2, 3]
     length: int64 := values.length
     first: int64 := values[0]
-    values[1] = 7
+    writeAt(values, 1, 7)
     second: int64 := values[1]
 
     if first == 1 and second == 7 {

@@ -7,10 +7,14 @@ type User :: struct {
         self = User { id: self.id + delta }
         return self.id
     },
+    function addWithOffset(self, mut value: int64, offset: int64) -> int64 {
+        value = value + offset
+        return self.id + value
+    },
 }
 
 function run() -> int64 {
     mut user := User { id: 41 }
     user.bump(1)
-    return user.idValue()
+    return user.idValue() + user.addWithOffset(1, 2)
 }

@@ -126,6 +126,7 @@ pub struct SemanticFunctionDeclaration {
 #[derive(Clone, Debug)]
 pub struct SemanticParameterDeclaration {
     pub name: String,
+    pub mutable: bool,
     pub type_name: SemanticTypeName,
     pub span: Span,
 }

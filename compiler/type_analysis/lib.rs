@@ -254,6 +254,7 @@ fn build_function_declaration_annotations(
                 .iter()
                 .map(|parameter| TypeAnnotatedParameterDeclaration {
                     name: parameter.name.clone(),
+                    mutable: parameter.mutable,
                     type_name: type_annotated_type_name_from_semantic_type_name(
                         &parameter.type_name,
                     ),
@@ -356,6 +357,7 @@ fn build_struct_declaration_annotations(
                                 .iter()
                                 .map(|parameter| TypeAnnotatedParameterDeclaration {
                                     name: parameter.name.clone(),
+                                    mutable: parameter.mutable,
                                     type_name: type_annotated_type_name_from_semantic_type_name(
                                         &parameter.type_name,
                                     ),
@@ -418,6 +420,7 @@ fn build_interface_declaration_annotations(
                                 .iter()
                                 .map(|parameter| TypeAnnotatedParameterDeclaration {
                                     name: parameter.name.clone(),
+                                    mutable: parameter.mutable,
                                     type_name: type_annotated_type_name_from_semantic_type_name(
                                         &parameter.type_name,
                                     ),

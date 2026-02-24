@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot assign to immutable binding 'value'",
+            "span": {
+                "start": 48,
+                "end": 53,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

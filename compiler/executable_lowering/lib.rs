@@ -158,6 +158,7 @@ fn lower_function_declarations(
             };
             executable_parameters.push(ExecutableParameterDeclaration {
                 name: parameter.name.clone(),
+                mutable: parameter.mutable,
                 type_reference,
             });
         }
@@ -270,6 +271,7 @@ fn lower_interface_declarations(
                 };
                 executable_parameters.push(ExecutableParameterDeclaration {
                     name: parameter.name.clone(),
+                    mutable: parameter.mutable,
                     type_reference,
                 });
             }
@@ -331,6 +333,7 @@ fn lower_method_declarations(
             };
             executable_parameters.push(ExecutableParameterDeclaration {
                 name: parameter.name.clone(),
+                mutable: parameter.mutable,
                 type_reference,
             });
         }

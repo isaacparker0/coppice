@@ -27,6 +27,10 @@ type Counter :: struct {
         }
         return "two"
     },
+    function add(self, mut value: int64) -> int64 {
+        value = value + self.value
+        return value
+    },
 }
 
 function identity[T](value: T) -> T {
@@ -56,5 +60,6 @@ function main() -> nil {
     mut counter := Counter { value: 1 }
     counter = counter.next()
     print(counter.describe())
+    print(string(counter.add(4)))
     return nil
 }

@@ -33,7 +33,7 @@ impl TypeChecker<'_> {
             self.define_variable(
                 parameter.name.clone(),
                 value_type,
-                false,
+                parameter.mutable,
                 parameter.span.clone(),
             );
         }
@@ -132,7 +132,7 @@ impl TypeChecker<'_> {
             self.define_variable(
                 parameter.name.clone(),
                 value_type,
-                false,
+                parameter.mutable,
                 parameter.span.clone(),
             );
         }

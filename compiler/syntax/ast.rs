@@ -171,6 +171,7 @@ pub struct SyntaxFunctionDeclaration {
 #[derive(Clone, Debug)]
 pub struct SyntaxParameterDeclaration {
     pub name: String,
+    pub mutable: bool,
     pub type_name: SyntaxTypeName,
     pub span: Span,
 }

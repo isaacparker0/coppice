@@ -1,0 +1,4 @@
+function increment(value: int64) -> int64 {
+    value = value + 1
+    return value
+}

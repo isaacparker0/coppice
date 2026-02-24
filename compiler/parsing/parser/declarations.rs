@@ -465,17 +465,25 @@ impl Parser {
     }
 
     pub(super) fn parse_parameter(&mut self) -> ParseResult<SyntaxParameterDeclaration> {
-        let (name, name_span) = self.expect_identifier()?;
+        let mut mutable = false;
+        let mut span_start = self.peek_span();
+        if self.peek_is_keyword(Keyword::Mut) {
+            let mut_span = self.advance().span;
+            mutable = true;
+            span_start = mut_span;
+        }
+        let (name, _) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
         let span = Span {
-            start: name_span.start,
+            start: span_start.start,
             end: type_name.span.end,
-            line: name_span.line,
-            column: name_span.column,
+            line: span_start.line,
+            column: span_start.column,
         };
         Ok(SyntaxParameterDeclaration {
             name,
+            mutable,
             type_name,
             span,
         })

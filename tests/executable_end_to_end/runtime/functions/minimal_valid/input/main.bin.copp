@@ -15,12 +15,18 @@ function plusOne(value: int64) -> int64 {
     return value + 1
 }
 
+function addTwo(mut value: int64) -> int64 {
+    value = value + 2
+    return value
+}
+
 function main() -> nil {
     localMapper: function(int64) -> int64 := plusOne
     importedMapper: function(int64) -> int64 := plusTwo
 
     first := apply(7, localMapper)
     second := apply(first, importedMapper)
+    print(string(addTwo(8)))
 
     print(describe(true))
     if second == 10 {
