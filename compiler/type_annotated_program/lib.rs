@@ -53,8 +53,6 @@ pub enum TypeAnnotatedCallTarget {
     BuiltinFunction {
         function_name: String,
     },
-    BuiltinListGet,
-    BuiltinListSet,
     UserDefinedFunction {
         callable_reference: TypeAnnotatedCallableReference,
     },
@@ -155,7 +153,7 @@ pub enum TypeAnnotatedStatement {
         span: Span,
     },
     Assign {
-        name: String,
+        target: TypeAnnotatedAssignTarget,
         value: TypeAnnotatedExpression,
         span: Span,
     },
@@ -182,6 +180,19 @@ pub enum TypeAnnotatedStatement {
     },
     Return {
         value: TypeAnnotatedExpression,
+        span: Span,
+    },
+}
+
+#[derive(Clone)]
+pub enum TypeAnnotatedAssignTarget {
+    Name {
+        name: String,
+        span: Span,
+    },
+    Index {
+        target: Box<TypeAnnotatedExpression>,
+        index: Box<TypeAnnotatedExpression>,
         span: Span,
     },
 }
@@ -228,6 +239,11 @@ pub enum TypeAnnotatedExpression {
     FieldAccess {
         target: Box<TypeAnnotatedExpression>,
         field: String,
+        span: Span,
+    },
+    IndexAccess {
+        target: Box<TypeAnnotatedExpression>,
+        index: Box<TypeAnnotatedExpression>,
         span: Span,
     },
     Unary {

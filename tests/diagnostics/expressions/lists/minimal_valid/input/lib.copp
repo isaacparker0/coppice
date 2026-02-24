@@ -1,15 +1,12 @@
 function run() -> int64 {
     mut values := [1, 2, 3]
     length: int64 := values.length
-    first: int64 | nil := values.get(0)
-    missing: int64 | nil := values.get(99)
-    values.set(1, 7)
+    first: int64 := values[0]
+    values[1] = 7
+    second: int64 := values[1]
 
-    if first == nil {
-        return 0
-    }
-    if missing == nil {
+    if first == 1 and second == 7 {
         return length
     }
-    return length
+    return 0
 }

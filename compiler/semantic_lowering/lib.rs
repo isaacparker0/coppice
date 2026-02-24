@@ -318,13 +318,11 @@ fn lower_statement(
             span: span.clone(),
         },
         syntax::SyntaxStatement::Assign {
-            name,
-            name_span,
+            target,
             value,
             span,
         } => semantic::SemanticStatement::Assign {
-            name: name.clone(),
-            name_span: name_span.clone(),
+            target: lower_assign_target(target, context),
             value: lower_expression(value, context),
             span: span.clone(),
         },
@@ -366,6 +364,32 @@ fn lower_statement(
                 span: span.clone(),
             }
         }
+    }
+}
+
+fn lower_assign_target(
+    target: &syntax::SyntaxAssignTarget,
+    context: &mut LoweringContext,
+) -> semantic::SemanticAssignTarget {
+    match target {
+        syntax::SyntaxAssignTarget::Name {
+            name,
+            name_span,
+            span,
+        } => semantic::SemanticAssignTarget::Name {
+            name: name.clone(),
+            name_span: name_span.clone(),
+            span: span.clone(),
+        },
+        syntax::SyntaxAssignTarget::Index {
+            target,
+            index,
+            span,
+        } => semantic::SemanticAssignTarget::Index {
+            target: Box::new(lower_expression(target, context)),
+            index: Box::new(lower_expression(index, context)),
+            span: span.clone(),
+        },
     }
 }
 
@@ -448,6 +472,16 @@ fn lower_expression(
             target: Box::new(lower_expression(target, context)),
             field: field.clone(),
             field_span: field_span.clone(),
+            span: span.clone(),
+        },
+        syntax::SyntaxExpression::IndexAccess {
+            target,
+            index,
+            span,
+        } => semantic::SemanticExpression::IndexAccess {
+            id,
+            target: Box::new(lower_expression(target, context)),
+            index: Box::new(lower_expression(index, context)),
             span: span.clone(),
         },
         syntax::SyntaxExpression::Call {

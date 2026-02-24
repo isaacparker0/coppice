@@ -4,12 +4,12 @@
         {
             "phase": "type_analysis",
             "path": "lib.copp",
-            "message": "cannot call mutating method 'List.set' on immutable binding 'values'",
+            "message": "cannot index-assign through immutable binding 'values'",
             "span": {
-                "start": 59,
-                "end": 62,
+                "start": 52,
+                "end": 58,
                 "line": 3,
-                "column": 12
+                "column": 5
             }
         }
     ]

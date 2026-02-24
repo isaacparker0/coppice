@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use compiler__semantic_program::{
-    SemanticBlock, SemanticExpression, SemanticFunctionDeclaration, SemanticMethodDeclaration,
-    SemanticStatement, SemanticTypeDeclaration, SemanticTypeDeclarationKind,
+    SemanticAssignTarget, SemanticBlock, SemanticExpression, SemanticFunctionDeclaration,
+    SemanticMethodDeclaration, SemanticStatement, SemanticTypeDeclaration,
+    SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{NominalTypeId, NominalTypeRef, Type};
 
@@ -222,52 +223,102 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            SemanticStatement::Assign {
-                name,
-                name_span,
-                value,
-                ..
-            } => {
+            SemanticStatement::Assign { target, value, .. } => {
                 let value_type = self.check_expression(value);
-                if let Some((is_mutable, variable_type)) = self.lookup_variable_for_assignment(name)
-                {
-                    if !is_mutable {
-                        self.error(
-                            format!("cannot assign to immutable binding '{name}'"),
-                            name_span.clone(),
-                        );
-                    } else if variable_type != Type::Unknown
-                        && value_type != Type::Unknown
-                        && !self.is_assignable(&value_type, &variable_type)
-                    {
-                        self.error(
-                            format!(
-                                "assignment type mismatch: expected {}, got {}",
-                                variable_type.display(),
-                                value_type.display()
-                            ),
-                            value.span(),
-                        );
+                match target {
+                    SemanticAssignTarget::Name {
+                        name, name_span, ..
+                    } => {
+                        if let Some((is_mutable, variable_type)) =
+                            self.lookup_variable_for_assignment(name)
+                        {
+                            if !is_mutable {
+                                self.error(
+                                    format!("cannot assign to immutable binding '{name}'"),
+                                    name_span.clone(),
+                                );
+                            } else if variable_type != Type::Unknown
+                                && value_type != Type::Unknown
+                                && !self.is_assignable(&value_type, &variable_type)
+                            {
+                                self.error(
+                                    format!(
+                                        "assignment type mismatch: expected {}, got {}",
+                                        variable_type.display(),
+                                        value_type.display()
+                                    ),
+                                    value.span(),
+                                );
+                            }
+                        } else if self.constants.contains_key(name) {
+                            self.error(
+                                format!("cannot assign to constant '{name}'"),
+                                name_span.clone(),
+                            );
+                        } else if self.imported_constant_type(name).is_some() {
+                            self.mark_import_used(name);
+                            self.error(
+                                format!("cannot assign to constant '{name}'"),
+                                name_span.clone(),
+                            );
+                        } else {
+                            self.error(format!("unknown name '{name}'"), name_span.clone());
+                        }
                     }
-                } else if self.constants.contains_key(name) {
-                    self.error(
-                        format!("cannot assign to constant '{name}'"),
-                        name_span.clone(),
-                    );
-                } else if self.imported_constant_type(name).is_some() {
-                    self.mark_import_used(name);
-                    self.error(
-                        format!("cannot assign to constant '{name}'"),
-                        name_span.clone(),
-                    );
-                } else {
-                    self.error(format!("unknown name '{name}'"), name_span.clone());
-                }
-                if value_type == Type::Never {
-                    return StatementOutcome {
-                        terminates: true,
-                        fallthrough_narrowing: None,
-                    };
+                    SemanticAssignTarget::Index {
+                        target,
+                        index,
+                        span: _,
+                    } => {
+                        if let Some(binding_name) = Self::assignment_root_binding_name(target) {
+                            let receiver_is_mutable = self
+                                .lookup_variable_for_assignment(binding_name)
+                                .is_some_and(|(is_mutable, _)| is_mutable);
+                            if !receiver_is_mutable
+                                && (self.constants.contains_key(binding_name)
+                                    || self.lookup_variable_type(binding_name).is_some())
+                            {
+                                self.error(
+                                    format!(
+                                        "cannot index-assign through immutable binding '{binding_name}'"
+                                    ),
+                                    target.span(),
+                                );
+                            }
+                        } else {
+                            self.error(
+                                "cannot index-assign through non-binding receiver",
+                                target.span(),
+                            );
+                        }
+                        let target_type = self.check_expression(target);
+                        let index_type = self.check_expression(index);
+                        if index_type != Type::Integer64 && index_type != Type::Unknown {
+                            self.error("list index must be int64", index.span());
+                        }
+                        if let Type::List(element_type) = target_type {
+                            if value_type != Type::Unknown
+                                && !self.is_assignable(&value_type, &element_type)
+                            {
+                                self.error(
+                                    format!(
+                                        "indexed assignment type mismatch: expected {}, got {}",
+                                        element_type.display(),
+                                        value_type.display()
+                                    ),
+                                    value.span(),
+                                );
+                            }
+                        } else if target_type != Type::Unknown {
+                            self.error(
+                                format!(
+                                    "cannot index-assign non-list type {}",
+                                    target_type.display()
+                                ),
+                                target.span(),
+                            );
+                        }
+                    }
                 }
                 StatementOutcome {
                     terminates: false,
@@ -395,6 +446,17 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
+        }
+    }
+
+    fn assignment_root_binding_name(target: &SemanticExpression) -> Option<&str> {
+        match target {
+            SemanticExpression::NameReference { name, .. } => Some(name),
+            SemanticExpression::FieldAccess { target, .. }
+            | SemanticExpression::IndexAccess { target, .. } => {
+                Self::assignment_root_binding_name(target)
+            }
+            _ => None,
         }
     }
 }

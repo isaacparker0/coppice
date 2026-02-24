@@ -7,27 +7,16 @@ function main() -> nil {
         print("length bad")
     }
 
-    first := values.get(0)
-    if first == nil {
-        print("first nil")
-    } else {
+    first := values[0]
+    if first == 1 {
         print("first ok")
-    }
-
-    missing := values.get(99)
-    if missing == nil {
-        print("missing nil")
     } else {
-        print("missing present")
+        print("first bad")
     }
 
-    values.set(1, 7)
-    updated := values.get(1)
-    updatedText := match updated {
-        n: int64 => string(n)
-        nil => "updated nil"
-    }
-    print(updatedText)
+    values[1] = 7
+    updated := values[1]
+    print(string(updated))
 
     return nil
 }

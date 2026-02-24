@@ -1,3 +1,0 @@
-lib.copp:3:19: error: argument 2 to 'set' must be int64, got boolean
-      values.set(1, true)
-                    ^

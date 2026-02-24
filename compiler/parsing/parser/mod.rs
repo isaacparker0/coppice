@@ -32,7 +32,6 @@ pub(super) enum MissingTokenKind {
 pub(super) enum InvalidConstructKind {
     FirstMethodParameterMustBeSelf,
     ConstantsRequireExplicitTypeAnnotation,
-    TypeArgumentsMustBeFollowedByCall,
     PatternTypeArgumentsNotSupported,
 }
 
@@ -82,6 +81,13 @@ pub(crate) struct Parser {
     position: usize,
     parse_errors: Vec<ParseError>,
     deferred_parse_errors: Vec<ParseError>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ParserCheckpoint {
+    position: usize,
+    parse_errors_len: usize,
+    deferred_parse_errors_len: usize,
 }
 
 impl Parser {
@@ -259,6 +265,21 @@ impl Parser {
         token
     }
 
+    fn checkpoint(&self) -> ParserCheckpoint {
+        ParserCheckpoint {
+            position: self.position,
+            parse_errors_len: self.parse_errors.len(),
+            deferred_parse_errors_len: self.deferred_parse_errors.len(),
+        }
+    }
+
+    fn restore(&mut self, checkpoint: ParserCheckpoint) {
+        self.position = checkpoint.position;
+        self.parse_errors.truncate(checkpoint.parse_errors_len);
+        self.deferred_parse_errors
+            .truncate(checkpoint.deferred_parse_errors_len);
+    }
+
     fn skip_statement_terminators(&mut self) {
         while matches!(self.peek().kind, TokenKind::StatementTerminator) {
             self.advance();
@@ -340,9 +361,6 @@ impl Parser {
                     InvalidConstructKind::ConstantsRequireExplicitTypeAnnotation => {
                         "constants require an explicit type annotation".to_string()
                     }
-                    InvalidConstructKind::TypeArgumentsMustBeFollowedByCall => {
-                        "type arguments must be followed by a call".to_string()
-                    }
                     InvalidConstructKind::PatternTypeArgumentsNotSupported => {
                         "match patterns must not include type arguments".to_string()
                     }
@@ -396,6 +414,7 @@ impl ExpressionSpan for SyntaxExpression {
             | SyntaxExpression::NameReference { span, .. }
             | SyntaxExpression::StructLiteral { span, .. }
             | SyntaxExpression::FieldAccess { span, .. }
+            | SyntaxExpression::IndexAccess { span, .. }
             | SyntaxExpression::Call { span, .. }
             | SyntaxExpression::Unary { span, .. }
             | SyntaxExpression::Binary { span, .. }

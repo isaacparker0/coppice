@@ -4,9 +4,10 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
-    SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration, SemanticExpression,
-    SemanticExpressionId, SemanticFile, SemanticFunctionDeclaration, SemanticNameReferenceKind,
-    SemanticStatement, SemanticTypeDeclaration, SemanticTypeName, SemanticUnaryOperator,
+    SemanticAssignTarget, SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration,
+    SemanticExpression, SemanticExpressionId, SemanticFile, SemanticFunctionDeclaration,
+    SemanticNameReferenceKind, SemanticStatement, SemanticTypeDeclaration, SemanticTypeName,
+    SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
     FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
@@ -15,10 +16,10 @@ use compiler__semantic_types::{
 };
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference,
-    TypeAnnotatedConstantDeclaration, TypeAnnotatedConstantReference,
-    TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
+    TypeAnnotatedAssignTarget, TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget,
+    TypeAnnotatedCallableReference, TypeAnnotatedConstantDeclaration,
+    TypeAnnotatedConstantReference, TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression,
+    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
     TypeAnnotatedInterfaceDeclaration, TypeAnnotatedInterfaceMethodDeclaration,
     TypeAnnotatedInterfaceReference, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
     TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
@@ -482,9 +483,19 @@ fn type_annotated_statement_from_semantic_statement(
             span: span.clone(),
         },
         SemanticStatement::Assign {
-            name, value, span, ..
+            target,
+            value,
+            span,
         } => TypeAnnotatedStatement::Assign {
-            name: name.clone(),
+            target: type_annotated_assign_target_from_semantic_assign_target(
+                target,
+                resolved_type_by_expression_id,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            ),
             value: type_annotated_expression_from_semantic_expression(
                 value,
                 resolved_type_by_expression_id,
@@ -609,6 +620,60 @@ fn type_annotated_statement_from_semantic_statement(
     }
 }
 
+fn type_annotated_assign_target_from_semantic_assign_target(
+    target: &SemanticAssignTarget,
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
+    enum_variant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedEnumVariantReference,
+    >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
+    >,
+) -> TypeAnnotatedAssignTarget {
+    match target {
+        SemanticAssignTarget::Name { name, span, .. } => TypeAnnotatedAssignTarget::Name {
+            name: name.clone(),
+            span: span.clone(),
+        },
+        SemanticAssignTarget::Index {
+            target,
+            index,
+            span,
+        } => TypeAnnotatedAssignTarget::Index {
+            target: Box::new(type_annotated_expression_from_semantic_expression(
+                target,
+                resolved_type_by_expression_id,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            )),
+            index: Box::new(type_annotated_expression_from_semantic_expression(
+                index,
+                resolved_type_by_expression_id,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            )),
+            span: span.clone(),
+        },
+    }
+}
+
 fn type_annotated_expression_from_semantic_expression(
     expression: &SemanticExpression,
     resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
@@ -699,9 +764,7 @@ fn type_annotated_expression_from_semantic_expression(
                     TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
                         Some(callable_reference.clone())
                     }
-                    TypeAnnotatedCallTarget::BuiltinFunction { .. }
-                    | TypeAnnotatedCallTarget::BuiltinListGet
-                    | TypeAnnotatedCallTarget::BuiltinListSet => None,
+                    TypeAnnotatedCallTarget::BuiltinFunction { .. } => None,
                 }),
             span: span.clone(),
         },
@@ -761,6 +824,32 @@ fn type_annotated_expression_from_semantic_expression(
                 constant_reference_by_expression_id,
             )),
             field: field.clone(),
+            span: span.clone(),
+        },
+        SemanticExpression::IndexAccess {
+            target,
+            index,
+            span,
+            ..
+        } => TypeAnnotatedExpression::IndexAccess {
+            target: Box::new(type_annotated_expression_from_semantic_expression(
+                target,
+                resolved_type_by_expression_id,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            )),
+            index: Box::new(type_annotated_expression_from_semantic_expression(
+                index,
+                resolved_type_by_expression_id,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            )),
             span: span.clone(),
         },
         SemanticExpression::Unary {
@@ -1239,6 +1328,7 @@ fn semantic_expression_id(expression: &SemanticExpression) -> SemanticExpression
         | SemanticExpression::NameReference { id, .. }
         | SemanticExpression::StructLiteral { id, .. }
         | SemanticExpression::FieldAccess { id, .. }
+        | SemanticExpression::IndexAccess { id, .. }
         | SemanticExpression::Call { id, .. }
         | SemanticExpression::Unary { id, .. }
         | SemanticExpression::Binary { id, .. }
@@ -1362,8 +1452,23 @@ fn annotate_statement_nominal_references(
                 nominal_type_reference_by_local_name,
             );
         }
-        TypeAnnotatedStatement::Assign { value, .. }
-        | TypeAnnotatedStatement::Expression { value, .. }
+        TypeAnnotatedStatement::Assign { target, value, .. } => {
+            match target {
+                TypeAnnotatedAssignTarget::Name { .. } => {}
+                TypeAnnotatedAssignTarget::Index { target, index, .. } => {
+                    annotate_expression_nominal_references(
+                        target,
+                        nominal_type_reference_by_local_name,
+                    );
+                    annotate_expression_nominal_references(
+                        index,
+                        nominal_type_reference_by_local_name,
+                    );
+                }
+            }
+            annotate_expression_nominal_references(value, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedStatement::Expression { value, .. }
         | TypeAnnotatedStatement::Return { value, .. } => {
             annotate_expression_nominal_references(value, nominal_type_reference_by_local_name);
         }
@@ -1443,6 +1548,10 @@ fn annotate_expression_nominal_references(
         }
         TypeAnnotatedExpression::FieldAccess { target, .. } => {
             annotate_expression_nominal_references(target, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedExpression::IndexAccess { target, index, .. } => {
+            annotate_expression_nominal_references(target, nominal_type_reference_by_local_name);
+            annotate_expression_nominal_references(index, nominal_type_reference_by_local_name);
         }
         TypeAnnotatedExpression::Unary { expression, .. } => {
             annotate_expression_nominal_references(
@@ -2527,6 +2636,7 @@ impl ExpressionSpan for SemanticExpression {
             | SemanticExpression::NameReference { span, .. }
             | SemanticExpression::StructLiteral { span, .. }
             | SemanticExpression::FieldAccess { span, .. }
+            | SemanticExpression::IndexAccess { span, .. }
             | SemanticExpression::Call { span, .. }
             | SemanticExpression::Unary { span, .. }
             | SemanticExpression::Binary { span, .. }

@@ -7,12 +7,12 @@ use crate::runtime_interface_emission::{
     ExternalRuntimeFunctions, declare_runtime_interface_functions,
 };
 use compiler__executable_program::{
-    ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableInterfaceDeclaration,
-    ExecutableInterfaceReference, ExecutableMatchArm, ExecutableMatchPattern,
-    ExecutableMethodDeclaration, ExecutableNominalTypeReference, ExecutableProgram,
-    ExecutableStatement, ExecutableStructDeclaration, ExecutableStructReference,
+    ExecutableAssignTarget, ExecutableBinaryOperator, ExecutableCallTarget,
+    ExecutableCallableReference, ExecutableConstantDeclaration, ExecutableConstantReference,
+    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
+    ExecutableInterfaceDeclaration, ExecutableInterfaceReference, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableNominalTypeReference,
+    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration, ExecutableStructReference,
     ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::CompilerFailure;
@@ -171,14 +171,21 @@ fn ensure_type_supported(type_reference: &ExecutableTypeReference) {
 fn ensure_statement_supported(statement: &ExecutableStatement) -> Result<(), CompilerFailure> {
     match statement {
         ExecutableStatement::Binding { initializer, .. }
-        | ExecutableStatement::Assign {
-            value: initializer, ..
-        }
         | ExecutableStatement::Expression {
             expression: initializer,
         }
         | ExecutableStatement::Return { value: initializer } => {
             ensure_expression_supported(initializer)
+        }
+        ExecutableStatement::Assign { target, value } => {
+            match target {
+                ExecutableAssignTarget::Name { .. } => {}
+                ExecutableAssignTarget::Index { target, index } => {
+                    ensure_expression_supported(target)?;
+                    ensure_expression_supported(index)?;
+                }
+            }
+            ensure_expression_supported(value)
         }
         ExecutableStatement::If {
             condition,
@@ -221,6 +228,7 @@ fn ensure_expression_supported(expression: &ExecutableExpression) -> Result<(), 
         | ExecutableExpression::ListLiteral { .. }
         | ExecutableExpression::Identifier { .. }
         | ExecutableExpression::StructLiteral { .. }
+        | ExecutableExpression::IndexAccess { .. }
         | ExecutableExpression::FieldAccess { .. }
         | ExecutableExpression::EnumVariantLiteral { .. } => Ok(()),
         ExecutableExpression::Unary { expression, .. } => ensure_expression_supported(expression),
@@ -830,31 +838,43 @@ fn compile_statements(
                     .local_value_by_name
                     .insert(name.clone(), local_value);
             }
-            ExecutableStatement::Assign { name, value } => {
-                let local_value = compilation_context
-                    .local_value_by_name
-                    .get(name)
-                    .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?
-                    .clone();
-                let assigned_value =
-                    compile_expression(state, function_builder, compilation_context, value)?;
-                if assigned_value.terminates {
-                    return Ok(true);
+            ExecutableStatement::Assign { target, value } => match target {
+                ExecutableAssignTarget::Name { name } => {
+                    let local_value = compilation_context
+                        .local_value_by_name
+                        .get(name)
+                        .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?
+                        .clone();
+                    let assigned_value =
+                        compile_expression(state, function_builder, compilation_context, value)?;
+                    if assigned_value.terminates {
+                        return Ok(true);
+                    }
+                    if local_value.type_reference != assigned_value.type_reference {
+                        return Err(build_failed(
+                            format!("assignment type mismatch for local '{name}'"),
+                            None,
+                        ));
+                    }
+                    let Some(value) = assigned_value.value else {
+                        return Err(build_failed(
+                            format!("assignment value for '{name}' produced no runtime value"),
+                            None,
+                        ));
+                    };
+                    function_builder.def_var(local_value.variable, value);
                 }
-                if local_value.type_reference != assigned_value.type_reference {
-                    return Err(build_failed(
-                        format!("assignment type mismatch for local '{name}'"),
-                        None,
-                    ));
+                ExecutableAssignTarget::Index { target, index } => {
+                    compile_index_assign_statement(
+                        state,
+                        function_builder,
+                        compilation_context,
+                        target,
+                        index,
+                        value,
+                    )?;
                 }
-                let Some(value) = assigned_value.value else {
-                    return Err(build_failed(
-                        format!("assignment value for '{name}' produced no runtime value"),
-                        None,
-                    ));
-                };
-                function_builder.def_var(local_value.variable, value);
-            }
+            },
             ExecutableStatement::If {
                 condition,
                 then_statements,
@@ -1229,6 +1249,13 @@ fn compile_expression(
             compilation_context,
             target,
             field,
+        ),
+        ExecutableExpression::IndexAccess { target, index } => compile_index_access_expression(
+            state,
+            function_builder,
+            compilation_context,
+            target,
+            index,
         ),
         ExecutableExpression::Unary {
             operator,
@@ -1669,22 +1696,6 @@ fn compile_call_expression(
                     None,
                 ))
             }
-            ExecutableCallTarget::BuiltinListGet => compile_builtin_list_get_call(
-                state,
-                function_builder,
-                compilation_context,
-                callee,
-                arguments,
-                type_arguments,
-            ),
-            ExecutableCallTarget::BuiltinListSet => compile_builtin_list_set_call(
-                state,
-                function_builder,
-                compilation_context,
-                callee,
-                arguments,
-                type_arguments,
-            ),
             ExecutableCallTarget::UserDefinedFunction { callable_reference } => {
                 let function_record = state
                     .function_record_by_callable_reference
@@ -2064,39 +2075,13 @@ fn compile_builtin_conversion_call(
     Ok(Some(converted))
 }
 
-fn compile_builtin_list_get_call(
+fn compile_index_access_expression(
     state: &mut CompilationState,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
-    callee: &ExecutableExpression,
-    arguments: &[ExecutableExpression],
-    type_arguments: &[ExecutableTypeReference],
+    target: &ExecutableExpression,
+    index: &ExecutableExpression,
 ) -> Result<TypedValue, CompilerFailure> {
-    if !type_arguments.is_empty() {
-        return Err(build_failed(
-            "List.get does not take type arguments".to_string(),
-            None,
-        ));
-    }
-    if arguments.len() != 1 {
-        return Err(build_failed(
-            "List.get requires exactly one argument".to_string(),
-            None,
-        ));
-    }
-    let ExecutableExpression::FieldAccess { target, field } = callee else {
-        return Err(build_failed(
-            "List.get call target must be field access".to_string(),
-            None,
-        ));
-    };
-    if field != "get" {
-        return Err(build_failed(
-            "List.get call target must use '.get'".to_string(),
-            None,
-        ));
-    }
-
     let compiled_target = compile_expression(state, function_builder, compilation_context, target)?;
     if compiled_target.terminates {
         return Ok(compiled_target);
@@ -2104,33 +2089,32 @@ fn compile_builtin_list_get_call(
     let ExecutableTypeReference::List { element_type } = &compiled_target.type_reference else {
         return Err(build_failed(
             format!(
-                "List.get receiver must be List, got {}",
+                "index access target must be List, got {}",
                 type_reference_display(&compiled_target.type_reference)
             ),
             None,
         ));
     };
 
-    let compiled_index =
-        compile_expression(state, function_builder, compilation_context, &arguments[0])?;
+    let compiled_index = compile_expression(state, function_builder, compilation_context, index)?;
     if compiled_index.terminates {
         return Ok(compiled_index);
     }
     if compiled_index.type_reference != ExecutableTypeReference::Int64 {
-        return Err(build_failed(
-            "List.get index must be int64".to_string(),
-            None,
-        ));
+        return Err(build_failed("list index must be int64".to_string(), None));
     }
 
     let list_pointer = compiled_target.value.ok_or_else(|| {
         build_failed(
-            "List.get receiver produced no runtime value".to_string(),
+            "index access target produced no runtime value".to_string(),
             None,
         )
     })?;
     let index_value = compiled_index.value.ok_or_else(|| {
-        build_failed("List.get index produced no runtime value".to_string(), None)
+        build_failed(
+            "index expression produced no runtime value".to_string(),
+            None,
+        )
     })?;
     let list_length = function_builder.ins().load(
         types::I64,
@@ -2145,34 +2129,41 @@ fn compile_builtin_list_get_call(
         LIST_DATA_POINTER_OFFSET,
     );
 
-    let out_block = function_builder.create_block();
-    let in_block = function_builder.create_block();
+    let store_block = function_builder.create_block();
+    let invalid_index_block = function_builder.create_block();
+    let non_negative_block = function_builder.create_block();
     let merge_block = function_builder.create_block();
-    function_builder.append_block_param(merge_block, types::I64);
+    function_builder.append_block_param(merge_block, cranelift_type_for(element_type));
 
     let zero_value = function_builder.ins().iconst(types::I64, 0);
     let index_is_non_negative =
         function_builder
             .ins()
             .icmp(IntCC::SignedGreaterThanOrEqual, index_value, zero_value);
-    function_builder
-        .ins()
-        .brif(index_is_non_negative, in_block, &[], out_block, &[]);
-    function_builder.seal_block(in_block);
+    function_builder.ins().brif(
+        index_is_non_negative,
+        non_negative_block,
+        &[],
+        invalid_index_block,
+        &[],
+    );
+    function_builder.seal_block(non_negative_block);
 
-    function_builder.switch_to_block(in_block);
+    function_builder.switch_to_block(non_negative_block);
     let index_in_range =
         function_builder
             .ins()
             .icmp(IntCC::SignedLessThan, index_value, list_length);
-    let load_block = function_builder.create_block();
     function_builder
         .ins()
-        .brif(index_in_range, load_block, &[], out_block, &[]);
-    function_builder.seal_block(load_block);
-    function_builder.seal_block(out_block);
+        .brif(index_in_range, store_block, &[], invalid_index_block, &[]);
+    function_builder.seal_block(store_block);
+    function_builder.seal_block(invalid_index_block);
 
-    function_builder.switch_to_block(load_block);
+    function_builder.switch_to_block(invalid_index_block);
+    function_builder.ins().trap(TrapCode::user(3).unwrap());
+
+    function_builder.switch_to_block(store_block);
     let element_offset = function_builder.ins().imul_imm(index_value, 8);
     let element_pointer = function_builder
         .ins()
@@ -2183,119 +2174,57 @@ fn compile_builtin_list_get_call(
             .load(types::I64, MemFlags::new(), element_pointer, 0);
     let loaded_value =
         runtime_value_from_i64_storage(function_builder, loaded_storage, element_type);
-    let list_get_type_reference = list_get_type_reference(element_type);
-    let boxed_loaded = runtime_value_for_expected_type(
-        state,
-        function_builder,
-        Some(loaded_value),
-        element_type,
-        &list_get_type_reference,
-    )?
-    .ok_or_else(|| {
-        build_failed(
-            "List.get result produced no runtime value".to_string(),
-            None,
-        )
-    })?;
-    let merge_arguments = [BlockArg::Value(boxed_loaded)];
-    function_builder.ins().jump(merge_block, &merge_arguments);
-
-    function_builder.switch_to_block(out_block);
-    let nil_value = function_builder.ins().iconst(types::I64, 0);
-    let boxed_nil = runtime_value_for_expected_type(
-        state,
-        function_builder,
-        Some(nil_value),
-        &ExecutableTypeReference::Nil,
-        &list_get_type_reference,
-    )?
-    .ok_or_else(|| {
-        build_failed(
-            "List.get nil result produced no runtime value".to_string(),
-            None,
-        )
-    })?;
-    let merge_arguments = [BlockArg::Value(boxed_nil)];
+    let merge_arguments = [BlockArg::Value(loaded_value)];
     function_builder.ins().jump(merge_block, &merge_arguments);
     function_builder.seal_block(merge_block);
 
     function_builder.switch_to_block(merge_block);
-    let merged_value = function_builder.block_params(merge_block)[0];
+    let value = function_builder.block_params(merge_block)[0];
     Ok(TypedValue {
-        value: Some(merged_value),
-        type_reference: list_get_type_reference,
+        value: Some(value),
+        type_reference: (**element_type).clone(),
         terminates: false,
     })
 }
 
-fn compile_builtin_list_set_call(
+fn compile_index_assign_statement(
     state: &mut CompilationState,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
-    callee: &ExecutableExpression,
-    arguments: &[ExecutableExpression],
-    type_arguments: &[ExecutableTypeReference],
-) -> Result<TypedValue, CompilerFailure> {
-    if !type_arguments.is_empty() {
-        return Err(build_failed(
-            "List.set does not take type arguments".to_string(),
-            None,
-        ));
-    }
-    if arguments.len() != 2 {
-        return Err(build_failed(
-            "List.set requires exactly two arguments".to_string(),
-            None,
-        ));
-    }
-    let ExecutableExpression::FieldAccess { target, field } = callee else {
-        return Err(build_failed(
-            "List.set call target must be field access".to_string(),
-            None,
-        ));
-    };
-    if field != "set" {
-        return Err(build_failed(
-            "List.set call target must use '.set'".to_string(),
-            None,
-        ));
-    }
-
+    target: &ExecutableExpression,
+    index: &ExecutableExpression,
+    value: &ExecutableExpression,
+) -> Result<(), CompilerFailure> {
     let compiled_target = compile_expression(state, function_builder, compilation_context, target)?;
     if compiled_target.terminates {
-        return Ok(compiled_target);
+        return Ok(());
     }
     let ExecutableTypeReference::List { element_type } = &compiled_target.type_reference else {
         return Err(build_failed(
             format!(
-                "List.set receiver must be List, got {}",
+                "index assignment target must be List, got {}",
                 type_reference_display(&compiled_target.type_reference)
             ),
             None,
         ));
     };
 
-    let compiled_index =
-        compile_expression(state, function_builder, compilation_context, &arguments[0])?;
+    let compiled_index = compile_expression(state, function_builder, compilation_context, index)?;
     if compiled_index.terminates {
-        return Ok(compiled_index);
+        return Ok(());
     }
     if compiled_index.type_reference != ExecutableTypeReference::Int64 {
-        return Err(build_failed(
-            "List.set index must be int64".to_string(),
-            None,
-        ));
+        return Err(build_failed("list index must be int64".to_string(), None));
     }
 
-    let compiled_value =
-        compile_expression(state, function_builder, compilation_context, &arguments[1])?;
+    let compiled_value = compile_expression(state, function_builder, compilation_context, value)?;
     if compiled_value.terminates {
-        return Ok(compiled_value);
+        return Ok(());
     }
     if !is_type_assignable(state, &compiled_value.type_reference, element_type) {
         return Err(build_failed(
             format!(
-                "List.set value type mismatch: expected {}, got {}",
+                "indexed assignment type mismatch: expected {}, got {}",
                 type_reference_display(element_type),
                 type_reference_display(&compiled_value.type_reference)
             ),
@@ -2305,12 +2234,15 @@ fn compile_builtin_list_set_call(
 
     let list_pointer = compiled_target.value.ok_or_else(|| {
         build_failed(
-            "List.set receiver produced no runtime value".to_string(),
+            "index assignment target produced no runtime value".to_string(),
             None,
         )
     })?;
     let index_value = compiled_index.value.ok_or_else(|| {
-        build_failed("List.set index produced no runtime value".to_string(), None)
+        build_failed(
+            "index expression produced no runtime value".to_string(),
+            None,
+        )
     })?;
     let lowered_value = runtime_value_for_expected_type(
         state,
@@ -2319,7 +2251,12 @@ fn compile_builtin_list_set_call(
         &compiled_value.type_reference,
         element_type,
     )?
-    .ok_or_else(|| build_failed("List.set value produced no runtime value".to_string(), None))?;
+    .ok_or_else(|| {
+        build_failed(
+            "indexed assignment value produced no runtime value".to_string(),
+            None,
+        )
+    })?;
     let stored_value = i64_storage_value_for_type(function_builder, lowered_value, element_type);
 
     let list_length = function_builder.ins().load(
@@ -2375,12 +2312,7 @@ fn compile_builtin_list_set_call(
     function_builder
         .ins()
         .store(MemFlags::new(), stored_value, element_pointer, 0);
-
-    Ok(TypedValue {
-        value: None,
-        type_reference: ExecutableTypeReference::Nil,
-        terminates: false,
-    })
+    Ok(())
 }
 
 fn compile_struct_literal_expression(
@@ -3473,26 +3405,6 @@ fn type_reference_matches_pattern_type(
             .iter()
             .any(|member| type_reference_matches_pattern_type(member, pattern_type_reference)),
         _ => false,
-    }
-}
-
-fn list_get_type_reference(element_type: &ExecutableTypeReference) -> ExecutableTypeReference {
-    if *element_type == ExecutableTypeReference::Nil {
-        return ExecutableTypeReference::Nil;
-    }
-    match element_type {
-        ExecutableTypeReference::Union { members } => {
-            let mut result_members = members.clone();
-            if !result_members.contains(&ExecutableTypeReference::Nil) {
-                result_members.push(ExecutableTypeReference::Nil);
-            }
-            ExecutableTypeReference::Union {
-                members: result_members,
-            }
-        }
-        _ => ExecutableTypeReference::Union {
-            members: vec![element_type.clone(), ExecutableTypeReference::Nil],
-        },
     }
 }
 

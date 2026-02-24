@@ -2,23 +2,25 @@ use std::collections::BTreeMap;
 
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
-    ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableInterfaceDeclaration,
-    ExecutableInterfaceMethodDeclaration, ExecutableInterfaceReference, ExecutableMatchArm,
-    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableNominalTypeReference,
-    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
-    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableAssignTarget, ExecutableBinaryOperator, ExecutableCallTarget,
+    ExecutableCallableReference, ExecutableConstantDeclaration, ExecutableConstantReference,
+    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
+    ExecutableInterfaceDeclaration, ExecutableInterfaceMethodDeclaration,
+    ExecutableInterfaceReference, ExecutableMatchArm, ExecutableMatchPattern,
+    ExecutableMethodDeclaration, ExecutableNominalTypeReference, ExecutableParameterDeclaration,
+    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
+    ExecutableStructFieldDeclaration, ExecutableStructLiteralField, ExecutableStructReference,
+    ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedConstantDeclaration,
-    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration,
-    TypeAnnotatedInterfaceDeclaration, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
-    TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedAssignTarget, TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget,
+    TypeAnnotatedConstantDeclaration, TypeAnnotatedExpression, TypeAnnotatedFile,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedInterfaceDeclaration, TypeAnnotatedMatchArm,
+    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument,
+    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
+    TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -436,10 +438,10 @@ fn lower_statement(
                 initializer: executable_initializer,
             }
         }
-        TypeAnnotatedStatement::Assign { name, value, .. } => {
+        TypeAnnotatedStatement::Assign { target, value, .. } => {
             let executable_value = lower_expression(value, type_parameter_names, diagnostics);
             ExecutableStatement::Assign {
-                name: name.clone(),
+                target: lower_assign_target(target, type_parameter_names, diagnostics),
                 value: executable_value,
             }
         }
@@ -479,6 +481,22 @@ fn lower_statement(
                 value: executable_expression,
             }
         }
+    }
+}
+
+fn lower_assign_target(
+    target: &TypeAnnotatedAssignTarget,
+    type_parameter_names: &[String],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> ExecutableAssignTarget {
+    match target {
+        TypeAnnotatedAssignTarget::Name { name, .. } => {
+            ExecutableAssignTarget::Name { name: name.clone() }
+        }
+        TypeAnnotatedAssignTarget::Index { target, index, .. } => ExecutableAssignTarget::Index {
+            target: Box::new(lower_expression(target, type_parameter_names, diagnostics)),
+            index: Box::new(lower_expression(index, type_parameter_names, diagnostics)),
+        },
     }
 }
 
@@ -604,6 +622,12 @@ fn lower_expression(
                 field: field.clone(),
             }
         }
+        TypeAnnotatedExpression::IndexAccess { target, index, .. } => {
+            ExecutableExpression::IndexAccess {
+                target: Box::new(lower_expression(target, type_parameter_names, diagnostics)),
+                index: Box::new(lower_expression(index, type_parameter_names, diagnostics)),
+            }
+        }
         TypeAnnotatedExpression::Unary {
             operator,
             expression,
@@ -673,8 +697,6 @@ fn lower_expression(
                             function_name: function_name.clone(),
                         }
                     }
-                    TypeAnnotatedCallTarget::BuiltinListGet => ExecutableCallTarget::BuiltinListGet,
-                    TypeAnnotatedCallTarget::BuiltinListSet => ExecutableCallTarget::BuiltinListSet,
                     TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
                         ExecutableCallTarget::UserDefinedFunction {
                             callable_reference: ExecutableCallableReference {

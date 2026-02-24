@@ -4,7 +4,7 @@
         {
             "phase": "type_analysis",
             "path": "lib.copp",
-            "message": "unknown method 'List.first'",
+            "message": "cannot call method 'first' on non-struct type List[int64]",
             "span": {
                 "start": 68,
                 "end": 73,

@@ -1,6 +1,8 @@
 use crate::lexer::{Keyword, Symbol};
 use compiler__source::Span;
-use compiler__syntax::{SyntaxBlock, SyntaxBlockItem, SyntaxStatement};
+use compiler__syntax::{
+    SyntaxAssignTarget, SyntaxBlock, SyntaxBlockItem, SyntaxExpression, SyntaxStatement,
+};
 
 use super::{ExpressionSpan, ParseResult, Parser};
 
@@ -123,22 +125,62 @@ impl Parser {
             });
         }
 
-        if self.peek_is_identifier() && self.peek_second_is_symbol(Symbol::Equal) {
-            let (name, name_span) = self.expect_identifier()?;
-            self.advance();
-            let value = self.parse_expression()?;
-            let span = Span {
-                start: name_span.start,
-                end: value.span().end,
-                line: name_span.line,
-                column: name_span.column,
-            };
-            return Ok(SyntaxStatement::Assign {
-                name,
-                name_span,
-                value,
-                span,
-            });
+        if self.peek_is_identifier() {
+            let checkpoint = self.checkpoint();
+            let assignment_target = self.parse_postfix();
+            if let Ok(assignment_target) = assignment_target
+                && self.peek_is_symbol(Symbol::Equal)
+            {
+                self.advance();
+                let value = self.parse_expression()?;
+                return match assignment_target {
+                    SyntaxExpression::NameReference { name, span, .. } => {
+                        let statement_span = Span {
+                            start: span.start,
+                            end: value.span().end,
+                            line: span.line,
+                            column: span.column,
+                        };
+                        Ok(SyntaxStatement::Assign {
+                            target: SyntaxAssignTarget::Name {
+                                name,
+                                name_span: span.clone(),
+                                span,
+                            },
+                            value,
+                            span: statement_span,
+                        })
+                    }
+                    SyntaxExpression::IndexAccess {
+                        target,
+                        index,
+                        span,
+                    } => {
+                        let statement_span = Span {
+                            start: span.start,
+                            end: value.span().end,
+                            line: span.line,
+                            column: span.column,
+                        };
+                        Ok(SyntaxStatement::Assign {
+                            target: SyntaxAssignTarget::Index {
+                                target,
+                                index,
+                                span,
+                            },
+                            value,
+                            span: statement_span,
+                        })
+                    }
+                    _ => {
+                        self.restore(checkpoint);
+                        let value = self.parse_expression()?;
+                        let span = value.span();
+                        Ok(SyntaxStatement::Expression { value, span })
+                    }
+                };
+            }
+            self.restore(checkpoint);
         }
 
         if self.peek_is_identifier()

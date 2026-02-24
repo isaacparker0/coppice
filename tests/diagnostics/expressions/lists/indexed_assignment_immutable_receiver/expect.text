@@ -1,0 +1,3 @@
+lib.copp:3:5: error: cannot index-assign through immutable binding 'values'
+      values[1] = 9
+      ^
