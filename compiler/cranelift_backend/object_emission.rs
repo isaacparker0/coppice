@@ -1365,8 +1365,46 @@ fn compile_binary_expression(
     }
 
     match operator {
-        ExecutableBinaryOperator::Add
-        | ExecutableBinaryOperator::Subtract
+        ExecutableBinaryOperator::Add => {
+            let left_value = left_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary left operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
+            let right_value = right_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary right operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
+            match (
+                &left_typed_value.type_reference,
+                &right_typed_value.type_reference,
+            ) {
+                (ExecutableTypeReference::Int64, ExecutableTypeReference::Int64) => {
+                    Ok(TypedValue {
+                        value: Some(function_builder.ins().iadd(left_value, right_value)),
+                        type_reference: ExecutableTypeReference::Int64,
+                        terminates: false,
+                    })
+                }
+                (ExecutableTypeReference::String, ExecutableTypeReference::String) => {
+                    let concatenated =
+                        concatenate_strings(state, function_builder, left_value, right_value);
+                    Ok(TypedValue {
+                        value: Some(concatenated),
+                        type_reference: ExecutableTypeReference::String,
+                        terminates: false,
+                    })
+                }
+                _ => Err(build_failed(
+                    "operator '+' requires operands of the same type".to_string(),
+                    None,
+                )),
+            }
+        }
+        ExecutableBinaryOperator::Subtract
         | ExecutableBinaryOperator::Multiply
         | ExecutableBinaryOperator::Divide
         | ExecutableBinaryOperator::Modulo
@@ -1397,11 +1435,6 @@ fn compile_binary_expression(
             }
 
             match operator {
-                ExecutableBinaryOperator::Add => Ok(TypedValue {
-                    value: Some(function_builder.ins().iadd(left_value, right_value)),
-                    type_reference: ExecutableTypeReference::Int64,
-                    terminates: false,
-                }),
                 ExecutableBinaryOperator::Subtract => Ok(TypedValue {
                     value: Some(function_builder.ins().isub(left_value, right_value)),
                     type_reference: ExecutableTypeReference::Int64,
@@ -1594,6 +1627,57 @@ fn compile_binary_expression(
             })
         }
     }
+}
+
+fn concatenate_strings(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    left_pointer: Value,
+    right_pointer: Value,
+) -> Value {
+    let strlen = state.module.declare_func_in_func(
+        state.external_runtime_functions.strlen,
+        function_builder.func,
+    );
+    let left_length_call = function_builder.ins().call(strlen, &[left_pointer]);
+    let left_length = function_builder.inst_results(left_length_call)[0];
+    let right_length_call = function_builder.ins().call(strlen, &[right_pointer]);
+    let right_length = function_builder.inst_results(right_length_call)[0];
+
+    let total_length = function_builder.ins().iadd(left_length, right_length);
+    let one = function_builder.ins().iconst(types::I64, 1);
+    let allocation_size = function_builder.ins().iadd(total_length, one);
+    let malloc = state.module.declare_func_in_func(
+        state.external_runtime_functions.malloc,
+        function_builder.func,
+    );
+    let malloc_call = function_builder.ins().call(malloc, &[allocation_size]);
+    let destination_pointer = function_builder.inst_results(malloc_call)[0];
+
+    let memcpy = state.module.declare_func_in_func(
+        state.external_runtime_functions.memcpy,
+        function_builder.func,
+    );
+    let _ = function_builder
+        .ins()
+        .call(memcpy, &[destination_pointer, left_pointer, left_length]);
+    let right_destination_pointer = function_builder
+        .ins()
+        .iadd(destination_pointer, left_length);
+    let _ = function_builder.ins().call(
+        memcpy,
+        &[right_destination_pointer, right_pointer, right_length],
+    );
+
+    let terminator_pointer = function_builder
+        .ins()
+        .iadd(destination_pointer, total_length);
+    let zero = function_builder.ins().iconst(types::I8, 0);
+    function_builder
+        .ins()
+        .store(MemFlags::new(), zero, terminator_pointer, 0);
+
+    destination_pointer
 }
 
 fn compile_call_expression(

@@ -1,4 +1,11 @@
 function main() -> nil {
+    combined := "a" + "b"
+    print(combined)
+
+    mut dynamic := "row "
+    dynamic = dynamic + string(7)
+    print(dynamic)
+
     if not false
         and (-5 < 0)
         and ((7 - 2) == 5)

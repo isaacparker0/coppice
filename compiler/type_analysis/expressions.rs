@@ -438,8 +438,23 @@ impl TypeChecker<'_> {
                 let left_type = self.check_expression(left);
                 let right_type = self.check_expression(right);
                 match operator {
-                    SemanticBinaryOperator::Add
-                    | SemanticBinaryOperator::Subtract
+                    SemanticBinaryOperator::Add => {
+                        if left_type == Type::Unknown || right_type == Type::Unknown {
+                            return Type::Unknown;
+                        }
+                        if left_type == Type::Integer64 && right_type == Type::Integer64 {
+                            return Type::Integer64;
+                        }
+                        if left_type == Type::String && right_type == Type::String {
+                            return Type::String;
+                        }
+                        self.error(
+                            "operator '+' requires operands of the same type",
+                            left.span(),
+                        );
+                        Type::Unknown
+                    }
+                    SemanticBinaryOperator::Subtract
                     | SemanticBinaryOperator::Multiply
                     | SemanticBinaryOperator::Divide
                     | SemanticBinaryOperator::Modulo => {

@@ -12,6 +12,7 @@ pub(crate) struct ExternalRuntimeFunctions {
     pub strlen: FuncId,
     pub exit: FuncId,
     pub malloc: FuncId,
+    pub memcpy: FuncId,
 }
 
 pub(crate) fn declare_runtime_interface_functions(
@@ -54,11 +55,25 @@ pub(crate) fn declare_runtime_interface_functions(
         )
         .map_err(|error| build_failed(format!("failed to declare 'malloc': {error}"), None))?;
 
+    let mut memcpy_signature = module.make_signature();
+    memcpy_signature.params.push(AbiParam::new(types::I64));
+    memcpy_signature.params.push(AbiParam::new(types::I64));
+    memcpy_signature.params.push(AbiParam::new(types::I64));
+    memcpy_signature.returns.push(AbiParam::new(types::I64));
+    let memcpy = module
+        .declare_function(
+            "memcpy",
+            cranelift_module::Linkage::Import,
+            &memcpy_signature,
+        )
+        .map_err(|error| build_failed(format!("failed to declare 'memcpy': {error}"), None))?;
+
     Ok(ExternalRuntimeFunctions {
         write,
         strlen,
         exit,
         malloc,
+        memcpy,
     })
 }
 
