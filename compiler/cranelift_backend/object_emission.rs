@@ -18,7 +18,7 @@ use compiler__reports::CompilerFailure;
 use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
-    AbiParam, Block, InstBuilder, MemFlags, Signature, TrapCode, Value, types,
+    AbiParam, Block, BlockArg, InstBuilder, MemFlags, Signature, TrapCode, Value, types,
 };
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::{self, Configurable};
@@ -96,6 +96,9 @@ const UNION_BOX_SIZE_BYTES: i64 = 16;
 const INTERFACE_VALUE_DATA_POINTER_OFFSET: i32 = 0;
 const INTERFACE_VALUE_VTABLE_POINTER_OFFSET: i32 = 8;
 const INTERFACE_VALUE_SIZE_BYTES: i64 = 16;
+const LIST_LENGTH_OFFSET: i32 = 0;
+const LIST_DATA_POINTER_OFFSET: i32 = 8;
+const LIST_HEADER_SIZE_BYTES: i64 = 16;
 
 const UNION_TAG_INT64: i64 = 1;
 const UNION_TAG_BOOLEAN: i64 = 2;
@@ -155,6 +158,7 @@ fn ensure_type_supported(type_reference: &ExecutableTypeReference) {
         | ExecutableTypeReference::String
         | ExecutableTypeReference::Nil
         | ExecutableTypeReference::Never
+        | ExecutableTypeReference::List { .. }
         | ExecutableTypeReference::Function { .. }
         | ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalType { .. }
@@ -213,6 +217,7 @@ fn ensure_expression_supported(expression: &ExecutableExpression) -> Result<(), 
         | ExecutableExpression::BooleanLiteral { .. }
         | ExecutableExpression::NilLiteral
         | ExecutableExpression::StringLiteral { .. }
+        | ExecutableExpression::ListLiteral { .. }
         | ExecutableExpression::Identifier { .. }
         | ExecutableExpression::StructLiteral { .. }
         | ExecutableExpression::FieldAccess { .. }
@@ -476,6 +481,7 @@ fn cranelift_type_for(type_reference: &ExecutableTypeReference) -> types::Type {
     match type_reference {
         ExecutableTypeReference::Int64
         | ExecutableTypeReference::String
+        | ExecutableTypeReference::List { .. }
         | ExecutableTypeReference::Function { .. }
         | ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalType { .. }
@@ -1080,6 +1086,16 @@ fn compile_expression(
             type_reference: ExecutableTypeReference::String,
             terminates: false,
         }),
+        ExecutableExpression::ListLiteral {
+            elements,
+            element_type,
+        } => compile_list_literal_expression(
+            state,
+            function_builder,
+            compilation_context,
+            elements,
+            element_type,
+        ),
         ExecutableExpression::Identifier {
             name,
             constant_reference,
@@ -1320,19 +1336,6 @@ fn compile_binary_expression(
         return Ok(right_typed_value);
     }
 
-    let left_value = left_typed_value.value.ok_or_else(|| {
-        build_failed(
-            "binary left operand produced no runtime value".to_string(),
-            None,
-        )
-    })?;
-    let right_value = right_typed_value.value.ok_or_else(|| {
-        build_failed(
-            "binary right operand produced no runtime value".to_string(),
-            None,
-        )
-    })?;
-
     match operator {
         ExecutableBinaryOperator::Add
         | ExecutableBinaryOperator::Subtract
@@ -1343,6 +1346,18 @@ fn compile_binary_expression(
         | ExecutableBinaryOperator::LessThanOrEqual
         | ExecutableBinaryOperator::GreaterThan
         | ExecutableBinaryOperator::GreaterThanOrEqual => {
+            let left_value = left_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary left operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
+            let right_value = right_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary right operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
             if left_typed_value.type_reference != ExecutableTypeReference::Int64
                 || right_typed_value.type_reference != ExecutableTypeReference::Int64
             {
@@ -1409,20 +1424,106 @@ fn compile_binary_expression(
             }
         }
         ExecutableBinaryOperator::EqualEqual | ExecutableBinaryOperator::NotEqual => {
-            if left_typed_value.type_reference != right_typed_value.type_reference {
-                return Err(build_failed(
-                    "equality operators require operands of identical type".to_string(),
-                    None,
-                ));
-            }
+            let comparable_type_reference = comparable_type_reference_for_equality(
+                state,
+                &left_typed_value.type_reference,
+                &right_typed_value.type_reference,
+            )
+            .ok_or_else(|| {
+                build_failed("equality operators require same type".to_string(), None)
+            })?;
+            let lowered_left_value = runtime_value_for_expected_type(
+                state,
+                function_builder,
+                left_typed_value.value,
+                &left_typed_value.type_reference,
+                &comparable_type_reference,
+            )?;
+            let lowered_right_value = runtime_value_for_expected_type(
+                state,
+                function_builder,
+                right_typed_value.value,
+                &right_typed_value.type_reference,
+                &comparable_type_reference,
+            )?;
+
+            let (left_value, right_value) = match (lowered_left_value, lowered_right_value) {
+                (Some(left_value), Some(right_value)) => (left_value, right_value),
+                (None, None)
+                    if matches!(
+                        comparable_type_reference,
+                        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
+                    ) =>
+                {
+                    let bool_value = if matches!(operator, ExecutableBinaryOperator::EqualEqual) {
+                        function_builder.ins().iconst(types::I8, 1)
+                    } else {
+                        function_builder.ins().iconst(types::I8, 0)
+                    };
+                    return Ok(TypedValue {
+                        value: Some(bool_value),
+                        type_reference: ExecutableTypeReference::Boolean,
+                        terminates: false,
+                    });
+                }
+                _ => {
+                    return Err(build_failed(
+                        "equality operand conversion produced no runtime value".to_string(),
+                        None,
+                    ));
+                }
+            };
             let condition_code = if matches!(operator, ExecutableBinaryOperator::EqualEqual) {
                 IntCC::Equal
             } else {
                 IntCC::NotEqual
             };
-            let condition = function_builder
-                .ins()
-                .icmp(condition_code, left_value, right_value);
+            let condition = if matches!(
+                comparable_type_reference,
+                ExecutableTypeReference::Union { .. }
+            ) {
+                let left_tag = function_builder.ins().load(
+                    types::I64,
+                    MemFlags::new(),
+                    left_value,
+                    UNION_BOX_TAG_OFFSET,
+                );
+                let right_tag = function_builder.ins().load(
+                    types::I64,
+                    MemFlags::new(),
+                    right_value,
+                    UNION_BOX_TAG_OFFSET,
+                );
+                let left_payload = function_builder.ins().load(
+                    types::I64,
+                    MemFlags::new(),
+                    left_value,
+                    UNION_BOX_PAYLOAD_OFFSET,
+                );
+                let right_payload = function_builder.ins().load(
+                    types::I64,
+                    MemFlags::new(),
+                    right_value,
+                    UNION_BOX_PAYLOAD_OFFSET,
+                );
+                let tags_equal = function_builder
+                    .ins()
+                    .icmp(IntCC::Equal, left_tag, right_tag);
+                let payloads_equal =
+                    function_builder
+                        .ins()
+                        .icmp(IntCC::Equal, left_payload, right_payload);
+                if matches!(operator, ExecutableBinaryOperator::EqualEqual) {
+                    function_builder.ins().band(tags_equal, payloads_equal)
+                } else {
+                    let equal_condition = function_builder.ins().band(tags_equal, payloads_equal);
+                    function_builder.ins().bnot(equal_condition)
+                }
+            } else {
+                function_builder
+                    .ins()
+                    .icmp(condition_code, left_value, right_value)
+            };
             let one = function_builder.ins().iconst(types::I8, 1);
             let zero = function_builder.ins().iconst(types::I8, 0);
             let bool_value = function_builder.ins().select(condition, one, zero);
@@ -1433,6 +1534,18 @@ fn compile_binary_expression(
             })
         }
         ExecutableBinaryOperator::And | ExecutableBinaryOperator::Or => {
+            let left_value = left_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary left operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
+            let right_value = right_typed_value.value.ok_or_else(|| {
+                build_failed(
+                    "binary right operand produced no runtime value".to_string(),
+                    None,
+                )
+            })?;
             if left_typed_value.type_reference != ExecutableTypeReference::Boolean
                 || right_typed_value.type_reference != ExecutableTypeReference::Boolean
             {
@@ -1545,6 +1658,14 @@ fn compile_call_expression(
                     None,
                 ))
             }
+            ExecutableCallTarget::BuiltinListGet => compile_builtin_list_get_call(
+                state,
+                function_builder,
+                compilation_context,
+                callee,
+                arguments,
+                type_arguments,
+            ),
             ExecutableCallTarget::UserDefinedFunction { callable_reference } => {
                 let function_record = state
                     .function_record_by_callable_reference
@@ -1809,6 +1930,170 @@ fn compile_function_value_call_expression(
     }
 }
 
+fn compile_builtin_list_get_call(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    callee: &ExecutableExpression,
+    arguments: &[ExecutableExpression],
+    type_arguments: &[ExecutableTypeReference],
+) -> Result<TypedValue, CompilerFailure> {
+    if !type_arguments.is_empty() {
+        return Err(build_failed(
+            "List.get does not take type arguments".to_string(),
+            None,
+        ));
+    }
+    if arguments.len() != 1 {
+        return Err(build_failed(
+            "List.get requires exactly one argument".to_string(),
+            None,
+        ));
+    }
+    let ExecutableExpression::FieldAccess { target, field } = callee else {
+        return Err(build_failed(
+            "List.get call target must be field access".to_string(),
+            None,
+        ));
+    };
+    if field != "get" {
+        return Err(build_failed(
+            "List.get call target must use '.get'".to_string(),
+            None,
+        ));
+    }
+
+    let compiled_target = compile_expression(state, function_builder, compilation_context, target)?;
+    if compiled_target.terminates {
+        return Ok(compiled_target);
+    }
+    let ExecutableTypeReference::List { element_type } = &compiled_target.type_reference else {
+        return Err(build_failed(
+            format!(
+                "List.get receiver must be List, got {}",
+                type_reference_display(&compiled_target.type_reference)
+            ),
+            None,
+        ));
+    };
+
+    let compiled_index =
+        compile_expression(state, function_builder, compilation_context, &arguments[0])?;
+    if compiled_index.terminates {
+        return Ok(compiled_index);
+    }
+    if compiled_index.type_reference != ExecutableTypeReference::Int64 {
+        return Err(build_failed(
+            "List.get index must be int64".to_string(),
+            None,
+        ));
+    }
+
+    let list_pointer = compiled_target.value.ok_or_else(|| {
+        build_failed(
+            "List.get receiver produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+    let index_value = compiled_index.value.ok_or_else(|| {
+        build_failed("List.get index produced no runtime value".to_string(), None)
+    })?;
+    let list_length = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        list_pointer,
+        LIST_LENGTH_OFFSET,
+    );
+    let list_data_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        list_pointer,
+        LIST_DATA_POINTER_OFFSET,
+    );
+
+    let out_block = function_builder.create_block();
+    let in_block = function_builder.create_block();
+    let merge_block = function_builder.create_block();
+    function_builder.append_block_param(merge_block, types::I64);
+
+    let zero_value = function_builder.ins().iconst(types::I64, 0);
+    let index_is_non_negative =
+        function_builder
+            .ins()
+            .icmp(IntCC::SignedGreaterThanOrEqual, index_value, zero_value);
+    function_builder
+        .ins()
+        .brif(index_is_non_negative, in_block, &[], out_block, &[]);
+    function_builder.seal_block(in_block);
+
+    function_builder.switch_to_block(in_block);
+    let index_in_range =
+        function_builder
+            .ins()
+            .icmp(IntCC::SignedLessThan, index_value, list_length);
+    let load_block = function_builder.create_block();
+    function_builder
+        .ins()
+        .brif(index_in_range, load_block, &[], out_block, &[]);
+    function_builder.seal_block(load_block);
+    function_builder.seal_block(out_block);
+
+    function_builder.switch_to_block(load_block);
+    let element_offset = function_builder.ins().imul_imm(index_value, 8);
+    let element_pointer = function_builder
+        .ins()
+        .iadd(list_data_pointer, element_offset);
+    let loaded_storage =
+        function_builder
+            .ins()
+            .load(types::I64, MemFlags::new(), element_pointer, 0);
+    let loaded_value =
+        runtime_value_from_i64_storage(function_builder, loaded_storage, element_type);
+    let list_get_type_reference = list_get_type_reference(element_type);
+    let boxed_loaded = runtime_value_for_expected_type(
+        state,
+        function_builder,
+        Some(loaded_value),
+        element_type,
+        &list_get_type_reference,
+    )?
+    .ok_or_else(|| {
+        build_failed(
+            "List.get result produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+    let merge_arguments = [BlockArg::Value(boxed_loaded)];
+    function_builder.ins().jump(merge_block, &merge_arguments);
+
+    function_builder.switch_to_block(out_block);
+    let nil_value = function_builder.ins().iconst(types::I64, 0);
+    let boxed_nil = runtime_value_for_expected_type(
+        state,
+        function_builder,
+        Some(nil_value),
+        &ExecutableTypeReference::Nil,
+        &list_get_type_reference,
+    )?
+    .ok_or_else(|| {
+        build_failed(
+            "List.get nil result produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+    let merge_arguments = [BlockArg::Value(boxed_nil)];
+    function_builder.ins().jump(merge_block, &merge_arguments);
+    function_builder.seal_block(merge_block);
+
+    function_builder.switch_to_block(merge_block);
+    let merged_value = function_builder.block_params(merge_block)[0];
+    Ok(TypedValue {
+        value: Some(merged_value),
+        type_reference: list_get_type_reference,
+        terminates: false,
+    })
+}
+
 fn compile_struct_literal_expression(
     state: &mut CompilationState,
     function_builder: &mut FunctionBuilder<'_>,
@@ -1912,6 +2197,95 @@ fn compile_struct_literal_expression(
     })
 }
 
+fn compile_list_literal_expression(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    elements: &[ExecutableExpression],
+    element_type: &ExecutableTypeReference,
+) -> Result<TypedValue, CompilerFailure> {
+    let element_count = i64::try_from(elements.len()).map_err(|_| {
+        build_failed(
+            "list literal length exceeds supported range".to_string(),
+            None,
+        )
+    })?;
+    let list_data_size_bytes = element_count.checked_mul(8).ok_or_else(|| {
+        build_failed(
+            "list literal size exceeds supported range".to_string(),
+            None,
+        )
+    })?;
+    let list_data_pointer = allocate_heap_bytes(state, function_builder, list_data_size_bytes)?;
+    let list_header_pointer = allocate_heap_bytes(state, function_builder, LIST_HEADER_SIZE_BYTES)?;
+    let mem_flags = MemFlags::new();
+
+    for (index, element_expression) in elements.iter().enumerate() {
+        let compiled_element = compile_expression(
+            state,
+            function_builder,
+            compilation_context,
+            element_expression,
+        )?;
+        if compiled_element.terminates {
+            return Ok(compiled_element);
+        }
+        if !is_type_assignable(state, &compiled_element.type_reference, element_type) {
+            return Err(build_failed(
+                format!(
+                    "list element type mismatch: expected {}, got {}",
+                    type_reference_display(element_type),
+                    type_reference_display(&compiled_element.type_reference)
+                ),
+                None,
+            ));
+        }
+        let lowered_runtime_value = runtime_value_for_expected_type(
+            state,
+            function_builder,
+            compiled_element.value,
+            &compiled_element.type_reference,
+            element_type,
+        )?;
+        let lowered_value = lowered_runtime_value.ok_or_else(|| {
+            build_failed("list element produced no runtime value".to_string(), None)
+        })?;
+        let stored_value =
+            i64_storage_value_for_type(function_builder, lowered_value, element_type);
+        let element_offset = i32::try_from(index * 8).map_err(|_| {
+            build_failed(
+                "list element offset exceeds supported range".to_string(),
+                None,
+            )
+        })?;
+        function_builder
+            .ins()
+            .store(mem_flags, stored_value, list_data_pointer, element_offset);
+    }
+
+    let element_count_value = function_builder.ins().iconst(types::I64, element_count);
+    function_builder.ins().store(
+        mem_flags,
+        element_count_value,
+        list_header_pointer,
+        LIST_LENGTH_OFFSET,
+    );
+    function_builder.ins().store(
+        mem_flags,
+        list_data_pointer,
+        list_header_pointer,
+        LIST_DATA_POINTER_OFFSET,
+    );
+
+    Ok(TypedValue {
+        value: Some(list_header_pointer),
+        type_reference: ExecutableTypeReference::List {
+            element_type: Box::new(element_type.clone()),
+        },
+        terminates: false,
+    })
+}
+
 fn compile_field_access_expression(
     state: &mut CompilationState,
     function_builder: &mut FunctionBuilder<'_>,
@@ -1922,6 +2296,31 @@ fn compile_field_access_expression(
     let compiled_target = compile_expression(state, function_builder, compilation_context, target)?;
     if compiled_target.terminates {
         return Ok(compiled_target);
+    }
+    if let ExecutableTypeReference::List { .. } = &compiled_target.type_reference {
+        if field_name != "length" {
+            return Err(build_failed(
+                format!("unknown field 'List.{field_name}'"),
+                None,
+            ));
+        }
+        let target_pointer = compiled_target.value.ok_or_else(|| {
+            build_failed(
+                "field access target produced no runtime value".to_string(),
+                None,
+            )
+        })?;
+        let length_value = function_builder.ins().load(
+            types::I64,
+            MemFlags::new(),
+            target_pointer,
+            LIST_LENGTH_OFFSET,
+        );
+        return Ok(TypedValue {
+            value: Some(length_value),
+            type_reference: ExecutableTypeReference::Int64,
+            terminates: false,
+        });
     }
     let (struct_declaration, type_substitutions_by_type_parameter_name) =
         resolve_struct_type_details(state, &compiled_target.type_reference)?;
@@ -2623,8 +3022,7 @@ fn runtime_value_for_expected_type(
     if matches!(expected_type, ExecutableTypeReference::Union { .. })
         && !matches!(actual_type, ExecutableTypeReference::Union { .. })
     {
-        let raw_value = value
-            .ok_or_else(|| build_failed("value expected for union conversion".to_string(), None))?;
+        let raw_value = value.unwrap_or_else(|| function_builder.ins().iconst(types::I64, 0));
         let union_box_pointer = box_union_value(state, function_builder, raw_value, actual_type)?;
         return Ok(Some(union_box_pointer));
     }
@@ -2653,6 +3051,20 @@ fn runtime_value_for_expected_type(
     }
 
     Ok(value)
+}
+
+fn comparable_type_reference_for_equality(
+    state: &CompilationState,
+    left_type_reference: &ExecutableTypeReference,
+    right_type_reference: &ExecutableTypeReference,
+) -> Option<ExecutableTypeReference> {
+    if is_type_assignable(state, left_type_reference, right_type_reference) {
+        return Some(right_type_reference.clone());
+    }
+    if is_type_assignable(state, right_type_reference, left_type_reference) {
+        return Some(left_type_reference.clone());
+    }
+    None
 }
 
 fn box_union_value(
@@ -2775,6 +3187,26 @@ fn type_reference_matches_pattern_type(
     }
 }
 
+fn list_get_type_reference(element_type: &ExecutableTypeReference) -> ExecutableTypeReference {
+    if *element_type == ExecutableTypeReference::Nil {
+        return ExecutableTypeReference::Nil;
+    }
+    match element_type {
+        ExecutableTypeReference::Union { members } => {
+            let mut result_members = members.clone();
+            if !result_members.contains(&ExecutableTypeReference::Nil) {
+                result_members.push(ExecutableTypeReference::Nil);
+            }
+            ExecutableTypeReference::Union {
+                members: result_members,
+            }
+        }
+        _ => ExecutableTypeReference::Union {
+            members: vec![element_type.clone(), ExecutableTypeReference::Nil],
+        },
+    }
+}
+
 fn is_type_assignable(
     state: &CompilationState,
     actual_type: &ExecutableTypeReference,
@@ -2807,9 +3239,10 @@ fn union_type_tag_for_type_reference(
         ExecutableTypeReference::Boolean => Ok(UNION_TAG_BOOLEAN),
         ExecutableTypeReference::String => Ok(UNION_TAG_STRING),
         ExecutableTypeReference::Nil | ExecutableTypeReference::Never => Ok(UNION_TAG_NIL),
-        ExecutableTypeReference::Function { .. } => Ok(UNION_TAG_FUNCTION),
-        ExecutableTypeReference::TypeParameter { .. }
+        ExecutableTypeReference::List { .. }
+        | ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalTypeApplication { .. } => Ok(UNION_TAG_STRUCT),
+        ExecutableTypeReference::Function { .. } => Ok(UNION_TAG_FUNCTION),
         ExecutableTypeReference::NominalType { name, .. } => {
             if name.contains('.') {
                 Ok(UNION_TAG_ENUM_VARIANT)
@@ -3266,6 +3699,9 @@ fn type_reference_display(type_reference: &ExecutableTypeReference) -> String {
         ExecutableTypeReference::Never => "never".to_string(),
         ExecutableTypeReference::TypeParameter { name }
         | ExecutableTypeReference::NominalType { name, .. } => name.clone(),
+        ExecutableTypeReference::List { element_type } => {
+            format!("List[{}]", type_reference_display(element_type))
+        }
         ExecutableTypeReference::Function {
             parameter_types,
             return_type,

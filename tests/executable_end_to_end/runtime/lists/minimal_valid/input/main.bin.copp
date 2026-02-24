@@ -1,0 +1,25 @@
+function main() -> nil {
+    values := [1, 2, 3]
+
+    if values.length == 3 {
+        print("length ok")
+    } else {
+        print("length bad")
+    }
+
+    first := values.get(0)
+    if first == nil {
+        print("first nil")
+    } else {
+        print("first ok")
+    }
+
+    missing := values.get(99)
+    if missing == nil {
+        print("missing nil")
+    } else {
+        print("missing present")
+    }
+
+    return nil
+}

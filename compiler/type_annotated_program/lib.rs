@@ -1,10 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use compiler__source::Span;
 
 #[derive(Clone, Default)]
 pub struct TypeAnnotatedFile {
     pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
+    pub resolved_type_by_expression_id: BTreeMap<u32, TypeAnnotatedResolvedTypeArgument>,
     pub constant_declarations: Vec<TypeAnnotatedConstantDeclaration>,
     pub interface_declarations: Vec<TypeAnnotatedInterfaceDeclaration>,
     pub struct_declarations: Vec<TypeAnnotatedStructDeclaration>,
@@ -52,6 +53,7 @@ pub enum TypeAnnotatedCallTarget {
     BuiltinFunction {
         function_name: String,
     },
+    BuiltinListGet,
     UserDefinedFunction {
         callable_reference: TypeAnnotatedCallableReference,
     },
@@ -200,6 +202,11 @@ pub enum TypeAnnotatedExpression {
         value: String,
         span: Span,
     },
+    ListLiteral {
+        elements: Vec<TypeAnnotatedExpression>,
+        element_type: TypeAnnotatedResolvedTypeArgument,
+        span: Span,
+    },
     NameReference {
         name: String,
         kind: TypeAnnotatedNameReferenceKind,
@@ -323,6 +330,9 @@ pub enum TypeAnnotatedResolvedTypeArgument {
     String,
     Nil,
     Never,
+    List {
+        element_type: Box<TypeAnnotatedResolvedTypeArgument>,
+    },
     Function {
         parameter_types: Vec<TypeAnnotatedResolvedTypeArgument>,
         return_type: Box<TypeAnnotatedResolvedTypeArgument>,

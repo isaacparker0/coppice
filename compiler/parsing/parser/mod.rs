@@ -392,6 +392,7 @@ impl ExpressionSpan for SyntaxExpression {
             | SyntaxExpression::NilLiteral { span, .. }
             | SyntaxExpression::BooleanLiteral { span, .. }
             | SyntaxExpression::StringLiteral { span, .. }
+            | SyntaxExpression::ListLiteral { span, .. }
             | SyntaxExpression::NameReference { span, .. }
             | SyntaxExpression::StructLiteral { span, .. }
             | SyntaxExpression::FieldAccess { span, .. }

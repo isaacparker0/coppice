@@ -246,6 +246,10 @@ pub enum SyntaxExpression {
         value: String,
         span: Span,
     },
+    ListLiteral {
+        elements: Vec<SyntaxExpression>,
+        span: Span,
+    },
     NameReference {
         name: String,
         kind: SyntaxNameReferenceKind,

@@ -413,6 +413,7 @@ impl Parser {
                 span: token.span,
             }),
             TokenKind::Keyword(Keyword::Match) => self.parse_match_expression(&token.span),
+            TokenKind::Symbol(Symbol::LeftBracket) => self.parse_list_literal(&token.span),
             TokenKind::Symbol(Symbol::LeftParenthesis) => {
                 let expression = self.parse_expression()?;
                 self.expect_symbol(Symbol::RightParenthesis)?;
@@ -444,6 +445,21 @@ impl Parser {
             fields,
             span,
         })
+    }
+
+    pub(super) fn parse_list_literal(
+        &mut self,
+        start_span: &Span,
+    ) -> ParseResult<SyntaxExpression> {
+        let elements = self.parse_list_literal_elements();
+        let right_bracket = self.expect_symbol(Symbol::RightBracket)?;
+        let span = Span {
+            start: start_span.start,
+            end: right_bracket.end,
+            line: start_span.line,
+            column: start_span.column,
+        };
+        Ok(SyntaxExpression::ListLiteral { elements, span })
     }
 
     pub(super) fn parse_match_expression(
@@ -643,5 +659,38 @@ impl Parser {
             value,
             span,
         })
+    }
+
+    pub(super) fn parse_list_literal_elements(&mut self) -> Vec<SyntaxExpression> {
+        let mut elements = Vec::new();
+        self.skip_statement_terminators();
+        if self.peek_is_symbol(Symbol::RightBracket) {
+            return elements;
+        }
+        loop {
+            self.skip_statement_terminators();
+            match self.parse_expression() {
+                Ok(element) => elements.push(element),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBracket);
+                    if self.peek_is_symbol(Symbol::RightBracket) {
+                        break;
+                    }
+                }
+            }
+
+            self.skip_statement_terminators();
+            if self.peek_is_symbol(Symbol::Comma) {
+                self.advance();
+                self.skip_statement_terminators();
+                if self.peek_is_symbol(Symbol::RightBracket) {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        elements
     }
 }

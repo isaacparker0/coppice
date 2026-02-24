@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "unknown method 'List.first'",
+            "span": {
+                "start": 68,
+                "end": 73,
+                "line": 3,
+                "column": 19
+            }
+        }
+    ]
+}
