@@ -1,5 +1,18 @@
 # https://bazelbuild.slack.com/archives/C05UNC5AANQ/p1771610074794149
-# https://github.com/cerisier/toolchains_llvm_bootstrapped/pull/333/
+# https://github.com/cerisier/toolchains_llvm_bootstrapped/pull/333
+
+--- 3rd_party/macos_sdk/CLTools_macOSNMOS_SDK.BUILD.bazel
++++ 3rd_party/macos_sdk/CLTools_macOSNMOS_SDK.BUILD.bazel
+@@ -5,3 +5,9 @@
+     path = ".",
+     visibility = ["//visibility:public"],
+ )
++
++filegroup(
++    name = "sysroot_files",
++    srcs = glob(["**"]),
++    visibility = ["//visibility:public"],
++)
 
 --- toolchain/BUILD.bazel
 +++ toolchain/BUILD.bazel
@@ -33,7 +46,7 @@
  
  cc_binary(
      name = "header-parser",
-@@ -11,3 +16,106 @@ cc_binary(
+@@ -11,3 +16,119 @@
      srcs = ["static_library_validator.cc"],
      visibility = ["//visibility:public"],
  )
@@ -54,11 +67,15 @@
 +        "",
 +        "const char* kLinkerWrapperClangRlocation = \"$(rlocationpath //tools:clang++)\";",
 +        "const char* kLinkerWrapperContractRlocation = \"$(rlocationpath :linker_contract)\";",
++        "const char* kLinkerWrapperLibcxxSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libcxx:libcxx_library_search_directory)\";",
++        "const char* kLinkerWrapperLibunwindSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libunwind:libunwind_library_search_directory)\";",
 +        "",
 +        "}  // namespace llvm",
 +        "CONFIG",
 +    ]),
 +    tools = [
++        "//runtimes/libcxx:libcxx_library_search_directory",
++        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//tools:clang++",
 +        ":linker_contract",
 +    ],
@@ -78,8 +95,11 @@
 +    ],
 +    data = [
 +        "//runtimes:resource_directory",
++        "//runtimes/libcxx:libcxx_library_search_directory",
++        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//tools:clang++",
-+        "@macos_sdk//sysroot",
++        "@macos_sdk//sysroot:sysroot_files",
++        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
 +    deps = [
@@ -101,9 +121,12 @@
 +    ],
 +    data = [
 +        "//runtimes:crt_objects_directory",
++        "//runtimes/libcxx:libcxx_library_search_directory",
++        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
 +    deps = [
@@ -125,9 +148,12 @@
 +    ],
 +    data = [
 +        "//runtimes:crt_objects_directory",
++        "//runtimes/libcxx:libcxx_library_search_directory",
++        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
 +        "//tools:clang++",
++        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
 +    deps = [
@@ -143,10 +169,26 @@
 
 --- /dev/null
 +++ tools/internal/linker_contracts.bzl
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,95 @@
 +load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
 +load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 +load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
++
++def _stub_search_directory_name(path):
++    if path.endswith("/libcxx_library_search_directory"):
++        return "libcxx"
++    if path.endswith("/libunwind_library_search_directory"):
++        return "libunwind"
++    return None
++
++def _append_contract_lines(lines, argument):
++    if argument.startswith("-L") and len(argument) > 2:
++        stub_search_directory = _stub_search_directory_name(argument[2:])
++        if stub_search_directory != None:
++            lines.append("search_dir\t%s" % stub_search_directory)
++            return
++
++    lines.append("arg\t%s" % argument)
 +
 +def _linker_contract_from_cc_toolchain_impl(ctx):
 +    cc_toolchain = find_cc_toolchain(ctx)
@@ -173,10 +215,28 @@
 +    lines = [
 +        "# directive<TAB>payload",
 +    ]
++    pending_search_flag = False
 +    for argument in link_args:
 +        if not argument:
 +            continue
-+        lines.append("arg\t%s" % argument)
++        if pending_search_flag:
++            pending_search_flag = False
++            stub_search_directory = _stub_search_directory_name(argument)
++            if stub_search_directory != None:
++                lines.append("search_dir\t%s" % stub_search_directory)
++                continue
++            lines.append("arg\t-L")
++            lines.append("arg\t%s" % argument)
++            continue
++
++        if argument == "-L":
++            pending_search_flag = True
++            continue
++
++        _append_contract_lines(lines, argument)
++
++    if pending_search_flag:
++        lines.append("arg\t-L")
 +
 +    ctx.actions.write(
 +        output = ctx.outputs.out,
@@ -208,7 +268,7 @@
 
 --- /dev/null
 +++ tools/internal/linker_wrapper.cc
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,311 @@
 +#include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
@@ -290,29 +350,78 @@
 +  return "";
 +}
 +
++std::string ResolveRunfilesRootPath(const std::string& absolute_path) {
++  const std::string marker = ".runfiles/";
++  const size_t marker_pos = absolute_path.find(marker);
++  if (marker_pos == std::string::npos) {
++    return "";
++  }
++  return absolute_path.substr(0, marker_pos + marker.size() - 1);
++}
++
 +bool PathExists(const std::string& path) {
 +  return access(path.c_str(), F_OK) == 0;
 +}
 +
 +std::string NormalizeRelativePath(const std::string& value,
 +                                  const std::string& workspace_execroot,
-+                                  const std::string& output_base) {
++                                  const std::string& output_base,
++                                  const std::string& runfiles_root) {
 +  if (value.empty() || value[0] == '/') {
 +    return value;
 +  }
 +
-+  if (value.rfind("bazel-out/", 0) == 0 && !workspace_execroot.empty()) {
-+    const std::string candidate = workspace_execroot + "/" + value;
-+    if (PathExists(candidate)) {
-+      return candidate;
++  const bool is_bazel_relative = value.rfind("bazel-out/", 0) == 0 ||
++                                 value.rfind("external/", 0) == 0;
++  if (is_bazel_relative) {
++    if (!workspace_execroot.empty()) {
++      const std::string candidate = workspace_execroot + "/" + value;
++      if (PathExists(candidate)) {
++        return candidate;
++      }
 +    }
-+  }
 +
-+  if (value.rfind("external/", 0) == 0 && !output_base.empty()) {
-+    const std::string candidate = output_base + "/" + value;
-+    if (PathExists(candidate)) {
-+      return candidate;
++    if (value.rfind("external/", 0) == 0 && !output_base.empty()) {
++      const std::string candidate = output_base + "/" + value;
++      if (PathExists(candidate)) {
++        return candidate;
++      }
 +    }
++
++    if (!runfiles_root.empty()) {
++      const std::string candidate_in_main = runfiles_root + "/_main/" + value;
++      if (PathExists(candidate_in_main)) {
++        return candidate_in_main;
++      }
++
++      const std::string candidate_in_root = runfiles_root + "/" + value;
++      if (PathExists(candidate_in_root)) {
++        return candidate_in_root;
++      }
++
++      if (value.rfind("external/", 0) == 0) {
++        const std::string candidate_external_repo =
++            runfiles_root + "/" + value.substr(strlen("external/"));
++        if (PathExists(candidate_external_repo)) {
++          return candidate_external_repo;
++        }
++      }
++
++      const size_t external_segment = value.find("/external/");
++      if (external_segment != std::string::npos) {
++        const std::string candidate_external_from_bazel_out =
++            runfiles_root + "/" + value.substr(external_segment + strlen("/external/"));
++        if (PathExists(candidate_external_from_bazel_out)) {
++          return candidate_external_from_bazel_out;
++        }
++      }
++    }
++
++    fprintf(stderr,
++            "linker_wrapper: failed to resolve bazel-relative path '%s' (execroot='%s', output_base='%s', runfiles_root='%s')\n",
++            value.c_str(), workspace_execroot.c_str(), output_base.c_str(),
++            runfiles_root.c_str());
++    exit(2);
 +  }
 +
 +  return value;
@@ -320,23 +429,25 @@
 +
 +std::string NormalizePathLikeArgument(const std::string& argument,
 +                                      const std::string& workspace_execroot,
-+                                      const std::string& output_base) {
++                                      const std::string& output_base,
++                                      const std::string& runfiles_root) {
 +  if (argument.rfind("--sysroot=", 0) == 0) {
 +    const std::string path = argument.substr(strlen("--sysroot="));
 +    return std::string("--sysroot=") +
-+           NormalizeRelativePath(path, workspace_execroot, output_base);
++           NormalizeRelativePath(path, workspace_execroot, output_base, runfiles_root);
 +  }
 +  if (argument.rfind("-L", 0) == 0 && argument.size() > 2) {
 +    const std::string path = argument.substr(2);
 +    return std::string("-L") +
-+           NormalizeRelativePath(path, workspace_execroot, output_base);
++           NormalizeRelativePath(path, workspace_execroot, output_base, runfiles_root);
 +  }
 +  if (argument.rfind("-B", 0) == 0 && argument.size() > 2) {
 +    const std::string path = argument.substr(2);
 +    return std::string("-B") +
-+           NormalizeRelativePath(path, workspace_execroot, output_base);
++           NormalizeRelativePath(path, workspace_execroot, output_base, runfiles_root);
 +  }
-+  return NormalizeRelativePath(argument, workspace_execroot, output_base);
++  return NormalizeRelativePath(argument, workspace_execroot, output_base,
++                               runfiles_root);
 +}
 +
 +void RequireArity(const std::vector<std::string>& fields, size_t expected,
@@ -353,6 +464,8 @@
 +void ApplyContractLine(const std::vector<std::string>& fields,
 +                       const std::string& workspace_execroot,
 +                       const std::string& output_base,
++                       const std::string& runfiles_root,
++                       const Runfiles& runfiles,
 +                       std::vector<std::string>* arguments) {
 +  if (fields.empty()) {
 +    return;
@@ -360,8 +473,29 @@
 +
 +  if (fields[0] == "arg") {
 +    RequireArity(fields, 2, "arg");
-+    arguments->push_back(
-+        NormalizePathLikeArgument(fields[1], workspace_execroot, output_base));
++    arguments->push_back(NormalizePathLikeArgument(
++        fields[1], workspace_execroot, output_base, runfiles_root));
++    return;
++  }
++
++  if (fields[0] == "search_dir") {
++    RequireArity(fields, 2, "search_dir");
++    const char* runfile_key = nullptr;
++    const char* description = nullptr;
++    if (fields[1] == "libcxx") {
++      runfile_key = llvm::kLinkerWrapperLibcxxSearchDirectoryRlocation;
++      description = "libcxx search directory";
++    } else if (fields[1] == "libunwind") {
++      runfile_key = llvm::kLinkerWrapperLibunwindSearchDirectoryRlocation;
++      description = "libunwind search directory";
++    } else {
++      fprintf(stderr, "linker_wrapper: unknown search_dir value '%s'\n",
++              fields[1].c_str());
++      exit(2);
++    }
++
++    arguments->push_back(std::string("-L") +
++                         ResolveRunfilePath(runfiles, runfile_key, description));
 +    return;
 +  }
 +
@@ -373,6 +507,8 @@
 +void AppendLinkerContractArguments(const std::string& contract_path,
 +                                   const std::string& workspace_execroot,
 +                                   const std::string& output_base,
++                                   const std::string& runfiles_root,
++                                   const Runfiles& runfiles,
 +                                   std::vector<std::string>* arguments) {
 +  std::ifstream contract_stream(contract_path);
 +  if (!contract_stream.is_open()) {
@@ -387,7 +523,7 @@
 +      continue;
 +    }
 +    ApplyContractLine(ParseContractFields(line), workspace_execroot, output_base,
-+                      arguments);
++                      runfiles_root, runfiles, arguments);
 +  }
 +}
 +
@@ -419,13 +555,14 @@
 +  const std::string workspace_execroot =
 +      ResolveWorkspaceExecrootPath(contract_path);
 +  const std::string output_base = ResolveOutputBasePath(contract_path);
++  const std::string runfiles_root = ResolveRunfilesRootPath(contract_path);
 +
 +  std::vector<std::string> argument_storage;
 +  argument_storage.reserve(static_cast<size_t>(argc) + 24);
 +  argument_storage.push_back(clang_path);
 +
 +  AppendLinkerContractArguments(contract_path, workspace_execroot, output_base,
-+                                &argument_storage);
++                                runfiles_root, *runfiles, &argument_storage);
 +
 +  for (int index = 1; index < argc; ++index) {
 +    argument_storage.push_back(argv[index]);
@@ -446,12 +583,14 @@
 
 --- /dev/null
 +++ tools/internal/linker_wrapper_config.h
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,10 @@
 +#pragma once
 +
 +namespace llvm {
 +
 +extern const char* kLinkerWrapperClangRlocation;
 +extern const char* kLinkerWrapperContractRlocation;
++extern const char* kLinkerWrapperLibcxxSearchDirectoryRlocation;
++extern const char* kLinkerWrapperLibunwindSearchDirectoryRlocation;
 +
 +}  // namespace llvm
