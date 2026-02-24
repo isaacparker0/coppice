@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableProgram {
     pub entrypoint_callable_reference: ExecutableCallableReference,
+    pub constant_declarations: Vec<ExecutableConstantDeclaration>,
     pub struct_declarations: Vec<ExecutableStructDeclaration>,
     pub function_declarations: Vec<ExecutableFunctionDeclaration>,
 }
@@ -55,6 +56,12 @@ pub struct ExecutableStructReference {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ExecutableConstantReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ExecutableEnumVariantReference {
     pub enum_name: String,
     pub variant_name: String,
@@ -73,6 +80,14 @@ pub struct ExecutableMethodDeclaration {
     pub parameters: Vec<ExecutableParameterDeclaration>,
     pub return_type: ExecutableTypeReference,
     pub statements: Vec<ExecutableStatement>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutableConstantDeclaration {
+    pub name: String,
+    pub constant_reference: ExecutableConstantReference,
+    pub type_reference: ExecutableTypeReference,
+    pub initializer: ExecutableExpression,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +156,7 @@ pub enum ExecutableExpression {
     },
     Identifier {
         name: String,
+        constant_reference: Option<ExecutableConstantReference>,
     },
     EnumVariantLiteral {
         enum_variant_reference: ExecutableEnumVariantReference,

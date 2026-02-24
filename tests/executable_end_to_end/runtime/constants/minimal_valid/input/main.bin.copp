@@ -1,0 +1,8 @@
+BASE: string := "base"
+CHAINED: string := BASE
+
+function main() -> nil {
+    print(BASE)
+    print(CHAINED)
+    return nil
+}

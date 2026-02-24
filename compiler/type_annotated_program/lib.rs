@@ -5,6 +5,7 @@ use compiler__source::Span;
 #[derive(Clone, Default)]
 pub struct TypeAnnotatedFile {
     pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
+    pub constant_declarations: Vec<TypeAnnotatedConstantDeclaration>,
     pub struct_declarations: Vec<TypeAnnotatedStructDeclaration>,
     pub function_declarations: Vec<TypeAnnotatedFunctionDeclaration>,
 }
@@ -17,6 +18,12 @@ pub struct TypeAnnotatedCallableReference {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TypeAnnotatedStructReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedConstantReference {
     pub package_path: String,
     pub symbol_name: String,
 }
@@ -42,6 +49,15 @@ pub struct TypeAnnotatedFunctionSignature {
     pub type_parameter_count: usize,
     pub parameter_count: usize,
     pub returns_nil: bool,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedConstantDeclaration {
+    pub name: String,
+    pub constant_reference: TypeAnnotatedConstantReference,
+    pub type_name: TypeAnnotatedTypeName,
+    pub initializer: TypeAnnotatedExpression,
+    pub span: Span,
 }
 
 #[derive(Clone)]
@@ -159,6 +175,7 @@ pub enum TypeAnnotatedExpression {
     NameReference {
         name: String,
         kind: TypeAnnotatedNameReferenceKind,
+        constant_reference: Option<TypeAnnotatedConstantReference>,
         span: Span,
     },
     EnumVariantLiteral {

@@ -20,7 +20,10 @@ tests/executable_end_to_end/<area>/<feature>/<case>/
 
 ## Content rules
 
-- Prefer a small number of high-signal cases per feature.
+- Prefer a small number of high-signal cases per feature: keep one
+  `minimal_valid` case for canonical valid coverage, expand that case when
+  adding more valid behavior, and use non-`minimal_valid` names only for
+  targeted scenarios.
 - Each fixture is self-contained and should include `input/PACKAGE.copp`.
 - `invoke.args` is required and contains one CLI argument per line.
 - `expect.exit`, `expect.stdout`, `expect.stderr`, and `expect.artifacts` are

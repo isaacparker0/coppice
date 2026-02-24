@@ -7,10 +7,11 @@ use crate::runtime_interface_emission::{
 };
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableMatchArm, ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableProgram,
-    ExecutableStatement, ExecutableStructDeclaration, ExecutableStructReference,
-    ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructReference, ExecutableTypeReference,
+    ExecutableUnaryOperator,
 };
 use compiler__reports::CompilerFailure;
 use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
@@ -72,6 +73,8 @@ struct CompilationState {
     module: ObjectModule,
     function_record_by_callable_reference: BTreeMap<ExecutableCallableReference, FunctionRecord>,
     method_record_by_key: BTreeMap<MethodKey, MethodRecord>,
+    constant_declaration_by_reference:
+        BTreeMap<ExecutableConstantReference, ExecutableConstantDeclaration>,
     struct_declaration_by_reference:
         BTreeMap<ExecutableStructReference, ExecutableStructDeclaration>,
     external_runtime_functions: ExternalRuntimeFunctions,
@@ -88,6 +91,11 @@ const UNION_TAG_NIL: i64 = 4;
 const UNION_TAG_STRUCT: i64 = 5;
 const UNION_TAG_ENUM_VARIANT: i64 = 6;
 pub(crate) fn ensure_program_supported(program: &ExecutableProgram) -> Result<(), CompilerFailure> {
+    for constant_declaration in &program.constant_declarations {
+        ensure_type_supported(&constant_declaration.type_reference);
+        ensure_expression_supported(&constant_declaration.initializer)?;
+    }
+
     for function_declaration in &program.function_declarations {
         for parameter in &function_declaration.parameters {
             ensure_type_supported(&parameter.type_reference);
@@ -227,6 +235,11 @@ pub(crate) fn emit_object_bytes(program: &ExecutableProgram) -> Result<Vec<u8>, 
     let function_record_by_callable_reference =
         declare_program_functions(&mut module, &program.function_declarations)?;
     let method_record_by_key = declare_struct_methods(&mut module, &program.struct_declarations)?;
+    let constant_declaration_by_reference = program
+        .constant_declarations
+        .iter()
+        .map(|declaration| (declaration.constant_reference.clone(), declaration.clone()))
+        .collect();
     let struct_declaration_by_reference = program
         .struct_declarations
         .iter()
@@ -237,6 +250,7 @@ pub(crate) fn emit_object_bytes(program: &ExecutableProgram) -> Result<Vec<u8>, 
         module,
         function_record_by_callable_reference,
         method_record_by_key,
+        constant_declaration_by_reference,
         struct_declaration_by_reference,
         external_runtime_functions,
     };
@@ -981,17 +995,61 @@ fn compile_expression(
             type_reference: ExecutableTypeReference::String,
             terminates: false,
         }),
-        ExecutableExpression::Identifier { name } => {
-            let local_value = compilation_context
-                .local_value_by_name
-                .get(name)
-                .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?
-                .clone();
-            Ok(TypedValue {
-                value: Some(function_builder.use_var(local_value.variable)),
-                type_reference: local_value.type_reference,
-                terminates: false,
-            })
+        ExecutableExpression::Identifier {
+            name,
+            constant_reference,
+        } => {
+            if let Some(local_value) = compilation_context.local_value_by_name.get(name).cloned() {
+                return Ok(TypedValue {
+                    value: Some(function_builder.use_var(local_value.variable)),
+                    type_reference: local_value.type_reference,
+                    terminates: false,
+                });
+            }
+
+            if let Some(constant_reference) = constant_reference {
+                let constant_declaration = state
+                    .constant_declaration_by_reference
+                    .get(constant_reference)
+                    .cloned()
+                    .ok_or_else(|| {
+                        build_failed(
+                            format!(
+                                "unknown constant '{}::{}'",
+                                constant_reference.package_path, constant_reference.symbol_name
+                            ),
+                            None,
+                        )
+                    })?;
+                let constant_value = compile_expression(
+                    state,
+                    function_builder,
+                    compilation_context,
+                    &constant_declaration.initializer,
+                )?;
+                if constant_value.terminates {
+                    return Ok(constant_value);
+                }
+                if !is_type_assignable(
+                    &constant_value.type_reference,
+                    &constant_declaration.type_reference,
+                ) {
+                    return Err(build_failed(
+                        format!(
+                            "constant '{}::{}' initializer type mismatch",
+                            constant_reference.package_path, constant_reference.symbol_name
+                        ),
+                        None,
+                    ));
+                }
+                return Ok(TypedValue {
+                    value: constant_value.value,
+                    type_reference: constant_declaration.type_reference,
+                    terminates: false,
+                });
+            }
+
+            Err(build_failed(format!("unknown local '{name}'"), None))
         }
         ExecutableExpression::EnumVariantLiteral {
             enum_variant_reference,

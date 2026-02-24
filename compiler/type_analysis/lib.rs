@@ -16,6 +16,7 @@ use compiler__semantic_types::{
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference,
+    TypeAnnotatedConstantDeclaration, TypeAnnotatedConstantReference,
     TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression, TypeAnnotatedFile,
     TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedMatchArm,
     TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
@@ -36,12 +37,15 @@ mod unused_bindings;
 struct TypeAnalysisSummary {
     file_typecheck_summary: FileTypecheckSummary,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    constant_reference_by_expression_id:
+        BTreeMap<SemanticExpressionId, TypeAnnotatedConstantReference>,
     resolved_type_argument_types_by_expression_id:
         BTreeMap<SemanticExpressionId, Vec<TypeAnnotatedResolvedTypeArgument>>,
     struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
     enum_variant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedEnumVariantReference>,
     type_declarations_for_annotations: Vec<SemanticTypeDeclaration>,
+    constant_declarations_for_annotations: Vec<SemanticConstantDeclaration>,
     function_declarations_for_annotations: Vec<SemanticFunctionDeclaration>,
 }
 
@@ -71,6 +75,15 @@ pub fn check_package_unit(
             function_signature_by_name: function_signature_by_name_from_summary(
                 &summary.file_typecheck_summary,
             ),
+            constant_declarations: build_constant_declaration_annotations(
+                package_path,
+                &summary.constant_declarations_for_annotations,
+                &summary.call_target_by_expression_id,
+                &summary.resolved_type_argument_types_by_expression_id,
+                &summary.struct_reference_by_expression_id,
+                &summary.enum_variant_reference_by_expression_id,
+                &summary.constant_reference_by_expression_id,
+            ),
             struct_declarations: build_struct_declaration_annotations(
                 package_path,
                 &summary.type_declarations_for_annotations,
@@ -78,6 +91,7 @@ pub fn check_package_unit(
                 &summary.resolved_type_argument_types_by_expression_id,
                 &summary.struct_reference_by_expression_id,
                 &summary.enum_variant_reference_by_expression_id,
+                &summary.constant_reference_by_expression_id,
             ),
             function_declarations: build_function_declaration_annotations(
                 package_path,
@@ -86,6 +100,7 @@ pub fn check_package_unit(
                 &summary.resolved_type_argument_types_by_expression_id,
                 &summary.struct_reference_by_expression_id,
                 &summary.enum_variant_reference_by_expression_id,
+                &summary.constant_reference_by_expression_id,
             ),
         },
         diagnostics,
@@ -113,6 +128,51 @@ fn function_signature_by_name_from_summary(
     function_signature_by_name
 }
 
+fn build_constant_declaration_annotations(
+    package_path: &str,
+    constant_declarations: &[SemanticConstantDeclaration],
+    call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    resolved_type_argument_types_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        Vec<TypeAnnotatedResolvedTypeArgument>,
+    >,
+    struct_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedStructReference,
+    >,
+    enum_variant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedEnumVariantReference,
+    >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
+    >,
+) -> Vec<TypeAnnotatedConstantDeclaration> {
+    constant_declarations
+        .iter()
+        .map(|constant_declaration| TypeAnnotatedConstantDeclaration {
+            name: constant_declaration.name.clone(),
+            constant_reference: TypeAnnotatedConstantReference {
+                package_path: package_path.to_string(),
+                symbol_name: constant_declaration.name.clone(),
+            },
+            type_name: type_annotated_type_name_from_semantic_type_name(
+                &constant_declaration.type_name,
+            ),
+            initializer: type_annotated_expression_from_semantic_expression(
+                &constant_declaration.expression,
+                call_target_by_expression_id,
+                resolved_type_argument_types_by_expression_id,
+                struct_reference_by_expression_id,
+                enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
+            ),
+            span: constant_declaration.span.clone(),
+        })
+        .collect()
+}
+
 fn build_function_declaration_annotations(
     package_path: &str,
     function_declarations: &[SemanticFunctionDeclaration],
@@ -128,6 +188,10 @@ fn build_function_declaration_annotations(
     enum_variant_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedEnumVariantReference,
+    >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
     >,
 ) -> Vec<TypeAnnotatedFunctionDeclaration> {
     function_declarations
@@ -176,6 +240,7 @@ fn build_function_declaration_annotations(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     )
                 })
                 .collect(),
@@ -198,6 +263,10 @@ fn build_struct_declaration_annotations(
     enum_variant_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedEnumVariantReference,
+    >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
     >,
 ) -> Vec<TypeAnnotatedStructDeclaration> {
     type_declarations
@@ -263,6 +332,7 @@ fn build_struct_declaration_annotations(
                                         resolved_type_argument_types_by_expression_id,
                                         struct_reference_by_expression_id,
                                         enum_variant_reference_by_expression_id,
+                                        constant_reference_by_expression_id,
                                     )
                                 })
                                 .collect(),
@@ -293,6 +363,10 @@ fn type_annotated_statement_from_semantic_statement(
         SemanticExpressionId,
         TypeAnnotatedEnumVariantReference,
     >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
+    >,
 ) -> TypeAnnotatedStatement {
     match statement {
         SemanticStatement::Binding {
@@ -310,6 +384,7 @@ fn type_annotated_statement_from_semantic_statement(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             ),
             span: span.clone(),
         },
@@ -323,6 +398,7 @@ fn type_annotated_statement_from_semantic_statement(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             ),
             span: span.clone(),
         },
@@ -338,6 +414,7 @@ fn type_annotated_statement_from_semantic_statement(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             ),
             then_statements: then_block
                 .statements
@@ -349,6 +426,7 @@ fn type_annotated_statement_from_semantic_statement(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     )
                 })
                 .collect(),
@@ -363,6 +441,7 @@ fn type_annotated_statement_from_semantic_statement(
                             resolved_type_argument_types_by_expression_id,
                             struct_reference_by_expression_id,
                             enum_variant_reference_by_expression_id,
+                            constant_reference_by_expression_id,
                         )
                     })
                     .collect()
@@ -381,6 +460,7 @@ fn type_annotated_statement_from_semantic_statement(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )
             }),
             body_statements: body
@@ -393,6 +473,7 @@ fn type_annotated_statement_from_semantic_statement(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     )
                 })
                 .collect(),
@@ -409,6 +490,7 @@ fn type_annotated_statement_from_semantic_statement(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             ),
             span: span.clone(),
         },
@@ -419,6 +501,7 @@ fn type_annotated_statement_from_semantic_statement(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             ),
             span: span.clone(),
         },
@@ -439,6 +522,10 @@ fn type_annotated_expression_from_semantic_expression(
     enum_variant_reference_by_expression_id: &BTreeMap<
         SemanticExpressionId,
         TypeAnnotatedEnumVariantReference,
+    >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
     >,
 ) -> TypeAnnotatedExpression {
     match expression {
@@ -473,6 +560,9 @@ fn type_annotated_expression_from_semantic_expression(
                 }
                 SemanticNameReferenceKind::Builtin => TypeAnnotatedNameReferenceKind::Builtin,
             },
+            constant_reference: constant_reference_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .cloned(),
             span: span.clone(),
         },
         SemanticExpression::FieldAccess { span, .. }
@@ -504,6 +594,7 @@ fn type_annotated_expression_from_semantic_expression(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     ),
                     span: field.span.clone(),
                 })
@@ -525,6 +616,7 @@ fn type_annotated_expression_from_semantic_expression(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             )),
             field: field.clone(),
             span: span.clone(),
@@ -545,6 +637,7 @@ fn type_annotated_expression_from_semantic_expression(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             )),
             span: span.clone(),
         },
@@ -563,6 +656,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -570,6 +664,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -581,6 +676,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -588,6 +684,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -599,6 +696,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -606,6 +704,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -617,6 +716,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -624,6 +724,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -635,6 +736,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -642,6 +744,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -653,6 +756,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -660,6 +764,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -671,6 +776,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -678,6 +784,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -689,6 +796,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -696,6 +804,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -707,6 +816,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -714,6 +824,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -725,6 +836,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -732,6 +844,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -743,6 +856,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -750,6 +864,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -761,6 +876,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -768,6 +884,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -779,6 +896,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
@@ -786,6 +904,7 @@ fn type_annotated_expression_from_semantic_expression(
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
                     enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
                 )),
                 span: span.clone(),
             },
@@ -803,6 +922,7 @@ fn type_annotated_expression_from_semantic_expression(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             )),
             call_target: call_target_by_expression_id
                 .get(&semantic_expression_id(expression))
@@ -816,6 +936,7 @@ fn type_annotated_expression_from_semantic_expression(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     )
                 })
                 .collect(),
@@ -838,6 +959,7 @@ fn type_annotated_expression_from_semantic_expression(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             )),
             arms: arms
                 .iter()
@@ -848,6 +970,7 @@ fn type_annotated_expression_from_semantic_expression(
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
                         enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
                     )
                 })
                 .collect(),
@@ -865,6 +988,7 @@ fn type_annotated_expression_from_semantic_expression(
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
                 enum_variant_reference_by_expression_id,
+                constant_reference_by_expression_id,
             )),
             type_name: type_annotated_type_name_from_semantic_type_name(type_name),
             span: span.clone(),
@@ -887,6 +1011,10 @@ fn type_annotated_match_arm_from_semantic_match_arm(
         SemanticExpressionId,
         TypeAnnotatedEnumVariantReference,
     >,
+    constant_reference_by_expression_id: &BTreeMap<
+        SemanticExpressionId,
+        TypeAnnotatedConstantReference,
+    >,
 ) -> TypeAnnotatedMatchArm {
     TypeAnnotatedMatchArm {
         pattern: type_annotated_match_pattern_from_semantic_match_pattern(&arm.pattern),
@@ -896,6 +1024,7 @@ fn type_annotated_match_arm_from_semantic_match_arm(
             resolved_type_argument_types_by_expression_id,
             struct_reference_by_expression_id,
             enum_variant_reference_by_expression_id,
+            constant_reference_by_expression_id,
         ),
         span: arm.span.clone(),
     }
@@ -1046,6 +1175,7 @@ fn check_package_unit_declarations(
         imported_bindings,
     );
     summary.type_declarations_for_annotations = type_declarations;
+    summary.constant_declarations_for_annotations = constant_declarations;
     summary.function_declarations_for_annotations = function_declarations;
     summary
 }
@@ -1171,6 +1301,8 @@ struct TypeChecker<'a> {
     current_return_type: Type,
     loop_depth: usize,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
+    constant_reference_by_expression_id:
+        BTreeMap<SemanticExpressionId, TypeAnnotatedConstantReference>,
     resolved_type_argument_types_by_expression_id:
         BTreeMap<SemanticExpressionId, Vec<TypeAnnotatedResolvedTypeArgument>>,
     struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
@@ -1237,6 +1369,7 @@ impl<'a> TypeChecker<'a> {
             current_return_type: Type::Unknown,
             loop_depth: 0,
             call_target_by_expression_id: BTreeMap::new(),
+            constant_reference_by_expression_id: BTreeMap::new(),
             resolved_type_argument_types_by_expression_id: BTreeMap::new(),
             struct_reference_by_expression_id: BTreeMap::new(),
             enum_variant_reference_by_expression_id: BTreeMap::new(),
@@ -1280,6 +1413,7 @@ impl<'a> TypeChecker<'a> {
                 typed_symbol_by_name,
             },
             call_target_by_expression_id: self.call_target_by_expression_id.clone(),
+            constant_reference_by_expression_id: self.constant_reference_by_expression_id.clone(),
             resolved_type_argument_types_by_expression_id: self
                 .resolved_type_argument_types_by_expression_id
                 .clone(),
@@ -1288,6 +1422,7 @@ impl<'a> TypeChecker<'a> {
                 .enum_variant_reference_by_expression_id
                 .clone(),
             type_declarations_for_annotations: Vec::new(),
+            constant_declarations_for_annotations: Vec::new(),
             function_declarations_for_annotations: Vec::new(),
         }
     }
@@ -1359,6 +1494,7 @@ impl<'a> TypeChecker<'a> {
 
     fn check_name_reference_expression(
         &mut self,
+        expression_id: SemanticExpressionId,
         name: &str,
         kind: SemanticNameReferenceKind,
         span: &Span,
@@ -1387,10 +1523,15 @@ impl<'a> TypeChecker<'a> {
                 };
             }
         }
-        self.resolve_variable(name, span)
+        self.resolve_variable(expression_id, name, span)
     }
 
-    fn resolve_variable(&mut self, name: &str, span: &Span) -> Type {
+    fn resolve_variable(
+        &mut self,
+        expression_id: SemanticExpressionId,
+        name: &str,
+        span: &Span,
+    ) -> Type {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(info) = scope.get_mut(name) {
                 info.used = true;
@@ -1398,9 +1539,34 @@ impl<'a> TypeChecker<'a> {
             }
         }
         if let Some(info) = self.constants.get(name) {
+            self.constant_reference_by_expression_id.insert(
+                expression_id,
+                TypeAnnotatedConstantReference {
+                    package_path: self.package_path.clone(),
+                    symbol_name: name.to_string(),
+                },
+            );
             return info.value_type.clone();
         }
-        if let Some(value_type) = self.imported_constant_type(name) {
+        if let Some(imported_binding) = self.imported_bindings.get(name) {
+            let ImportedSymbol::Constant(value_type) = &imported_binding.symbol else {
+                // Not a constant binding; continue to unknown-name handling.
+                if self.imported_bindings.contains_key(name) {
+                    self.mark_import_used(name);
+                }
+                self.error(format!("unknown name '{name}'"), span.clone());
+                return Type::Unknown;
+            };
+            let imported_package_path = imported_binding.imported_package_path.clone();
+            let imported_symbol_name = imported_binding.imported_symbol_name.clone();
+            let value_type = value_type.clone();
+            self.constant_reference_by_expression_id.insert(
+                expression_id,
+                TypeAnnotatedConstantReference {
+                    package_path: imported_package_path,
+                    symbol_name: imported_symbol_name,
+                },
+            );
             self.mark_import_used(name);
             return value_type;
         }

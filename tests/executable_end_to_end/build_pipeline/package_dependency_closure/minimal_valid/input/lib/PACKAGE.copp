@@ -1,1 +1,1 @@
-exports { greet }
+exports { GREETING, greet }

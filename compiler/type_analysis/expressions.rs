@@ -41,8 +41,12 @@ impl TypeChecker<'_> {
             SemanticExpression::BooleanLiteral { .. } => Type::Boolean,
             SemanticExpression::StringLiteral { .. } => Type::String,
             SemanticExpression::NameReference {
-                name, kind, span, ..
-            } => self.check_name_reference_expression(name, *kind, span),
+                id,
+                name,
+                kind,
+                span,
+                ..
+            } => self.check_name_reference_expression(*id, name, *kind, span),
             SemanticExpression::StructLiteral {
                 type_name,
                 fields,

@@ -1,3 +1,5 @@
+visible GREETING: string := "hello from lib"
+
 visible function greet() -> string {
-    return "hello from lib"
+    return GREETING
 }

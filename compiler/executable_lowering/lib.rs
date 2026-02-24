@@ -1,20 +1,21 @@
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
-    ExecutableEnumVariantReference, ExecutableExpression, ExecutableFunctionDeclaration,
-    ExecutableMatchArm, ExecutableMatchPattern, ExecutableMethodDeclaration,
-    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
-    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableParameterDeclaration,
+    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
+    ExecutableStructFieldDeclaration, ExecutableStructLiteralField, ExecutableStructReference,
+    ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
-    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedExpression,
-    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedMatchArm,
-    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument,
-    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
-    TypeAnnotatedUnaryOperator,
+    TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedConstantDeclaration,
+    TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration,
+    TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration,
+    TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
+    TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -35,14 +36,19 @@ pub fn lower_type_annotated_build_unit(
         validate_main_signature_from_type_analysis(binary_entrypoint_file, &mut diagnostics);
 
     let mut all_struct_declarations = Vec::new();
+    let mut all_constant_declarations = Vec::new();
     let mut all_function_declarations = Vec::new();
     all_struct_declarations.extend(binary_entrypoint_file.struct_declarations.iter().cloned());
+    all_constant_declarations.extend(binary_entrypoint_file.constant_declarations.iter().cloned());
     all_function_declarations.extend(binary_entrypoint_file.function_declarations.iter().cloned());
     for dependency_file in dependency_library_files {
         all_struct_declarations.extend(dependency_file.struct_declarations.iter().cloned());
+        all_constant_declarations.extend(dependency_file.constant_declarations.iter().cloned());
         all_function_declarations.extend(dependency_file.function_declarations.iter().cloned());
     }
 
+    let constant_declarations =
+        lower_constant_declarations(&all_constant_declarations, &mut diagnostics);
     let struct_declarations = lower_struct_declarations(&all_struct_declarations, &mut diagnostics);
     let function_declarations =
         lower_function_declarations(&all_function_declarations, &mut diagnostics);
@@ -62,12 +68,40 @@ pub fn lower_type_annotated_build_unit(
     PhaseOutput {
         value: ExecutableProgram {
             entrypoint_callable_reference,
+            constant_declarations,
             struct_declarations,
             function_declarations,
         },
         diagnostics,
         status,
     }
+}
+
+fn lower_constant_declarations(
+    constant_declarations: &[TypeAnnotatedConstantDeclaration],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Vec<ExecutableConstantDeclaration> {
+    let mut lowered = Vec::new();
+    for constant_declaration in constant_declarations {
+        let Some(type_reference) = lower_type_name_to_type_reference(
+            &constant_declaration.type_name,
+            true,
+            &[],
+            diagnostics,
+        ) else {
+            continue;
+        };
+        lowered.push(ExecutableConstantDeclaration {
+            name: constant_declaration.name.clone(),
+            constant_reference: ExecutableConstantReference {
+                package_path: constant_declaration.constant_reference.package_path.clone(),
+                symbol_name: constant_declaration.constant_reference.symbol_name.clone(),
+            },
+            type_reference,
+            initializer: lower_expression(&constant_declaration.initializer, &[], diagnostics),
+        });
+    }
+    lowered
 }
 
 fn lower_function_declarations(
@@ -375,9 +409,19 @@ fn lower_expression(
                 value: value.clone(),
             }
         }
-        TypeAnnotatedExpression::NameReference { name, .. } => {
-            ExecutableExpression::Identifier { name: name.clone() }
-        }
+        TypeAnnotatedExpression::NameReference {
+            name,
+            constant_reference,
+            ..
+        } => ExecutableExpression::Identifier {
+            name: name.clone(),
+            constant_reference: constant_reference.as_ref().map(|constant_reference| {
+                ExecutableConstantReference {
+                    package_path: constant_reference.package_path.clone(),
+                    symbol_name: constant_reference.symbol_name.clone(),
+                }
+            }),
+        },
         TypeAnnotatedExpression::EnumVariantLiteral {
             enum_variant_reference,
             ..

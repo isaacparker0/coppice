@@ -22,7 +22,8 @@ Naming guidance:
 
 1. `<area>` is a broad subsystem boundary.
 2. `<feature>` is a feature family under that area.
-3. `<case>` is one scenario; use `minimal_valid` for canonical success.
+3. `<case>` is one scenario directory directly under `<feature>` (no extra
+   nesting); use `minimal_valid` for canonical success.
 
 ## Case design principles
 
