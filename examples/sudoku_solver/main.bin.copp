@@ -1,0 +1,103 @@
+function isAllowed(board: List[List[int64]], targetRow: int64, targetColumn: int64, candidateValue: int64) -> boolean {
+    mut column := 0
+    for column < 9 {
+        if board[targetRow][column] == candidateValue {
+            return false
+        }
+        column = column + 1
+    }
+
+    mut row := 0
+    for row < 9 {
+        if board[row][targetColumn] == candidateValue {
+            return false
+        }
+        row = row + 1
+    }
+
+    boxStartRow := (targetRow / 3) * 3
+    boxStartColumn := (targetColumn / 3) * 3
+
+    mut rowOffset := 0
+    for rowOffset < 3 {
+        mut columnOffset := 0
+        for columnOffset < 3 {
+            if board[boxStartRow + rowOffset][boxStartColumn + columnOffset] == candidateValue {
+                return false
+            }
+            columnOffset = columnOffset + 1
+        }
+        rowOffset = rowOffset + 1
+    }
+
+    return true
+}
+
+function solve(mut board: List[List[int64]]) -> boolean {
+    mut row := 0
+    for row < 9 {
+        mut column := 0
+        for column < 9 {
+            if board[row][column] == 0 {
+                mut candidateValue := 1
+                for candidateValue <= 9 {
+                    if isAllowed(board, row, column, candidateValue) {
+                        board[row][column] = candidateValue
+                        if solve(board) {
+                            return true
+                        }
+                        board[row][column] = 0
+                    }
+                    candidateValue = candidateValue + 1
+                }
+                return false
+            }
+            column = column + 1
+        }
+        row = row + 1
+    }
+
+    return true
+}
+
+function printBoard(board: List[List[int64]]) -> nil {
+    mut row := 0
+    for row < 9 {
+        mut rowText := ""
+        mut column := 0
+        for column < 9 {
+            if column > 0 {
+                rowText = rowText + " "
+            }
+            rowText = rowText + string(board[row][column])
+            column = column + 1
+        }
+        print(rowText)
+        row = row + 1
+    }
+
+    return nil
+}
+
+function main() -> nil {
+    mut board := [
+        [5, 3, 0, 0, 7, 0, 0, 0, 0],
+        [6, 0, 0, 1, 9, 5, 0, 0, 0],
+        [0, 9, 8, 0, 0, 0, 0, 6, 0],
+        [8, 0, 0, 0, 6, 0, 0, 0, 3],
+        [4, 0, 0, 8, 0, 3, 0, 0, 1],
+        [7, 0, 0, 0, 2, 0, 0, 0, 6],
+        [0, 6, 0, 0, 0, 0, 2, 8, 0],
+        [0, 0, 0, 4, 1, 9, 0, 0, 5],
+        [0, 0, 0, 0, 8, 0, 0, 7, 9],
+    ]
+
+    if solve(board) {
+        print("sudoku solved")
+        printBoard(board)
+    } else {
+        print("sudoku has no solution")
+    }
+
+    return nil
+}
