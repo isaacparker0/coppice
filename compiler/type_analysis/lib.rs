@@ -39,6 +39,7 @@ mod unused_bindings;
 
 struct TypeAnalysisSummary {
     file_typecheck_summary: FileTypecheckSummary,
+    resolved_type_by_expression_id: BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     constant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedConstantReference>,
@@ -80,9 +81,20 @@ pub fn check_package_unit(
         function_signature_by_name: function_signature_by_name_from_summary(
             &summary.file_typecheck_summary,
         ),
+        resolved_type_by_expression_id: summary
+            .resolved_type_by_expression_id
+            .iter()
+            .filter_map(|(expression_id, value_type)| {
+                Some((
+                    expression_id.0,
+                    type_annotated_resolved_type_argument_from_type(value_type)?,
+                ))
+            })
+            .collect(),
         constant_declarations: build_constant_declaration_annotations(
             package_path,
             &summary.constant_declarations_for_annotations,
+            &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
             &summary.struct_reference_by_expression_id,
@@ -97,6 +109,7 @@ pub fn check_package_unit(
             package_path,
             &summary.type_declarations_for_annotations,
             &summary.implemented_interface_references_by_struct_name,
+            &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
             &summary.struct_reference_by_expression_id,
@@ -106,6 +119,7 @@ pub fn check_package_unit(
         function_declarations: build_function_declaration_annotations(
             package_path,
             &summary.function_declarations_for_annotations,
+            &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
             &summary.struct_reference_by_expression_id,
@@ -148,6 +162,7 @@ fn function_signature_by_name_from_summary(
 fn build_constant_declaration_annotations(
     package_path: &str,
     constant_declarations: &[SemanticConstantDeclaration],
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -179,6 +194,7 @@ fn build_constant_declaration_annotations(
             ),
             initializer: type_annotated_expression_from_semantic_expression(
                 &constant_declaration.expression,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -193,6 +209,7 @@ fn build_constant_declaration_annotations(
 fn build_function_declaration_annotations(
     package_path: &str,
     function_declarations: &[SemanticFunctionDeclaration],
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -253,6 +270,7 @@ fn build_function_declaration_annotations(
                 .map(|statement| {
                     type_annotated_statement_from_semantic_statement(
                         statement,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -272,6 +290,7 @@ fn build_struct_declaration_annotations(
         String,
         Vec<TypeAnnotatedInterfaceReference>,
     >,
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -353,6 +372,7 @@ fn build_struct_declaration_annotations(
                                 .map(|statement| {
                                     type_annotated_statement_from_semantic_statement(
                                         statement,
+                                        resolved_type_by_expression_id,
                                         call_target_by_expression_id,
                                         resolved_type_argument_types_by_expression_id,
                                         struct_reference_by_expression_id,
@@ -421,6 +441,7 @@ fn build_interface_declaration_annotations(
 
 fn type_annotated_statement_from_semantic_statement(
     statement: &SemanticStatement,
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -451,6 +472,7 @@ fn type_annotated_statement_from_semantic_statement(
             mutable: *mutable,
             initializer: type_annotated_expression_from_semantic_expression(
                 initializer,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -465,6 +487,7 @@ fn type_annotated_statement_from_semantic_statement(
             name: name.clone(),
             value: type_annotated_expression_from_semantic_expression(
                 value,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -481,6 +504,7 @@ fn type_annotated_statement_from_semantic_statement(
         } => TypeAnnotatedStatement::If {
             condition: type_annotated_expression_from_semantic_expression(
                 condition,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -493,6 +517,7 @@ fn type_annotated_statement_from_semantic_statement(
                 .map(|statement| {
                     type_annotated_statement_from_semantic_statement(
                         statement,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -508,6 +533,7 @@ fn type_annotated_statement_from_semantic_statement(
                     .map(|statement| {
                         type_annotated_statement_from_semantic_statement(
                             statement,
+                            resolved_type_by_expression_id,
                             call_target_by_expression_id,
                             resolved_type_argument_types_by_expression_id,
                             struct_reference_by_expression_id,
@@ -527,6 +553,7 @@ fn type_annotated_statement_from_semantic_statement(
             condition: condition.as_ref().map(|expression| {
                 type_annotated_expression_from_semantic_expression(
                     expression,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -540,6 +567,7 @@ fn type_annotated_statement_from_semantic_statement(
                 .map(|statement| {
                     type_annotated_statement_from_semantic_statement(
                         statement,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -557,6 +585,7 @@ fn type_annotated_statement_from_semantic_statement(
         SemanticStatement::Expression { value, span } => TypeAnnotatedStatement::Expression {
             value: type_annotated_expression_from_semantic_expression(
                 value,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -568,6 +597,7 @@ fn type_annotated_statement_from_semantic_statement(
         SemanticStatement::Return { value, span } => TypeAnnotatedStatement::Return {
             value: type_annotated_expression_from_semantic_expression(
                 value,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -581,6 +611,7 @@ fn type_annotated_statement_from_semantic_statement(
 
 fn type_annotated_expression_from_semantic_expression(
     expression: &SemanticExpression,
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -621,6 +652,34 @@ fn type_annotated_expression_from_semantic_expression(
                 span: span.clone(),
             }
         }
+        SemanticExpression::ListLiteral { elements, span, .. } => {
+            TypeAnnotatedExpression::ListLiteral {
+                elements: elements
+                    .iter()
+                    .map(|element| {
+                        type_annotated_expression_from_semantic_expression(
+                            element,
+                            resolved_type_by_expression_id,
+                            call_target_by_expression_id,
+                            resolved_type_argument_types_by_expression_id,
+                            struct_reference_by_expression_id,
+                            enum_variant_reference_by_expression_id,
+                            constant_reference_by_expression_id,
+                        )
+                    })
+                    .collect(),
+                element_type: resolved_type_by_expression_id
+                    .get(&semantic_expression_id(expression))
+                    .and_then(|resolved_type| match resolved_type {
+                        Type::List(element_type) => {
+                            type_annotated_resolved_type_argument_from_type(element_type)
+                        }
+                        _ => None,
+                    })
+                    .unwrap_or(TypeAnnotatedResolvedTypeArgument::Never),
+                span: span.clone(),
+            }
+        }
         SemanticExpression::NameReference {
             name, kind, span, ..
         } => TypeAnnotatedExpression::NameReference {
@@ -640,7 +699,8 @@ fn type_annotated_expression_from_semantic_expression(
                     TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
                         Some(callable_reference.clone())
                     }
-                    TypeAnnotatedCallTarget::BuiltinFunction { .. } => None,
+                    TypeAnnotatedCallTarget::BuiltinFunction { .. }
+                    | TypeAnnotatedCallTarget::BuiltinListGet => None,
                 }),
             span: span.clone(),
         },
@@ -669,6 +729,7 @@ fn type_annotated_expression_from_semantic_expression(
                     name: field.name.clone(),
                     value: type_annotated_expression_from_semantic_expression(
                         &field.value,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -691,6 +752,7 @@ fn type_annotated_expression_from_semantic_expression(
         } => TypeAnnotatedExpression::FieldAccess {
             target: Box::new(type_annotated_expression_from_semantic_expression(
                 target,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -712,6 +774,7 @@ fn type_annotated_expression_from_semantic_expression(
             },
             expression: Box::new(type_annotated_expression_from_semantic_expression(
                 expression,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -731,6 +794,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Add,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -739,6 +803,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -751,6 +816,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Subtract,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -759,6 +825,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -771,6 +838,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Multiply,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -779,6 +847,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -791,6 +860,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Divide,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -799,6 +869,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -811,6 +882,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Modulo,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -819,6 +891,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -831,6 +904,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::EqualEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -839,6 +913,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -851,6 +926,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::NotEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -859,6 +935,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -871,6 +948,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::LessThan,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -879,6 +957,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -891,6 +970,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::LessThanOrEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -899,6 +979,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -911,6 +992,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::GreaterThan,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -919,6 +1001,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -931,6 +1014,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::GreaterThanOrEqual,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -939,6 +1023,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -951,6 +1036,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::And,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -959,6 +1045,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -971,6 +1058,7 @@ fn type_annotated_expression_from_semantic_expression(
                 operator: TypeAnnotatedBinaryOperator::Or,
                 left: Box::new(type_annotated_expression_from_semantic_expression(
                     left,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -979,6 +1067,7 @@ fn type_annotated_expression_from_semantic_expression(
                 )),
                 right: Box::new(type_annotated_expression_from_semantic_expression(
                     right,
+                    resolved_type_by_expression_id,
                     call_target_by_expression_id,
                     resolved_type_argument_types_by_expression_id,
                     struct_reference_by_expression_id,
@@ -997,6 +1086,7 @@ fn type_annotated_expression_from_semantic_expression(
         } => TypeAnnotatedExpression::Call {
             callee: Box::new(type_annotated_expression_from_semantic_expression(
                 callee,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -1011,6 +1101,7 @@ fn type_annotated_expression_from_semantic_expression(
                 .map(|argument| {
                     type_annotated_expression_from_semantic_expression(
                         argument,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -1034,6 +1125,7 @@ fn type_annotated_expression_from_semantic_expression(
         } => TypeAnnotatedExpression::Match {
             target: Box::new(type_annotated_expression_from_semantic_expression(
                 target,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -1045,6 +1137,7 @@ fn type_annotated_expression_from_semantic_expression(
                 .map(|arm| {
                     type_annotated_match_arm_from_semantic_match_arm(
                         arm,
+                        resolved_type_by_expression_id,
                         call_target_by_expression_id,
                         resolved_type_argument_types_by_expression_id,
                         struct_reference_by_expression_id,
@@ -1063,6 +1156,7 @@ fn type_annotated_expression_from_semantic_expression(
         } => TypeAnnotatedExpression::Matches {
             value: Box::new(type_annotated_expression_from_semantic_expression(
                 value,
+                resolved_type_by_expression_id,
                 call_target_by_expression_id,
                 resolved_type_argument_types_by_expression_id,
                 struct_reference_by_expression_id,
@@ -1077,6 +1171,7 @@ fn type_annotated_expression_from_semantic_expression(
 
 fn type_annotated_match_arm_from_semantic_match_arm(
     arm: &compiler__semantic_program::SemanticMatchArm,
+    resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -1099,6 +1194,7 @@ fn type_annotated_match_arm_from_semantic_match_arm(
         pattern: type_annotated_match_pattern_from_semantic_match_pattern(&arm.pattern),
         value: type_annotated_expression_from_semantic_expression(
             &arm.value,
+            resolved_type_by_expression_id,
             call_target_by_expression_id,
             resolved_type_argument_types_by_expression_id,
             struct_reference_by_expression_id,
@@ -1138,6 +1234,7 @@ fn semantic_expression_id(expression: &SemanticExpression) -> SemanticExpression
         | SemanticExpression::NilLiteral { id, .. }
         | SemanticExpression::BooleanLiteral { id, .. }
         | SemanticExpression::StringLiteral { id, .. }
+        | SemanticExpression::ListLiteral { id, .. }
         | SemanticExpression::NameReference { id, .. }
         | SemanticExpression::StructLiteral { id, .. }
         | SemanticExpression::FieldAccess { id, .. }
@@ -1324,6 +1421,14 @@ fn annotate_expression_nominal_references(
         | TypeAnnotatedExpression::StringLiteral { .. }
         | TypeAnnotatedExpression::NameReference { .. }
         | TypeAnnotatedExpression::EnumVariantLiteral { .. } => {}
+        TypeAnnotatedExpression::ListLiteral { elements, .. } => {
+            for element in elements {
+                annotate_expression_nominal_references(
+                    element,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
         TypeAnnotatedExpression::StructLiteral {
             type_name, fields, ..
         } => {
@@ -1408,6 +1513,12 @@ fn annotate_resolved_type_argument_nominal_references(
         | TypeAnnotatedResolvedTypeArgument::Nil
         | TypeAnnotatedResolvedTypeArgument::Never
         | TypeAnnotatedResolvedTypeArgument::TypeParameter { .. } => {}
+        TypeAnnotatedResolvedTypeArgument::List { element_type } => {
+            annotate_resolved_type_argument_nominal_references(
+                element_type,
+                nominal_type_reference_by_local_name,
+            );
+        }
         TypeAnnotatedResolvedTypeArgument::Function {
             parameter_types,
             return_type,
@@ -1492,6 +1603,11 @@ fn type_annotated_resolved_type_argument_from_type(
         Type::String => TypeAnnotatedResolvedTypeArgument::String,
         Type::Nil => TypeAnnotatedResolvedTypeArgument::Nil,
         Type::Never => TypeAnnotatedResolvedTypeArgument::Never,
+        Type::List(element_type) => TypeAnnotatedResolvedTypeArgument::List {
+            element_type: Box::new(type_annotated_resolved_type_argument_from_type(
+                element_type,
+            )?),
+        },
         Type::Function {
             parameter_types,
             return_type,
@@ -1706,6 +1822,7 @@ struct TypeChecker<'a> {
     diagnostics: &'a mut Vec<PhaseDiagnostic>,
     current_return_type: Type,
     loop_depth: usize,
+    resolved_type_by_expression_id: BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     constant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedConstantReference>,
@@ -1774,6 +1891,7 @@ impl<'a> TypeChecker<'a> {
             diagnostics,
             current_return_type: Type::Unknown,
             loop_depth: 0,
+            resolved_type_by_expression_id: BTreeMap::new(),
             call_target_by_expression_id: BTreeMap::new(),
             constant_reference_by_expression_id: BTreeMap::new(),
             resolved_type_argument_types_by_expression_id: BTreeMap::new(),
@@ -1818,6 +1936,7 @@ impl<'a> TypeChecker<'a> {
             file_typecheck_summary: FileTypecheckSummary {
                 typed_symbol_by_name,
             },
+            resolved_type_by_expression_id: self.resolved_type_by_expression_id.clone(),
             call_target_by_expression_id: self.call_target_by_expression_id.clone(),
             constant_reference_by_expression_id: self.constant_reference_by_expression_id.clone(),
             resolved_type_argument_types_by_expression_id: self
@@ -2194,6 +2313,26 @@ impl<'a> TypeChecker<'a> {
                 resolved.push(type_parameter);
                 continue;
             }
+            if name == "List" {
+                if segment.type_arguments.len() != 1 {
+                    self.error(
+                        format!(
+                            "built-in type 'List' expects 1 type argument, got {}",
+                            segment.type_arguments.len()
+                        ),
+                        segment.span.clone(),
+                    );
+                    has_unknown = true;
+                    continue;
+                }
+                let element_type = self.resolve_type_name(&segment.type_arguments[0]);
+                if element_type == Type::Unknown {
+                    has_unknown = true;
+                    continue;
+                }
+                resolved.push(Type::List(Box::new(element_type)));
+                continue;
+            }
             if let Some(builtin) = type_from_builtin_name(name) {
                 if !segment.type_arguments.is_empty() {
                     self.error(
@@ -2383,6 +2522,7 @@ impl ExpressionSpan for SemanticExpression {
             | SemanticExpression::NilLiteral { span, .. }
             | SemanticExpression::BooleanLiteral { span, .. }
             | SemanticExpression::StringLiteral { span, .. }
+            | SemanticExpression::ListLiteral { span, .. }
             | SemanticExpression::NameReference { span, .. }
             | SemanticExpression::StructLiteral { span, .. }
             | SemanticExpression::FieldAccess { span, .. }

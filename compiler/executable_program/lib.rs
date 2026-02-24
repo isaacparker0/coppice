@@ -34,6 +34,7 @@ pub enum ExecutableCallTarget {
     BuiltinFunction {
         function_name: String,
     },
+    BuiltinListGet,
     UserDefinedFunction {
         callable_reference: ExecutableCallableReference,
     },
@@ -130,6 +131,9 @@ pub enum ExecutableTypeReference {
     String,
     Nil,
     Never,
+    List {
+        element_type: Box<ExecutableTypeReference>,
+    },
     Function {
         parameter_types: Vec<ExecutableTypeReference>,
         return_type: Box<ExecutableTypeReference>,
@@ -192,6 +196,10 @@ pub enum ExecutableExpression {
     NilLiteral,
     StringLiteral {
         value: String,
+    },
+    ListLiteral {
+        elements: Vec<ExecutableExpression>,
+        element_type: ExecutableTypeReference,
     },
     Identifier {
         name: String,

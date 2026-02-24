@@ -36,6 +36,7 @@ pub enum Type {
     String,
     Nil,
     Never,
+    List(Box<Type>),
     Named(NominalTypeRef),
     Applied {
         base: NominalTypeRef,
@@ -59,6 +60,7 @@ impl Type {
             Type::String => "string",
             Type::Nil => "nil",
             Type::Never => "never",
+            Type::List(_) => "<list>",
             Type::Named(named) => named.display_name.as_str(),
             Type::Applied { .. } => "<applied>",
             Type::Function { .. } => "<function>",
@@ -93,6 +95,7 @@ impl Type {
                     return_type.display()
                 )
             }
+            Type::List(element_type) => format!("List[{}]", element_type.display()),
             Type::Union(types) => types
                 .iter()
                 .map(Type::display)

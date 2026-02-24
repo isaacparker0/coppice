@@ -1,0 +1,3 @@
+lib.copp:3:19: error: unknown method 'List.first'
+      return values.first()
+                    ^

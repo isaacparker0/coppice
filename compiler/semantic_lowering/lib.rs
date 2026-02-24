@@ -400,6 +400,16 @@ fn lower_expression(
                 span: span.clone(),
             }
         }
+        syntax::SyntaxExpression::ListLiteral { elements, span } => {
+            semantic::SemanticExpression::ListLiteral {
+                id,
+                elements: elements
+                    .iter()
+                    .map(|element| lower_expression(element, context))
+                    .collect(),
+                span: span.clone(),
+            }
+        }
         syntax::SyntaxExpression::NameReference { name, kind, span } => {
             semantic::SemanticExpression::NameReference {
                 id,

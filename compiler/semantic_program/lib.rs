@@ -199,6 +199,11 @@ pub enum SemanticExpression {
         value: String,
         span: Span,
     },
+    ListLiteral {
+        id: SemanticExpressionId,
+        elements: Vec<SemanticExpression>,
+        span: Span,
+    },
     NameReference {
         id: SemanticExpressionId,
         name: String,

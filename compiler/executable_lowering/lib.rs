@@ -500,6 +500,30 @@ fn lower_expression(
                 value: value.clone(),
             }
         }
+        TypeAnnotatedExpression::ListLiteral {
+            elements,
+            element_type,
+            span,
+        } => {
+            if elements.is_empty() {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "build mode does not support empty list literals yet",
+                    span.clone(),
+                ));
+                return ExecutableExpression::NilLiteral;
+            }
+            let lowered_elements = elements
+                .iter()
+                .map(|element| lower_expression(element, type_parameter_names, diagnostics))
+                .collect::<Vec<_>>();
+            ExecutableExpression::ListLiteral {
+                elements: lowered_elements,
+                element_type: lower_type_reference_to_type_reference(
+                    element_type,
+                    type_parameter_names,
+                ),
+            }
+        }
         TypeAnnotatedExpression::NameReference {
             name,
             constant_reference,
@@ -649,6 +673,7 @@ fn lower_expression(
                             function_name: function_name.clone(),
                         }
                     }
+                    TypeAnnotatedCallTarget::BuiltinListGet => ExecutableCallTarget::BuiltinListGet,
                     TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
                         ExecutableCallTarget::UserDefinedFunction {
                             callable_reference: ExecutableCallableReference {
@@ -701,6 +726,12 @@ fn lower_type_reference_to_type_reference(
         TypeAnnotatedResolvedTypeArgument::String => ExecutableTypeReference::String,
         TypeAnnotatedResolvedTypeArgument::Nil => ExecutableTypeReference::Nil,
         TypeAnnotatedResolvedTypeArgument::Never => ExecutableTypeReference::Never,
+        TypeAnnotatedResolvedTypeArgument::List { element_type } => ExecutableTypeReference::List {
+            element_type: Box::new(lower_type_reference_to_type_reference(
+                element_type,
+                type_parameter_names,
+            )),
+        },
         TypeAnnotatedResolvedTypeArgument::Function {
             parameter_types,
             return_type,
@@ -888,6 +919,27 @@ fn lower_type_name_segment_to_type_reference(
                 return None;
             }
             Some(ExecutableTypeReference::Never)
+        }
+        "List" => {
+            if type_name_segment.type_arguments.len() != 1 {
+                diagnostics.push(PhaseDiagnostic::new(
+                    format!(
+                        "built-in type 'List' expects 1 type argument, got {}",
+                        type_name_segment.type_arguments.len()
+                    ),
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            let element_type = lower_type_name_to_type_reference(
+                &type_name_segment.type_arguments[0],
+                true,
+                type_parameter_names,
+                diagnostics,
+            )?;
+            Some(ExecutableTypeReference::List {
+                element_type: Box::new(element_type),
+            })
         }
         "function" => {
             if type_name_segment.type_arguments.is_empty() {
