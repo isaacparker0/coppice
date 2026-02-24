@@ -634,6 +634,14 @@ fn type_annotated_expression_from_semantic_expression(
             constant_reference: constant_reference_by_expression_id
                 .get(&semantic_expression_id(expression))
                 .cloned(),
+            callable_reference: call_target_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .and_then(|call_target| match call_target {
+                    TypeAnnotatedCallTarget::UserDefinedFunction { callable_reference } => {
+                        Some(callable_reference.clone())
+                    }
+                    TypeAnnotatedCallTarget::BuiltinFunction { .. } => None,
+                }),
             span: span.clone(),
         },
         SemanticExpression::FieldAccess { span, .. }
@@ -1400,6 +1408,21 @@ fn annotate_resolved_type_argument_nominal_references(
         | TypeAnnotatedResolvedTypeArgument::Nil
         | TypeAnnotatedResolvedTypeArgument::Never
         | TypeAnnotatedResolvedTypeArgument::TypeParameter { .. } => {}
+        TypeAnnotatedResolvedTypeArgument::Function {
+            parameter_types,
+            return_type,
+        } => {
+            for parameter_type in parameter_types {
+                annotate_resolved_type_argument_nominal_references(
+                    parameter_type,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            annotate_resolved_type_argument_nominal_references(
+                return_type,
+                nominal_type_reference_by_local_name,
+            );
+        }
         TypeAnnotatedResolvedTypeArgument::Union { members } => {
             for member in members {
                 annotate_resolved_type_argument_nominal_references(
@@ -1469,6 +1492,18 @@ fn type_annotated_resolved_type_argument_from_type(
         Type::String => TypeAnnotatedResolvedTypeArgument::String,
         Type::Nil => TypeAnnotatedResolvedTypeArgument::Nil,
         Type::Never => TypeAnnotatedResolvedTypeArgument::Never,
+        Type::Function {
+            parameter_types,
+            return_type,
+        } => TypeAnnotatedResolvedTypeArgument::Function {
+            parameter_types: parameter_types
+                .iter()
+                .map(type_annotated_resolved_type_argument_from_type)
+                .collect::<Option<Vec<_>>>()?,
+            return_type: Box::new(type_annotated_resolved_type_argument_from_type(
+                return_type,
+            )?),
+        },
         Type::Named(named) => TypeAnnotatedResolvedTypeArgument::NominalType {
             nominal_type_reference: None,
             name: named.display_name.clone(),
@@ -1492,7 +1527,7 @@ fn type_annotated_resolved_type_argument_from_type(
                 .map(type_annotated_resolved_type_argument_from_type)
                 .collect::<Option<Vec<_>>>()?,
         },
-        Type::Function { .. } | Type::Unknown => return None,
+        Type::Unknown => return None,
     })
 }
 
@@ -1949,6 +1984,8 @@ impl<'a> TypeChecker<'a> {
                     );
                     return Type::Unknown;
                 }
+                self.call_target_by_expression_id
+                    .insert(expression_id, function_info.call_target.clone());
                 return Type::Function {
                     parameter_types: function_info.parameter_types,
                     return_type: Box::new(function_info.return_type),

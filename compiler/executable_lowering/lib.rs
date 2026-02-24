@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
@@ -129,6 +131,19 @@ fn lower_function_declarations(
             .iter()
             .map(|type_parameter| type_parameter.name.clone())
             .collect::<Vec<_>>();
+        let mut type_parameter_constraint_interface_reference_by_name = BTreeMap::new();
+        for type_parameter in &function_declaration.type_parameters {
+            let Some(constraint) = &type_parameter.constraint else {
+                continue;
+            };
+            let Some(interface_reference) =
+                lower_constraint_type_name_to_interface_reference(constraint, diagnostics)
+            else {
+                continue;
+            };
+            type_parameter_constraint_interface_reference_by_name
+                .insert(type_parameter.name.clone(), interface_reference);
+        }
         for parameter in &function_declaration.parameters {
             let Some(type_reference) = lower_type_name_to_type_reference(
                 &parameter.type_name,
@@ -162,6 +177,7 @@ fn lower_function_declarations(
                 symbol_name: function_declaration.callable_reference.symbol_name.clone(),
             },
             type_parameter_names: type_parameter_names.clone(),
+            type_parameter_constraint_interface_reference_by_name,
             parameters: executable_parameters,
             return_type,
             statements: lower_statements(
@@ -487,6 +503,7 @@ fn lower_expression(
         TypeAnnotatedExpression::NameReference {
             name,
             constant_reference,
+            callable_reference,
             ..
         } => ExecutableExpression::Identifier {
             name: name.clone(),
@@ -494,6 +511,12 @@ fn lower_expression(
                 ExecutableConstantReference {
                     package_path: constant_reference.package_path.clone(),
                     symbol_name: constant_reference.symbol_name.clone(),
+                }
+            }),
+            callable_reference: callable_reference.as_ref().map(|callable_reference| {
+                ExecutableCallableReference {
+                    package_path: callable_reference.package_path.clone(),
+                    symbol_name: callable_reference.symbol_name.clone(),
                 }
             }),
         },
@@ -678,6 +701,21 @@ fn lower_type_reference_to_type_reference(
         TypeAnnotatedResolvedTypeArgument::String => ExecutableTypeReference::String,
         TypeAnnotatedResolvedTypeArgument::Nil => ExecutableTypeReference::Nil,
         TypeAnnotatedResolvedTypeArgument::Never => ExecutableTypeReference::Never,
+        TypeAnnotatedResolvedTypeArgument::Function {
+            parameter_types,
+            return_type,
+        } => ExecutableTypeReference::Function {
+            parameter_types: parameter_types
+                .iter()
+                .map(|parameter_type| {
+                    lower_type_reference_to_type_reference(parameter_type, type_parameter_names)
+                })
+                .collect(),
+            return_type: Box::new(lower_type_reference_to_type_reference(
+                return_type,
+                type_parameter_names,
+            )),
+        },
         TypeAnnotatedResolvedTypeArgument::Union { members } => ExecutableTypeReference::Union {
             members: members
                 .iter()
@@ -852,11 +890,30 @@ fn lower_type_name_segment_to_type_reference(
             Some(ExecutableTypeReference::Never)
         }
         "function" => {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode does not support function type names yet",
-                type_name_segment.span.clone(),
-            ));
-            None
+            if type_name_segment.type_arguments.is_empty() {
+                diagnostics.push(PhaseDiagnostic::new(
+                    "function type must include at least a return type",
+                    type_name_segment.span.clone(),
+                ));
+                return None;
+            }
+            let mut lowered_arguments = Vec::new();
+            for type_argument in &type_name_segment.type_arguments {
+                let lowered_argument = lower_type_name_to_type_reference(
+                    type_argument,
+                    true,
+                    type_parameter_names,
+                    diagnostics,
+                )?;
+                lowered_arguments.push(lowered_argument);
+            }
+            let return_type = lowered_arguments
+                .pop()
+                .expect("function type arguments include at least return type");
+            Some(ExecutableTypeReference::Function {
+                parameter_types: lowered_arguments,
+                return_type: Box::new(return_type),
+            })
         }
         _ => {
             if has_type_arguments {
@@ -944,6 +1001,38 @@ fn lower_match_pattern(
             })
         }
     }
+}
+
+fn lower_constraint_type_name_to_interface_reference(
+    type_name: &TypeAnnotatedTypeName,
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Option<ExecutableInterfaceReference> {
+    if type_name.names.len() != 1 {
+        diagnostics.push(PhaseDiagnostic::new(
+            "constraint type must be a single nominal interface type",
+            type_name.span.clone(),
+        ));
+        return None;
+    }
+    let type_name_segment = &type_name.names[0];
+    if !type_name_segment.type_arguments.is_empty() {
+        diagnostics.push(PhaseDiagnostic::new(
+            "constraint interfaces with type arguments are not supported in build mode yet",
+            type_name_segment.span.clone(),
+        ));
+        return None;
+    }
+    let Some(nominal_type_reference) = &type_name_segment.nominal_type_reference else {
+        diagnostics.push(PhaseDiagnostic::new(
+            "constraint type must resolve to a nominal interface type",
+            type_name_segment.span.clone(),
+        ));
+        return None;
+    };
+    Some(ExecutableInterfaceReference {
+        package_path: nominal_type_reference.package_path.clone(),
+        symbol_name: nominal_type_reference.symbol_name.clone(),
+    })
 }
 
 fn fallback_span() -> Span {

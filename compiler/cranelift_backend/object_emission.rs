@@ -67,7 +67,14 @@ struct LoopContext {
 
 struct FunctionCompilationContext {
     local_value_by_name: BTreeMap<String, LocalValue>,
+    type_parameter_witness_by_name: BTreeMap<String, TypeParameterWitness>,
     loop_context: Option<LoopContext>,
+}
+
+#[derive(Clone)]
+struct TypeParameterWitness {
+    interface_reference: ExecutableInterfaceReference,
+    witness_table_pointer: Value,
 }
 
 struct CompilationState {
@@ -96,6 +103,7 @@ const UNION_TAG_STRING: i64 = 3;
 const UNION_TAG_NIL: i64 = 4;
 const UNION_TAG_STRUCT: i64 = 5;
 const UNION_TAG_ENUM_VARIANT: i64 = 6;
+const UNION_TAG_FUNCTION: i64 = 7;
 pub(crate) fn ensure_program_supported(program: &ExecutableProgram) -> Result<(), CompilerFailure> {
     for constant_declaration in &program.constant_declarations {
         ensure_type_supported(&constant_declaration.type_reference);
@@ -147,6 +155,7 @@ fn ensure_type_supported(type_reference: &ExecutableTypeReference) {
         | ExecutableTypeReference::String
         | ExecutableTypeReference::Nil
         | ExecutableTypeReference::Never
+        | ExecutableTypeReference::Function { .. }
         | ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalType { .. }
         | ExecutableTypeReference::NominalTypeApplication { .. }
@@ -392,6 +401,14 @@ fn build_signature_for_function(
             .params
             .push(AbiParam::new(cranelift_type_for(&parameter.type_reference)));
     }
+    for type_parameter_name in &function_declaration.type_parameter_names {
+        if function_declaration
+            .type_parameter_constraint_interface_reference_by_name
+            .contains_key(type_parameter_name)
+        {
+            signature.params.push(AbiParam::new(types::I64));
+        }
+    }
 
     if !matches!(
         function_declaration.return_type,
@@ -459,6 +476,7 @@ fn cranelift_type_for(type_reference: &ExecutableTypeReference) -> types::Type {
     match type_reference {
         ExecutableTypeReference::Int64
         | ExecutableTypeReference::String
+        | ExecutableTypeReference::Function { .. }
         | ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalType { .. }
         | ExecutableTypeReference::NominalTypeApplication { .. }
@@ -505,6 +523,7 @@ fn define_program_function(
 
         let mut compilation_context = FunctionCompilationContext {
             local_value_by_name: BTreeMap::new(),
+            type_parameter_witness_by_name: BTreeMap::new(),
             loop_context: None,
         };
 
@@ -517,6 +536,34 @@ fn define_program_function(
             compilation_context
                 .local_value_by_name
                 .insert(parameter.name.clone(), local_value);
+        }
+        let mut witness_parameter_offset = function_declaration.parameters.len();
+        for type_parameter_name in &function_declaration.type_parameter_names {
+            let Some(interface_reference) = function_declaration
+                .type_parameter_constraint_interface_reference_by_name
+                .get(type_parameter_name)
+            else {
+                continue;
+            };
+            let witness_table_pointer = parameter_values
+                .get(witness_parameter_offset)
+                .copied()
+                .ok_or_else(|| {
+                    build_failed(
+                        format!(
+                            "missing witness parameter for type parameter '{type_parameter_name}'"
+                        ),
+                        None,
+                    )
+                })?;
+            witness_parameter_offset += 1;
+            compilation_context.type_parameter_witness_by_name.insert(
+                type_parameter_name.clone(),
+                TypeParameterWitness {
+                    interface_reference: interface_reference.clone(),
+                    witness_table_pointer,
+                },
+            );
         }
 
         let terminated = compile_statements(
@@ -603,6 +650,7 @@ fn define_struct_method(
 
         let mut compilation_context = FunctionCompilationContext {
             local_value_by_name: BTreeMap::new(),
+            type_parameter_witness_by_name: BTreeMap::new(),
             loop_context: None,
         };
 
@@ -1035,6 +1083,7 @@ fn compile_expression(
         ExecutableExpression::Identifier {
             name,
             constant_reference,
+            callable_reference,
         } => {
             if let Some(local_value) = compilation_context.local_value_by_name.get(name).cloned() {
                 return Ok(TypedValue {
@@ -1083,6 +1132,50 @@ fn compile_expression(
                 return Ok(TypedValue {
                     value: constant_value.value,
                     type_reference: constant_declaration.type_reference,
+                    terminates: false,
+                });
+            }
+
+            if let Some(callable_reference) = callable_reference {
+                let function_record = state
+                    .function_record_by_callable_reference
+                    .get(callable_reference)
+                    .ok_or_else(|| {
+                        build_failed(
+                            format!(
+                                "unknown function '{}::{}'",
+                                callable_reference.package_path, callable_reference.symbol_name
+                            ),
+                            None,
+                        )
+                    })?;
+                if !function_record.declaration.type_parameter_names.is_empty() {
+                    return Err(build_failed(
+                        format!(
+                            "generic function '{}::{}' cannot be used as a runtime function value",
+                            callable_reference.package_path, callable_reference.symbol_name
+                        ),
+                        None,
+                    ));
+                }
+                let function_reference = state
+                    .module
+                    .declare_func_in_func(function_record.id, function_builder.func);
+                let function_pointer = function_builder
+                    .ins()
+                    .func_addr(types::I64, function_reference);
+                let function_type_reference = ExecutableTypeReference::Function {
+                    parameter_types: function_record
+                        .declaration
+                        .parameters
+                        .iter()
+                        .map(|parameter| parameter.type_reference.clone())
+                        .collect(),
+                    return_type: Box::new(function_record.declaration.return_type.clone()),
+                };
+                return Ok(TypedValue {
+                    value: Some(function_pointer),
+                    type_reference: function_type_reference,
                     terminates: false,
                 });
             }
@@ -1524,6 +1617,38 @@ fn compile_call_expression(
                     })?;
                     argument_values.push(value);
                 }
+                for (type_parameter_index, type_parameter_name) in function_record
+                    .declaration
+                    .type_parameter_names
+                    .iter()
+                    .enumerate()
+                {
+                    let Some(interface_reference) = function_record
+                        .declaration
+                        .type_parameter_constraint_interface_reference_by_name
+                        .get(type_parameter_name)
+                    else {
+                        continue;
+                    };
+                    let type_argument =
+                        type_arguments
+                            .get(type_parameter_index)
+                            .ok_or_else(|| {
+                                build_failed(
+                                    format!(
+                                        "missing type argument for constrained type parameter '{type_parameter_name}'"
+                                    ),
+                                    None,
+                                )
+                            })?;
+                    let witness_table_pointer = build_witness_table_for_constraint(
+                        state,
+                        function_builder,
+                        type_argument,
+                        interface_reference,
+                    )?;
+                    argument_values.push(witness_table_pointer);
+                }
 
                 let callee = state
                     .module
@@ -1551,13 +1676,137 @@ fn compile_call_expression(
         };
     }
 
-    compile_method_call_expression(
-        state,
-        function_builder,
-        compilation_context,
-        callee,
-        arguments,
-    )
+    match callee {
+        ExecutableExpression::FieldAccess { .. } => compile_method_call_expression(
+            state,
+            function_builder,
+            compilation_context,
+            callee,
+            arguments,
+        ),
+        _ => compile_function_value_call_expression(
+            state,
+            function_builder,
+            compilation_context,
+            callee,
+            arguments,
+        ),
+    }
+}
+
+fn compile_function_value_call_expression(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    callee: &ExecutableExpression,
+    arguments: &[ExecutableExpression],
+) -> Result<TypedValue, CompilerFailure> {
+    let compiled_callee = compile_expression(state, function_builder, compilation_context, callee)?;
+    if compiled_callee.terminates {
+        return Ok(compiled_callee);
+    }
+    let ExecutableTypeReference::Function {
+        parameter_types,
+        return_type,
+    } = &compiled_callee.type_reference
+    else {
+        return Err(build_failed(
+            format!(
+                "cannot call non-function value of type {}",
+                type_reference_display(&compiled_callee.type_reference)
+            ),
+            None,
+        ));
+    };
+    if parameter_types.len() != arguments.len() {
+        return Err(build_failed(
+            format!(
+                "function value expected {} argument(s), got {}",
+                parameter_types.len(),
+                arguments.len()
+            ),
+            None,
+        ));
+    }
+    let function_pointer = compiled_callee.value.ok_or_else(|| {
+        build_failed(
+            "function callee produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+
+    let mut call_values = Vec::with_capacity(arguments.len());
+    for (expected_type, argument_expression) in parameter_types.iter().zip(arguments) {
+        let compiled_argument = compile_expression(
+            state,
+            function_builder,
+            compilation_context,
+            argument_expression,
+        )?;
+        if compiled_argument.terminates {
+            return Ok(compiled_argument);
+        }
+        if !is_type_assignable(state, &compiled_argument.type_reference, expected_type) {
+            return Err(build_failed(
+                format!(
+                    "function argument type mismatch: expected {}, got {}",
+                    type_reference_display(expected_type),
+                    type_reference_display(&compiled_argument.type_reference)
+                ),
+                None,
+            ));
+        }
+        let lowered_argument = runtime_value_for_expected_type(
+            state,
+            function_builder,
+            compiled_argument.value,
+            &compiled_argument.type_reference,
+            expected_type,
+        )?;
+        let value = lowered_argument.ok_or_else(|| {
+            build_failed(
+                "function argument produced no runtime value".to_string(),
+                None,
+            )
+        })?;
+        call_values.push(value);
+    }
+
+    let mut call_signature = state.module.make_signature();
+    for parameter_type in parameter_types {
+        call_signature
+            .params
+            .push(AbiParam::new(cranelift_type_for(parameter_type)));
+    }
+    if !matches!(
+        **return_type,
+        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
+    ) {
+        call_signature
+            .returns
+            .push(AbiParam::new(cranelift_type_for(return_type)));
+    }
+    let signature_reference = function_builder.import_signature(call_signature);
+    let call =
+        function_builder
+            .ins()
+            .call_indirect(signature_reference, function_pointer, &call_values);
+    if matches!(
+        **return_type,
+        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
+    ) {
+        Ok(TypedValue {
+            value: None,
+            type_reference: (**return_type).clone(),
+            terminates: matches!(**return_type, ExecutableTypeReference::Never),
+        })
+    } else {
+        Ok(TypedValue {
+            value: Some(function_builder.inst_results(call)[0]),
+            type_reference: (**return_type).clone(),
+            terminates: false,
+        })
+    }
 }
 
 fn compile_struct_literal_expression(
@@ -1735,6 +1984,17 @@ fn compile_method_call_expression(
     if compiled_receiver.terminates {
         return Ok(compiled_receiver);
     }
+    if let ExecutableTypeReference::TypeParameter { name } = &compiled_receiver.type_reference {
+        return compile_type_parameter_method_call_expression(
+            state,
+            function_builder,
+            compilation_context,
+            name,
+            &compiled_receiver,
+            method_name,
+            arguments,
+        );
+    }
     if let Ok((struct_declaration, type_substitutions_by_type_parameter_name)) =
         resolve_struct_type_details(state, &compiled_receiver.type_reference)
     {
@@ -1787,6 +2047,49 @@ fn compile_method_call_expression(
         ),
         None,
     ))
+}
+
+fn compile_type_parameter_method_call_expression(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    type_parameter_name: &str,
+    compiled_receiver: &TypedValue,
+    method_name: &str,
+    arguments: &[ExecutableExpression],
+) -> Result<TypedValue, CompilerFailure> {
+    let type_parameter_witness = compilation_context
+        .type_parameter_witness_by_name
+        .get(type_parameter_name)
+        .cloned()
+        .ok_or_else(|| {
+            build_failed(
+                format!(
+                    "missing witness table for constrained type parameter '{type_parameter_name}'"
+                ),
+                None,
+            )
+        })?;
+    let interface_declaration = resolve_interface_declaration_by_reference(
+        state,
+        &type_parameter_witness.interface_reference,
+    )?
+    .clone();
+    compile_interface_method_call_through_vtable(
+        state,
+        function_builder,
+        compilation_context,
+        &interface_declaration,
+        type_parameter_witness.witness_table_pointer,
+        compiled_receiver.value.ok_or_else(|| {
+            build_failed(
+                "method receiver produced no runtime value".to_string(),
+                None,
+            )
+        })?,
+        method_name,
+        arguments,
+    )
 }
 
 fn compile_struct_method_call_expression(
@@ -1915,6 +2218,46 @@ fn compile_interface_method_call_expression(
     method_name: &str,
     arguments: &[ExecutableExpression],
 ) -> Result<TypedValue, CompilerFailure> {
+    let interface_value_pointer = compiled_receiver.value.ok_or_else(|| {
+        build_failed(
+            "interface method receiver produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+    let data_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        interface_value_pointer,
+        INTERFACE_VALUE_DATA_POINTER_OFFSET,
+    );
+    let vtable_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        interface_value_pointer,
+        INTERFACE_VALUE_VTABLE_POINTER_OFFSET,
+    );
+    compile_interface_method_call_through_vtable(
+        state,
+        function_builder,
+        compilation_context,
+        interface_declaration,
+        vtable_pointer,
+        data_pointer,
+        method_name,
+        arguments,
+    )
+}
+
+fn compile_interface_method_call_through_vtable(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    interface_declaration: &ExecutableInterfaceDeclaration,
+    vtable_pointer: Value,
+    receiver_data_pointer: Value,
+    method_name: &str,
+    arguments: &[ExecutableExpression],
+) -> Result<TypedValue, CompilerFailure> {
     let (method_index, method_declaration) = interface_declaration
         .methods
         .iter()
@@ -1942,25 +2285,6 @@ fn compile_interface_method_call_expression(
             None,
         ));
     }
-
-    let interface_value_pointer = compiled_receiver.value.ok_or_else(|| {
-        build_failed(
-            "interface method receiver produced no runtime value".to_string(),
-            None,
-        )
-    })?;
-    let data_pointer = function_builder.ins().load(
-        types::I64,
-        MemFlags::new(),
-        interface_value_pointer,
-        INTERFACE_VALUE_DATA_POINTER_OFFSET,
-    );
-    let vtable_pointer = function_builder.ins().load(
-        types::I64,
-        MemFlags::new(),
-        interface_value_pointer,
-        INTERFACE_VALUE_VTABLE_POINTER_OFFSET,
-    );
     let method_pointer_offset_bytes = i32::try_from(method_index * 8).map_err(|_| {
         build_failed(
             "interface method index exceeds supported offset range".to_string(),
@@ -1975,7 +2299,7 @@ fn compile_interface_method_call_expression(
     );
 
     let mut call_values = Vec::with_capacity(arguments.len() + 1);
-    call_values.push(data_pointer);
+    call_values.push(receiver_data_pointer);
     for (parameter, argument_expression) in method_declaration.parameters.iter().zip(arguments) {
         let compiled_argument = compile_expression(
             state,
@@ -2150,6 +2474,9 @@ fn compile_match_expression(
         function_builder.switch_to_block(arm_block);
         let mut arm_context = FunctionCompilationContext {
             local_value_by_name: compilation_context.local_value_by_name.clone(),
+            type_parameter_witness_by_name: compilation_context
+                .type_parameter_witness_by_name
+                .clone(),
             loop_context: compilation_context.loop_context,
         };
         bind_match_pattern_local(
@@ -2480,6 +2807,7 @@ fn union_type_tag_for_type_reference(
         ExecutableTypeReference::Boolean => Ok(UNION_TAG_BOOLEAN),
         ExecutableTypeReference::String => Ok(UNION_TAG_STRING),
         ExecutableTypeReference::Nil | ExecutableTypeReference::Never => Ok(UNION_TAG_NIL),
+        ExecutableTypeReference::Function { .. } => Ok(UNION_TAG_FUNCTION),
         ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalTypeApplication { .. } => Ok(UNION_TAG_STRUCT),
         ExecutableTypeReference::NominalType { name, .. } => {
@@ -2679,6 +3007,24 @@ fn resolve_interface_declaration_by_type_reference<'state>(
         })
 }
 
+fn resolve_interface_declaration_by_reference<'state>(
+    state: &'state CompilationState,
+    interface_reference: &ExecutableInterfaceReference,
+) -> Result<&'state ExecutableInterfaceDeclaration, CompilerFailure> {
+    state
+        .interface_declaration_by_reference
+        .get(interface_reference)
+        .ok_or_else(|| {
+            build_failed(
+                format!(
+                    "unknown interface type '{}::{}'",
+                    interface_reference.package_path, interface_reference.symbol_name
+                ),
+                None,
+            )
+        })
+}
+
 fn struct_implements_interface(
     struct_declaration: &ExecutableStructDeclaration,
     interface_declaration: &ExecutableInterfaceDeclaration,
@@ -2778,6 +3124,42 @@ fn build_interface_vtable(
     Ok(vtable_pointer)
 }
 
+fn build_witness_table_for_constraint(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    type_argument: &ExecutableTypeReference,
+    interface_reference: &ExecutableInterfaceReference,
+) -> Result<Value, CompilerFailure> {
+    let interface_declaration =
+        resolve_interface_declaration_by_reference(state, interface_reference)?.clone();
+    let (struct_declaration, _) =
+        resolve_struct_type_details(state, type_argument).map_err(|_| {
+            build_failed(
+                format!(
+                    "constraint witness table currently requires struct type argument, got {}",
+                    type_reference_display(type_argument)
+                ),
+                None,
+            )
+        })?;
+    let struct_declaration = struct_declaration.clone();
+    if !struct_implements_interface(&struct_declaration, &interface_declaration) {
+        return Err(build_failed(
+            format!(
+                "type '{}' does not implement required interface '{}'",
+                struct_declaration.name, interface_declaration.name
+            ),
+            None,
+        ));
+    }
+    build_interface_vtable(
+        state,
+        function_builder,
+        &struct_declaration,
+        &interface_declaration,
+    )
+}
+
 fn type_substitutions_for_struct_type(
     struct_declaration: &ExecutableStructDeclaration,
     type_reference: &ExecutableTypeReference,
@@ -2824,6 +3206,24 @@ fn substitute_type_reference(
                 .cloned()
                 .unwrap_or_else(|| type_reference.clone())
         }
+        ExecutableTypeReference::Function {
+            parameter_types,
+            return_type,
+        } => ExecutableTypeReference::Function {
+            parameter_types: parameter_types
+                .iter()
+                .map(|parameter_type| {
+                    substitute_type_reference(
+                        parameter_type,
+                        type_substitutions_by_type_parameter_name,
+                    )
+                })
+                .collect(),
+            return_type: Box::new(substitute_type_reference(
+                return_type,
+                type_substitutions_by_type_parameter_name,
+            )),
+        },
         ExecutableTypeReference::Union { members } => ExecutableTypeReference::Union {
             members: members
                 .iter()
@@ -2866,6 +3266,18 @@ fn type_reference_display(type_reference: &ExecutableTypeReference) -> String {
         ExecutableTypeReference::Never => "never".to_string(),
         ExecutableTypeReference::TypeParameter { name }
         | ExecutableTypeReference::NominalType { name, .. } => name.clone(),
+        ExecutableTypeReference::Function {
+            parameter_types,
+            return_type,
+        } => format!(
+            "function({}) -> {}",
+            parameter_types
+                .iter()
+                .map(type_reference_display)
+                .collect::<Vec<_>>()
+                .join(", "),
+            type_reference_display(return_type)
+        ),
         ExecutableTypeReference::NominalTypeApplication {
             base_name,
             arguments,

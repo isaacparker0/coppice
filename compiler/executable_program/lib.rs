@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -14,6 +16,8 @@ pub struct ExecutableFunctionDeclaration {
     pub name: String,
     pub callable_reference: ExecutableCallableReference,
     pub type_parameter_names: Vec<String>,
+    pub type_parameter_constraint_interface_reference_by_name:
+        BTreeMap<String, ExecutableInterfaceReference>,
     pub parameters: Vec<ExecutableParameterDeclaration>,
     pub return_type: ExecutableTypeReference,
     pub statements: Vec<ExecutableStatement>,
@@ -126,6 +130,10 @@ pub enum ExecutableTypeReference {
     String,
     Nil,
     Never,
+    Function {
+        parameter_types: Vec<ExecutableTypeReference>,
+        return_type: Box<ExecutableTypeReference>,
+    },
     Union {
         members: Vec<ExecutableTypeReference>,
     },
@@ -188,6 +196,7 @@ pub enum ExecutableExpression {
     Identifier {
         name: String,
         constant_reference: Option<ExecutableConstantReference>,
+        callable_reference: Option<ExecutableCallableReference>,
     },
     EnumVariantLiteral {
         enum_variant_reference: ExecutableEnumVariantReference,

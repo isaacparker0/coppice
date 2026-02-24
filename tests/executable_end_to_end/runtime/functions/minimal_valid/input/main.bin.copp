@@ -1,3 +1,5 @@
+import workspace/lib { plusTwo }
+
 function describe(ready: boolean) -> string {
     if ready {
         return "ready"
@@ -5,7 +7,26 @@ function describe(ready: boolean) -> string {
     return "not ready"
 }
 
+function apply(value: int64, mapper: function(int64) -> int64) -> int64 {
+    return mapper(value)
+}
+
+function plusOne(value: int64) -> int64 {
+    return value + 1
+}
+
 function main() -> nil {
+    localMapper: function(int64) -> int64 := plusOne
+    importedMapper: function(int64) -> int64 := plusTwo
+
+    first := apply(7, localMapper)
+    second := apply(first, importedMapper)
+
     print(describe(true))
+    if second == 10 {
+        print("value 10")
+    } else {
+        print("value not 10")
+    }
     return nil
 }

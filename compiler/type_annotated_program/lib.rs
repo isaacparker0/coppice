@@ -204,6 +204,7 @@ pub enum TypeAnnotatedExpression {
         name: String,
         kind: TypeAnnotatedNameReferenceKind,
         constant_reference: Option<TypeAnnotatedConstantReference>,
+        callable_reference: Option<TypeAnnotatedCallableReference>,
         span: Span,
     },
     EnumVariantLiteral {
@@ -322,6 +323,10 @@ pub enum TypeAnnotatedResolvedTypeArgument {
     String,
     Nil,
     Never,
+    Function {
+        parameter_types: Vec<TypeAnnotatedResolvedTypeArgument>,
+        return_type: Box<TypeAnnotatedResolvedTypeArgument>,
+    },
     Union {
         members: Vec<TypeAnnotatedResolvedTypeArgument>,
     },

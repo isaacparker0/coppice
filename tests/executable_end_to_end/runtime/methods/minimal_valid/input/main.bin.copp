@@ -1,4 +1,9 @@
-type Message :: struct {
+type Readable :: interface {
+    function read(self) -> string,
+    function choose(self, fallback: string) -> string,
+}
+
+type Message implements Readable :: struct {
     text: string,
     function read(self) -> string {
         return self.text
@@ -8,6 +13,19 @@ type Message :: struct {
             return fallback
         }
         return self.text
+    },
+}
+
+type Counter :: struct {
+    value: int64,
+    function next(mut self) -> Counter {
+        return Counter { value: self.value + 1 }
+    },
+    function describe(self) -> string {
+        if self.value == 1 {
+            return "one"
+        }
+        return "two"
     },
 }
 
@@ -22,10 +40,21 @@ type Box[T] :: struct {
     },
 }
 
+function passthroughReadable[T: Readable](value: T) -> T {
+    return value
+}
+
 function main() -> nil {
     message := Message { text: "hello" }
-    print(message.choose("fallback"))
+    selected := passthroughReadable[Message](message)
+    print(selected.read())
+    print(selected.choose("fallback"))
+
     boxed := Box[string] { value: "method generic ok" }
     print(boxed.passthrough())
+
+    mut counter := Counter { value: 1 }
+    counter = counter.next()
+    print(counter.describe())
     return nil
 }

@@ -9,8 +9,21 @@ function renderB(value: BPrintable) -> string {
     return value.label()
 }
 
+function passthroughA[T: APrintable](value: T) -> T {
+    return value
+}
+
+function passthroughB[T: BPrintable](value: T) -> T {
+    return value
+}
+
 function main() -> nil {
     print(renderA(AUser { name: "Ada" }))
     print(renderB(BUser { name: "Ben" }))
+
+    print(renderA(passthroughA[AUser](AUser { name: "Ari" })))
+    print(renderA(passthroughA(AUser { name: "Ava" })))
+    print(renderB(passthroughB[BUser](BUser { name: "Bea" })))
+    print(renderB(passthroughB(BUser { name: "Bo" })))
     return nil
 }
