@@ -15,9 +15,6 @@ echo "deb [signed-by=/usr/share/keyrings/buildkite-agent-archive-keyring.gpg] ht
 apt-get update
 apt-get install -y buildkite-agent git
 
-# TODO(isaac): Remove clang install once our compiler uses hermetic linking.
-apt-get install -y clang
-
 curl -fsSL -o /usr/local/bin/bazelisk \
   https://github.com/bazelbuild/bazelisk/releases/download/v1.28.1/bazelisk-linux-amd64
 chmod 0755 /usr/local/bin/bazelisk
