@@ -56,36 +56,11 @@
  
      cc_tool(
 
---- toolchain/selects.bzl
-+++ toolchain/selects.bzl
-@@ -10,6 +10,20 @@
-         "@llvm//toolchain:bootstrapped_toolchain": "@llvm//toolchain/bootstrap:" + binary,
-     })
- 
-+def platform_link_action_tool():
-+    return select({
-+        "@llvm//platforms/config:macos_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-darwin-arm64//:lld" % LLVM_VERSION,
-+        "@llvm//platforms/config:linux_x86_64_prebuilt": "@llvm-toolchain-minimal-%s-linux-amd64//:lld" % LLVM_VERSION,
-+        "@llvm//platforms/config:linux_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-linux-arm64//:lld" % LLVM_VERSION,
-+        "@llvm//platforms/config:windows_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-windows-arm64//:lld" % LLVM_VERSION,
-+        "@llvm//platforms/config:windows_x86_64_prebuilt": "@llvm-toolchain-minimal-%s-windows-amd64//:lld" % LLVM_VERSION,
-+        "@llvm//platforms/config:macos_aarch64": "@llvm//toolchain/bootstrap:macos_aarch64/lld",
-+        "@llvm//platforms/config:linux_x86_64": "@llvm//toolchain/bootstrap:linux_x86_64/lld",
-+        "@llvm//platforms/config:linux_aarch64": "@llvm//toolchain/bootstrap:linux_aarch64/lld",
-+        "@llvm//platforms/config:windows_aarch64": "@llvm//toolchain/bootstrap:windows_aarch64/lld",
-+        "@llvm//platforms/config:windows_x86_64": "@llvm//toolchain/bootstrap:windows_x86_64/lld",
-+    })
-+
- def platform_extra_binary(binary):
-     return select({
-         "@llvm//platforms/config:macos_aarch64": "@toolchain-extra-prebuilts-darwin-arm64//:%s" % binary,
-
 --- tools/internal/BUILD.bazel
 +++ tools/internal/BUILD.bazel
-@@ -1,4 +1,10 @@
+@@ -1,4 +1,9 @@
  load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 +load("@rules_cc//cc:cc_library.bzl", "cc_library")
-+load("@llvm//toolchain:selects.bzl", "platform_link_action_tool")
 +load(
 +    ":linker_contracts.bzl",
 +    "linker_contract_from_cc_toolchain",
@@ -93,7 +68,7 @@
  
  cc_binary(
      name = "header-parser",
-@@ -11,3 +17,126 @@
+@@ -11,3 +16,132 @@
      srcs = ["static_library_validator.cc"],
      visibility = ["//visibility:public"],
  )
@@ -104,8 +79,12 @@
 +)
 +
 +alias(
-+    name = "link_action_tool",
-+    actual = platform_link_action_tool(),
++    name = "linker_backend_tool",
++    actual = select({
++        "//platforms/config:macos_aarch64": "//tools:ld64.lld",
++        "//platforms/config:linux_x86_64": "//tools:ld.lld",
++        "//platforms/config:linux_aarch64": "//tools:ld.lld",
++    }),
 +    visibility = ["//visibility:private"],
 +)
 +
@@ -113,12 +92,14 @@
 +    name = "linker_wrapper_config",
 +    outs = ["linker_wrapper_config.cc"],
 +    cmd = "\n".join([
-+        "cat > $@ <<'CONFIG'",
++        "LINKER_BACKEND_BASENAME=$$(basename $(location :linker_backend_tool))",
++        "cat > $@ <<CONFIG",
 +        "#include \"tools/internal/linker_wrapper_config.h\"",
 +        "",
 +        "namespace llvm {",
 +        "",
 +        "const char* kLinkerWrapperLinkerToolRlocation = \"$(rlocationpath //tools:clang++)\";",
++        "const char* kLinkerWrapperLinkerBackendBasename = \"$${LINKER_BACKEND_BASENAME}\";",
 +        "const char* kLinkerWrapperContractRlocation = \"$(rlocationpath :linker_contract)\";",
 +        "const char* kLinkerWrapperLibcxxSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libcxx:libcxx_library_search_directory)\";",
 +        "const char* kLinkerWrapperLibunwindSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libunwind:libunwind_library_search_directory)\";",
@@ -130,7 +111,7 @@
 +        "//runtimes/libcxx:libcxx_library_search_directory",
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//tools:clang++",
-+        ":link_action_tool",
++        ":linker_backend_tool",
 +        ":linker_contract",
 +    ],
 +)
@@ -151,7 +132,7 @@
 +        "//runtimes:resource_directory",
 +        "//runtimes/libcxx:libcxx_library_search_directory",
 +        "//runtimes/libunwind:libunwind_library_search_directory",
-+        ":link_action_tool",
++        "//tools:clang++",
 +        "@macos_sdk//sysroot:sysroot_files",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
@@ -179,7 +160,7 @@
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
-+        ":link_action_tool",
++        "//tools:clang++",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
@@ -206,7 +187,7 @@
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
-+        ":link_action_tool",
++        "//tools:clang++",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
@@ -322,7 +303,8 @@
 
 --- /dev/null
 +++ tools/internal/linker_wrapper.cc
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,340 @@
++#include <errno.h>
 +#include <stdio.h>
 +#include <stdlib.h>
 +#include <string.h>
@@ -581,6 +563,31 @@
 +  }
 +}
 +
++std::string CreateLinkerBackendAlias(const std::string& linker_tool_path,
++                                     const char* linker_backend_basename) {
++  if (linker_backend_basename == nullptr || linker_backend_basename[0] == '\0') {
++    fprintf(stderr, "linker_wrapper: empty linker backend basename\n");
++    exit(2);
++  }
++
++  char temporary_directory_template[] = "/tmp/linker_wrapper_XXXXXX";
++  char* temporary_directory = mkdtemp(temporary_directory_template);
++  if (temporary_directory == nullptr) {
++    fprintf(stderr, "linker_wrapper: mkdtemp failed: %s\n", strerror(errno));
++    exit(2);
++  }
++
++  const std::string alias_path =
++      std::string(temporary_directory) + "/" + linker_backend_basename;
++  if (symlink(linker_tool_path.c_str(), alias_path.c_str()) != 0) {
++    fprintf(stderr, "linker_wrapper: symlink failed for '%s' -> '%s': %s\n",
++            alias_path.c_str(), linker_tool_path.c_str(), strerror(errno));
++    exit(2);
++  }
++
++  return alias_path;
++}
++
 +}  // namespace
 +
 +int main(int argc, char** argv) {
@@ -603,6 +610,8 @@
 +  const std::string linker_tool_path =
 +      ResolveRunfilePath(*runfiles, llvm::kLinkerWrapperLinkerToolRlocation,
 +                         "platform linker tool");
++  const std::string linker_backend_path = CreateLinkerBackendAlias(
++      linker_tool_path, llvm::kLinkerWrapperLinkerBackendBasename);
 +  const std::string contract_path = ResolveRunfilePath(
 +      *runfiles, llvm::kLinkerWrapperContractRlocation,
 +      "linker contract");
@@ -614,6 +623,7 @@
 +  std::vector<std::string> argument_storage;
 +  argument_storage.reserve(static_cast<size_t>(argc) + 24);
 +  argument_storage.push_back(linker_tool_path);
++  argument_storage.push_back(std::string("--ld-path=") + linker_backend_path);
 +
 +  AppendLinkerContractArguments(contract_path, workspace_execroot, output_base,
 +                                runfiles_root, *runfiles, &argument_storage);
@@ -637,12 +647,13 @@
 
 --- /dev/null
 +++ tools/internal/linker_wrapper_config.h
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,11 @@
 +#pragma once
 +
 +namespace llvm {
 +
 +extern const char* kLinkerWrapperLinkerToolRlocation;
++extern const char* kLinkerWrapperLinkerBackendBasename;
 +extern const char* kLinkerWrapperContractRlocation;
 +extern const char* kLinkerWrapperLibcxxSearchDirectoryRlocation;
 +extern const char* kLinkerWrapperLibunwindSearchDirectoryRlocation;
