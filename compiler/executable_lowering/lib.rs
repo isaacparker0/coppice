@@ -314,7 +314,7 @@ fn lower_statements(
 ) -> Vec<ExecutableStatement> {
     statements
         .iter()
-        .filter_map(|statement| lower_statement(statement, type_parameter_names, diagnostics))
+        .map(|statement| lower_statement(statement, type_parameter_names, diagnostics))
         .collect()
 }
 
@@ -322,7 +322,7 @@ fn lower_statement(
     statement: &TypeAnnotatedStatement,
     type_parameter_names: &[String],
     diagnostics: &mut Vec<PhaseDiagnostic>,
-) -> Option<ExecutableStatement> {
+) -> ExecutableStatement {
     match statement {
         TypeAnnotatedStatement::Binding {
             name,
@@ -332,61 +332,54 @@ fn lower_statement(
         } => {
             let executable_initializer =
                 lower_expression(initializer, type_parameter_names, diagnostics);
-            Some(ExecutableStatement::Binding {
+            ExecutableStatement::Binding {
                 name: name.clone(),
                 mutable: *mutable,
                 initializer: executable_initializer,
-            })
+            }
         }
         TypeAnnotatedStatement::Assign { name, value, .. } => {
             let executable_value = lower_expression(value, type_parameter_names, diagnostics);
-            Some(ExecutableStatement::Assign {
+            ExecutableStatement::Assign {
                 name: name.clone(),
                 value: executable_value,
-            })
+            }
         }
         TypeAnnotatedStatement::If {
             condition,
             then_statements,
             else_statements,
             ..
-        } => Some(ExecutableStatement::If {
+        } => ExecutableStatement::If {
             condition: lower_expression(condition, type_parameter_names, diagnostics),
             then_statements: lower_statements(then_statements, type_parameter_names, diagnostics),
             else_statements: else_statements
                 .as_ref()
                 .map(|statements| lower_statements(statements, type_parameter_names, diagnostics)),
-        }),
+        },
         TypeAnnotatedStatement::For {
             condition,
             body_statements,
             ..
-        } => Some(ExecutableStatement::For {
+        } => ExecutableStatement::For {
             condition: condition
                 .as_ref()
                 .map(|expression| lower_expression(expression, type_parameter_names, diagnostics)),
             body_statements: lower_statements(body_statements, type_parameter_names, diagnostics),
-        }),
-        TypeAnnotatedStatement::Break { .. } => Some(ExecutableStatement::Break),
-        TypeAnnotatedStatement::Continue { .. } => Some(ExecutableStatement::Continue),
+        },
+        TypeAnnotatedStatement::Break { .. } => ExecutableStatement::Break,
+        TypeAnnotatedStatement::Continue { .. } => ExecutableStatement::Continue,
         TypeAnnotatedStatement::Expression { value, .. } => {
             let executable_expression = lower_expression(value, type_parameter_names, diagnostics);
-            Some(ExecutableStatement::Expression {
+            ExecutableStatement::Expression {
                 expression: executable_expression,
-            })
+            }
         }
         TypeAnnotatedStatement::Return { value, .. } => {
             let executable_expression = lower_expression(value, type_parameter_names, diagnostics);
-            Some(ExecutableStatement::Return {
+            ExecutableStatement::Return {
                 value: executable_expression,
-            })
-        }
-        TypeAnnotatedStatement::Unsupported { span } => {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode does not support this statement yet",
-                span.clone(),
-            ));
-            None
+            }
         }
     }
 }
@@ -588,13 +581,6 @@ fn lower_expression(
                 value: Box::new(lower_expression(value, type_parameter_names, diagnostics)),
                 type_reference,
             }
-        }
-        TypeAnnotatedExpression::Unsupported { span } => {
-            diagnostics.push(PhaseDiagnostic::new(
-                "build mode does not support this expression yet",
-                span.clone(),
-            ));
-            ExecutableExpression::NilLiteral
         }
     }
 }

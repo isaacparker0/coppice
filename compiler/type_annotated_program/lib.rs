@@ -150,9 +150,6 @@ pub enum TypeAnnotatedStatement {
         value: TypeAnnotatedExpression,
         span: Span,
     },
-    Unsupported {
-        span: Span,
-    },
 }
 
 #[derive(Clone)]
@@ -220,9 +217,6 @@ pub enum TypeAnnotatedExpression {
     Matches {
         value: Box<TypeAnnotatedExpression>,
         type_name: TypeAnnotatedTypeName,
-        span: Span,
-    },
-    Unsupported {
         span: Span,
     },
 }
