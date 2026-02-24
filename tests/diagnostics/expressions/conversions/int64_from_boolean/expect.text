@@ -1,0 +1,3 @@
+lib.copp:2:18: error: cannot convert boolean to int64
+      return int64(true)
+                   ^

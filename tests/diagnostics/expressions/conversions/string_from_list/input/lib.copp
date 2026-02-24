@@ -1,0 +1,4 @@
+function run() -> string {
+    values := [1, 2, 3]
+    return string(values)
+}

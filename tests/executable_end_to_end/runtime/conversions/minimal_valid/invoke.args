@@ -1,0 +1,4 @@
+run
+main.bin.copp
+--output-dir
+${TMP_OUTPUT_DIR}
