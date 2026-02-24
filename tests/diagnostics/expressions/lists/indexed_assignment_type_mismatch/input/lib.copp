@@ -1,5 +1,5 @@
 function run() -> nil {
     mut values := [1, 2, 3]
-    values.set(1, true)
+    values[1] = true
     return nil
 }

@@ -110,6 +110,24 @@ impl TypeChecker<'_> {
                 }
                 self.resolve_field_access_type(&target_type, field, field_span)
             }
+            SemanticExpression::IndexAccess { target, index, .. } => {
+                let target_type = self.check_expression(target);
+                let index_type = self.check_expression(index);
+                if index_type != Type::Integer64 && index_type != Type::Unknown {
+                    self.error("list index must be int64", index.span());
+                }
+                match target_type {
+                    Type::List(element_type) => *element_type,
+                    Type::Unknown => Type::Unknown,
+                    _ => {
+                        self.error(
+                            format!("cannot index non-list type {}", target_type.display()),
+                            target.span(),
+                        );
+                        Type::Unknown
+                    }
+                }
+            }
             SemanticExpression::Call {
                 callee,
                 type_arguments,
@@ -233,19 +251,52 @@ impl TypeChecker<'_> {
                         self.error("methods do not take type arguments", span.clone());
                     }
                     let receiver_type = self.check_expression(target);
-                    if let Type::List(element_type) = &receiver_type {
-                        if field == "get" {
-                            let expected_parameter_types = vec![Type::Integer64];
-                            let return_type =
-                                Self::normalize_union(vec![(**element_type).clone(), Type::Nil]);
-                            Some(ResolvedCallTarget {
-                                display_name: "get".to_string(),
-                                parameter_types: expected_parameter_types,
-                                return_type,
-                                resolved_type_arguments: Vec::new(),
-                                call_target: Some(TypeAnnotatedCallTarget::BuiltinListGet),
-                            })
-                        } else if field == "set" {
+                    let (receiver_type_id, receiver_type_name, receiver_type_arguments) =
+                        match &receiver_type {
+                            Type::Named(named) => {
+                                (named.id.clone(), named.display_name.clone(), Vec::new())
+                            }
+                            Type::Applied { base, arguments } => {
+                                (base.id.clone(), receiver_type.display(), arguments.clone())
+                            }
+                            _ => {
+                                if receiver_type != Type::Unknown {
+                                    self.error(
+                                        format!(
+                                            "cannot call method '{}' on non-struct type {}",
+                                            field,
+                                            receiver_type.display()
+                                        ),
+                                        field_span.clone(),
+                                    );
+                                }
+                                return Type::Unknown;
+                            }
+                        };
+
+                    let method_key = MethodKey {
+                        receiver_type_id: receiver_type_id.clone(),
+                        method_name: field.clone(),
+                    };
+                    if let Some((method_self_mutable, method_parameter_types, method_return_type)) =
+                        self.methods.get(&method_key).map(|info| {
+                            (
+                                info.self_mutable,
+                                info.parameter_types.clone(),
+                                info.return_type.clone(),
+                            )
+                        })
+                    {
+                        let instantiated_signature = self.instantiate_method_call_signature(
+                            &receiver_type_id,
+                            &receiver_type_arguments,
+                            &method_parameter_types,
+                            &method_return_type,
+                            field_span,
+                        );
+                        let method_parameter_types = instantiated_signature.parameter_types;
+                        let method_return_type = instantiated_signature.return_type;
+                        if method_self_mutable {
                             if let SemanticExpression::NameReference { name, .. } = target.as_ref()
                             {
                                 let receiver_is_mutable = self
@@ -257,7 +308,7 @@ impl TypeChecker<'_> {
                                     {
                                         self.error(
                                             format!(
-                                                "cannot call mutating method 'List.set' on immutable binding '{name}'"
+                                                "cannot call mutating method '{receiver_type_name}.{field}' on immutable binding '{name}'"
                                             ),
                                             field_span.clone(),
                                         );
@@ -266,117 +317,27 @@ impl TypeChecker<'_> {
                                 }
                             } else {
                                 self.error(
-                                    "cannot call mutating method 'List.set' on non-binding receiver",
-                                    field_span.clone(),
-                                );
-                                return Type::Unknown;
-                            }
-                            Some(ResolvedCallTarget {
-                                display_name: "set".to_string(),
-                                parameter_types: vec![Type::Integer64, (**element_type).clone()],
-                                return_type: Type::Nil,
-                                resolved_type_arguments: Vec::new(),
-                                call_target: Some(TypeAnnotatedCallTarget::BuiltinListSet),
-                            })
-                        } else {
-                            self.error(
-                                format!("unknown method 'List.{field}'"),
-                                field_span.clone(),
-                            );
-                            return Type::Unknown;
-                        }
-                    } else {
-                        let (receiver_type_id, receiver_type_name, receiver_type_arguments) =
-                            match &receiver_type {
-                                Type::Named(named) => {
-                                    (named.id.clone(), named.display_name.clone(), Vec::new())
-                                }
-                                Type::Applied { base, arguments } => {
-                                    (base.id.clone(), receiver_type.display(), arguments.clone())
-                                }
-                                _ => {
-                                    if receiver_type != Type::Unknown {
-                                        self.error(
-                                            format!(
-                                                "cannot call method '{}' on non-struct type {}",
-                                                field,
-                                                receiver_type.display()
-                                            ),
-                                            field_span.clone(),
-                                        );
-                                    }
-                                    return Type::Unknown;
-                                }
-                            };
-
-                        let method_key = MethodKey {
-                            receiver_type_id: receiver_type_id.clone(),
-                            method_name: field.clone(),
-                        };
-                        if let Some((
-                            method_self_mutable,
-                            method_parameter_types,
-                            method_return_type,
-                        )) = self.methods.get(&method_key).map(|info| {
-                            (
-                                info.self_mutable,
-                                info.parameter_types.clone(),
-                                info.return_type.clone(),
-                            )
-                        }) {
-                            let instantiated_signature = self.instantiate_method_call_signature(
-                                &receiver_type_id,
-                                &receiver_type_arguments,
-                                &method_parameter_types,
-                                &method_return_type,
-                                field_span,
-                            );
-                            let method_parameter_types = instantiated_signature.parameter_types;
-                            let method_return_type = instantiated_signature.return_type;
-                            if method_self_mutable {
-                                if let SemanticExpression::NameReference { name, .. } =
-                                    target.as_ref()
-                                {
-                                    let receiver_is_mutable = self
-                                        .lookup_variable_for_assignment(name)
-                                        .is_some_and(|(is_mutable, _)| is_mutable);
-                                    if !receiver_is_mutable {
-                                        if self.constants.contains_key(name)
-                                            || self.lookup_variable_type(name).is_some()
-                                        {
-                                            self.error(
-                                            format!(
-                                                "cannot call mutating method '{receiver_type_name}.{field}' on immutable binding '{name}'"
-                                            ),
-                                            field_span.clone(),
-                                        );
-                                        }
-                                        return Type::Unknown;
-                                    }
-                                } else {
-                                    self.error(
                                     format!(
                                         "cannot call mutating method '{receiver_type_name}.{field}' on non-binding receiver"
                                     ),
                                     field_span.clone(),
                                 );
-                                    return Type::Unknown;
-                                }
+                                return Type::Unknown;
                             }
-                            Some(ResolvedCallTarget {
-                                display_name: field.clone(),
-                                parameter_types: method_parameter_types,
-                                return_type: method_return_type,
-                                resolved_type_arguments: Vec::new(),
-                                call_target: None,
-                            })
-                        } else {
-                            self.error(
-                                format!("unknown method '{receiver_type_name}.{field}'"),
-                                field_span.clone(),
-                            );
-                            return Type::Unknown;
                         }
+                        Some(ResolvedCallTarget {
+                            display_name: field.clone(),
+                            parameter_types: method_parameter_types,
+                            return_type: method_return_type,
+                            resolved_type_arguments: Vec::new(),
+                            call_target: None,
+                        })
+                    } else {
+                        self.error(
+                            format!("unknown method '{receiver_type_name}.{field}'"),
+                            field_span.clone(),
+                        );
+                        return Type::Unknown;
                     }
                 } else {
                     None

@@ -1,0 +1,3 @@
+lib.copp:3:19: error: list index must be int64
+      return values[true]
+                    ^

@@ -4,12 +4,12 @@
         {
             "phase": "type_analysis",
             "path": "lib.copp",
-            "message": "argument 2 to 'set' must be int64, got boolean",
+            "message": "indexed assignment type mismatch: expected int64, got boolean",
             "span": {
-                "start": 70,
-                "end": 74,
+                "start": 68,
+                "end": 72,
                 "line": 3,
-                "column": 19
+                "column": 17
             }
         }
     ]

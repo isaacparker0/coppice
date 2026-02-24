@@ -241,25 +241,42 @@ impl Parser {
                 continue;
             }
             if self.peek_is_symbol(Symbol::LeftBracket) {
-                let (type_arguments, right_bracket) = self.parse_type_argument_list()?;
-                let Ok(left_parenthesis) = self.expect_symbol(Symbol::LeftParenthesis) else {
-                    return Err(ParseError::InvalidConstruct {
-                        kind: InvalidConstructKind::TypeArgumentsMustBeFollowedByCall,
-                        span: right_bracket,
-                    });
-                };
-                let arguments = self.parse_arguments();
-                let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
+                let checkpoint = self.checkpoint();
+                let generic_call_result = self.parse_type_argument_list();
+                if let Ok((type_arguments, _right_bracket)) = generic_call_result
+                    && self.peek_is_symbol(Symbol::LeftParenthesis)
+                {
+                    let left_parenthesis = self.expect_symbol(Symbol::LeftParenthesis)?;
+                    let arguments = self.parse_arguments();
+                    let right_parenthesis = self.expect_symbol(Symbol::RightParenthesis)?;
+                    let span = Span {
+                        start: expression.span().start,
+                        end: right_parenthesis.end,
+                        line: left_parenthesis.line,
+                        column: left_parenthesis.column,
+                    };
+                    expression = SyntaxExpression::Call {
+                        callee: Box::new(expression),
+                        type_arguments,
+                        arguments,
+                        span,
+                    };
+                    continue;
+                }
+
+                self.restore(checkpoint);
+                let left_bracket = self.expect_symbol(Symbol::LeftBracket)?;
+                let index = self.parse_expression()?;
+                let right_bracket = self.expect_symbol(Symbol::RightBracket)?;
                 let span = Span {
                     start: expression.span().start,
-                    end: right_parenthesis.end,
-                    line: left_parenthesis.line,
-                    column: left_parenthesis.column,
+                    end: right_bracket.end,
+                    line: left_bracket.line,
+                    column: left_bracket.column,
                 };
-                expression = SyntaxExpression::Call {
-                    callee: Box::new(expression),
-                    type_arguments,
-                    arguments,
+                expression = SyntaxExpression::IndexAccess {
+                    target: Box::new(expression),
+                    index: Box::new(index),
                     span,
                 };
                 continue;

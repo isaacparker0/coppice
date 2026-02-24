@@ -34,8 +34,6 @@ pub enum ExecutableCallTarget {
     BuiltinFunction {
         function_name: String,
     },
-    BuiltinListGet,
-    BuiltinListSet,
     UserDefinedFunction {
         callable_reference: ExecutableCallableReference,
     },
@@ -164,7 +162,7 @@ pub enum ExecutableStatement {
         initializer: ExecutableExpression,
     },
     Assign {
-        name: String,
+        target: ExecutableAssignTarget,
         value: ExecutableExpression,
     },
     If {
@@ -183,6 +181,17 @@ pub enum ExecutableStatement {
     },
     Return {
         value: ExecutableExpression,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ExecutableAssignTarget {
+    Name {
+        name: String,
+    },
+    Index {
+        target: Box<ExecutableExpression>,
+        index: Box<ExecutableExpression>,
     },
 }
 
@@ -219,6 +228,10 @@ pub enum ExecutableExpression {
     FieldAccess {
         target: Box<ExecutableExpression>,
         field: String,
+    },
+    IndexAccess {
+        target: Box<ExecutableExpression>,
+        index: Box<ExecutableExpression>,
     },
     Unary {
         operator: ExecutableUnaryOperator,

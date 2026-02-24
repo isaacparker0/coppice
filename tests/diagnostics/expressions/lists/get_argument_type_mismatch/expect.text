@@ -1,3 +1,0 @@
-lib.copp:3:23: error: argument 1 to 'get' must be int64, got boolean
-      return values.get(true)
-                        ^

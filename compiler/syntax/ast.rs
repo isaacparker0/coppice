@@ -197,8 +197,7 @@ pub enum SyntaxStatement {
         span: Span,
     },
     Assign {
-        name: String,
-        name_span: Span,
+        target: SyntaxAssignTarget,
         value: SyntaxExpression,
         span: Span,
     },
@@ -225,6 +224,20 @@ pub enum SyntaxStatement {
     },
     Expression {
         value: SyntaxExpression,
+        span: Span,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum SyntaxAssignTarget {
+    Name {
+        name: String,
+        name_span: Span,
+        span: Span,
+    },
+    Index {
+        target: Box<SyntaxExpression>,
+        index: Box<SyntaxExpression>,
         span: Span,
     },
 }
@@ -264,6 +277,11 @@ pub enum SyntaxExpression {
         target: Box<SyntaxExpression>,
         field: String,
         field_span: Span,
+        span: Span,
+    },
+    IndexAccess {
+        target: Box<SyntaxExpression>,
+        index: Box<SyntaxExpression>,
         span: Span,
     },
     Call {

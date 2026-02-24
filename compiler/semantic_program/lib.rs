@@ -146,8 +146,7 @@ pub enum SemanticStatement {
         span: Span,
     },
     Assign {
-        name: String,
-        name_span: Span,
+        target: SemanticAssignTarget,
         value: SemanticExpression,
         span: Span,
     },
@@ -174,6 +173,20 @@ pub enum SemanticStatement {
     },
     Expression {
         value: SemanticExpression,
+        span: Span,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum SemanticAssignTarget {
+    Name {
+        name: String,
+        name_span: Span,
+        span: Span,
+    },
+    Index {
+        target: Box<SemanticExpression>,
+        index: Box<SemanticExpression>,
         span: Span,
     },
 }
@@ -221,6 +234,12 @@ pub enum SemanticExpression {
         target: Box<SemanticExpression>,
         field: String,
         field_span: Span,
+        span: Span,
+    },
+    IndexAccess {
+        id: SemanticExpressionId,
+        target: Box<SemanticExpression>,
+        index: Box<SemanticExpression>,
         span: Span,
     },
     Call {
