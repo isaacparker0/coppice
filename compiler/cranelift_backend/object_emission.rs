@@ -8,10 +8,11 @@ use crate::runtime_interface_emission::{
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
     ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
-    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableProgram, ExecutableStatement,
-    ExecutableStructDeclaration, ExecutableStructReference, ExecutableTypeReference,
-    ExecutableUnaryOperator,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableInterfaceDeclaration,
+    ExecutableInterfaceReference, ExecutableMatchArm, ExecutableMatchPattern,
+    ExecutableMethodDeclaration, ExecutableNominalTypeReference, ExecutableProgram,
+    ExecutableStatement, ExecutableStructDeclaration, ExecutableStructReference,
+    ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::CompilerFailure;
 use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
@@ -73,6 +74,8 @@ struct CompilationState {
     module: ObjectModule,
     function_record_by_callable_reference: BTreeMap<ExecutableCallableReference, FunctionRecord>,
     method_record_by_key: BTreeMap<MethodKey, MethodRecord>,
+    interface_declaration_by_reference:
+        BTreeMap<ExecutableInterfaceReference, ExecutableInterfaceDeclaration>,
     constant_declaration_by_reference:
         BTreeMap<ExecutableConstantReference, ExecutableConstantDeclaration>,
     struct_declaration_by_reference:
@@ -83,6 +86,9 @@ struct CompilationState {
 const UNION_BOX_TAG_OFFSET: i32 = 0;
 const UNION_BOX_PAYLOAD_OFFSET: i32 = 8;
 const UNION_BOX_SIZE_BYTES: i64 = 16;
+const INTERFACE_VALUE_DATA_POINTER_OFFSET: i32 = 0;
+const INTERFACE_VALUE_VTABLE_POINTER_OFFSET: i32 = 8;
+const INTERFACE_VALUE_SIZE_BYTES: i64 = 16;
 
 const UNION_TAG_INT64: i64 = 1;
 const UNION_TAG_BOOLEAN: i64 = 2;
@@ -119,6 +125,15 @@ pub(crate) fn ensure_program_supported(program: &ExecutableProgram) -> Result<()
             for statement in &method.statements {
                 ensure_statement_supported(statement)?;
             }
+        }
+    }
+
+    for interface_declaration in &program.interface_declarations {
+        for method in &interface_declaration.methods {
+            for parameter in &method.parameters {
+                ensure_type_supported(&parameter.type_reference);
+            }
+            ensure_type_supported(&method.return_type);
         }
     }
 
@@ -245,11 +260,17 @@ pub(crate) fn emit_object_bytes(program: &ExecutableProgram) -> Result<Vec<u8>, 
         .iter()
         .map(|declaration| (declaration.struct_reference.clone(), declaration.clone()))
         .collect();
+    let interface_declaration_by_reference = program
+        .interface_declarations
+        .iter()
+        .map(|declaration| (declaration.interface_reference.clone(), declaration.clone()))
+        .collect();
 
     let mut state = CompilationState {
         module,
         function_record_by_callable_reference,
         method_record_by_key,
+        interface_declaration_by_reference,
         constant_declaration_by_reference,
         struct_declaration_by_reference,
         external_runtime_functions,
@@ -392,10 +413,18 @@ fn build_signature_for_method(
     let mut signature = module.make_signature();
     let self_type_reference = if struct_declaration.type_parameter_names.is_empty() {
         ExecutableTypeReference::NominalType {
+            nominal_type_reference: Some(ExecutableNominalTypeReference {
+                package_path: struct_declaration.struct_reference.package_path.clone(),
+                symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+            }),
             name: struct_declaration.name.clone(),
         }
     } else {
         ExecutableTypeReference::NominalTypeApplication {
+            base_nominal_type_reference: Some(ExecutableNominalTypeReference {
+                package_path: struct_declaration.struct_reference.package_path.clone(),
+                symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+            }),
             base_name: struct_declaration.name.clone(),
             arguments: struct_declaration
                 .type_parameter_names
@@ -579,10 +608,18 @@ fn define_struct_method(
 
         let self_type_reference = if struct_declaration.type_parameter_names.is_empty() {
             ExecutableTypeReference::NominalType {
+                nominal_type_reference: Some(ExecutableNominalTypeReference {
+                    package_path: struct_declaration.struct_reference.package_path.clone(),
+                    symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+                }),
                 name: struct_declaration.name.clone(),
             }
         } else {
             ExecutableTypeReference::NominalTypeApplication {
+                base_nominal_type_reference: Some(ExecutableNominalTypeReference {
+                    package_path: struct_declaration.struct_reference.package_path.clone(),
+                    symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+                }),
                 base_name: struct_declaration.name.clone(),
                 arguments: struct_declaration
                     .type_parameter_names
@@ -929,7 +966,7 @@ fn compile_statements(
                 if typed_return.terminates {
                     return Ok(true);
                 }
-                if !is_type_assignable(&typed_return.type_reference, function_return_type)
+                if !is_type_assignable(state, &typed_return.type_reference, function_return_type)
                     && typed_return.type_reference != ExecutableTypeReference::Never
                 {
                     return Err(build_failed(
@@ -1031,6 +1068,7 @@ fn compile_expression(
                     return Ok(constant_value);
                 }
                 if !is_type_assignable(
+                    state,
                     &constant_value.type_reference,
                     &constant_declaration.type_reference,
                 ) {
@@ -1465,7 +1503,7 @@ fn compile_call_expression(
                     if argument.terminates {
                         return Ok(argument);
                     }
-                    if !is_type_assignable(&argument.type_reference, expected_type) {
+                    if !is_type_assignable(state, &argument.type_reference, expected_type) {
                         return Err(build_failed(
                             format!(
                                 "call argument type mismatch for function '{}::{}'",
@@ -1697,12 +1735,73 @@ fn compile_method_call_expression(
     if compiled_receiver.terminates {
         return Ok(compiled_receiver);
     }
-    let (struct_declaration, type_substitutions_by_type_parameter_name) =
-        resolve_struct_type_details(state, &compiled_receiver.type_reference)?;
-    let struct_declaration = struct_declaration.clone();
+    if let Ok((struct_declaration, type_substitutions_by_type_parameter_name)) =
+        resolve_struct_type_details(state, &compiled_receiver.type_reference)
+    {
+        let struct_declaration = struct_declaration.clone();
+        return compile_struct_method_call_expression(
+            state,
+            function_builder,
+            compilation_context,
+            &struct_declaration,
+            &type_substitutions_by_type_parameter_name,
+            &compiled_receiver,
+            method_name,
+            arguments,
+        );
+    }
+
+    let interface_declaration_result =
+        resolve_interface_declaration_by_type_reference(state, &compiled_receiver.type_reference);
+    if let Ok(interface_declaration) = interface_declaration_result {
+        let interface_declaration = interface_declaration.clone();
+        return compile_interface_method_call_expression(
+            state,
+            function_builder,
+            compilation_context,
+            &interface_declaration,
+            &compiled_receiver,
+            method_name,
+            arguments,
+        );
+    }
+    if let Err(interface_resolution_error) = interface_declaration_result
+        && matches!(
+            compiled_receiver.type_reference,
+            ExecutableTypeReference::NominalType {
+                nominal_type_reference: Some(_),
+                ..
+            } | ExecutableTypeReference::NominalTypeApplication {
+                base_nominal_type_reference: Some(_),
+                ..
+            }
+        )
+    {
+        return Err(interface_resolution_error);
+    }
+
+    Err(build_failed(
+        format!(
+            "expected struct or interface receiver type, found {}",
+            type_reference_display(&compiled_receiver.type_reference)
+        ),
+        None,
+    ))
+}
+
+fn compile_struct_method_call_expression(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    struct_declaration: &ExecutableStructDeclaration,
+    type_substitutions_by_type_parameter_name: &BTreeMap<String, ExecutableTypeReference>,
+    compiled_receiver: &TypedValue,
+    method_name: &str,
+    arguments: &[ExecutableExpression],
+) -> Result<TypedValue, CompilerFailure> {
     let method_key = MethodKey {
         struct_reference: struct_declaration.struct_reference.clone(),
-        method_name: method_name.clone(),
+        method_name: method_name.to_string(),
     };
     let method_record = state
         .method_record_by_key
@@ -1752,9 +1851,9 @@ fn compile_method_call_expression(
         }
         let expected_type = substitute_type_reference(
             &parameter.type_reference,
-            &type_substitutions_by_type_parameter_name,
+            type_substitutions_by_type_parameter_name,
         );
-        if !is_type_assignable(&compiled_argument.type_reference, &expected_type) {
+        if !is_type_assignable(state, &compiled_argument.type_reference, &expected_type) {
             return Err(build_failed(
                 format!(
                     "method argument type mismatch for '{}.{}': expected {}, got {}",
@@ -1787,7 +1886,7 @@ fn compile_method_call_expression(
     let call = function_builder.ins().call(callee, &call_values);
     let return_type = substitute_type_reference(
         &method_record.declaration.return_type,
-        &type_substitutions_by_type_parameter_name,
+        type_substitutions_by_type_parameter_name,
     );
     if matches!(
         return_type,
@@ -1802,6 +1901,161 @@ fn compile_method_call_expression(
         Ok(TypedValue {
             value: Some(function_builder.inst_results(call)[0]),
             type_reference: return_type,
+            terminates: false,
+        })
+    }
+}
+
+fn compile_interface_method_call_expression(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    compilation_context: &mut FunctionCompilationContext,
+    interface_declaration: &ExecutableInterfaceDeclaration,
+    compiled_receiver: &TypedValue,
+    method_name: &str,
+    arguments: &[ExecutableExpression],
+) -> Result<TypedValue, CompilerFailure> {
+    let (method_index, method_declaration) = interface_declaration
+        .methods
+        .iter()
+        .enumerate()
+        .find(|(_, method)| method.name == method_name)
+        .ok_or_else(|| {
+            build_failed(
+                format!(
+                    "unknown method '{}.{}'",
+                    interface_declaration.name, method_name
+                ),
+                None,
+            )
+        })?;
+
+    if method_declaration.parameters.len() != arguments.len() {
+        return Err(build_failed(
+            format!(
+                "method '{}.{}' expected {} argument(s), got {}",
+                interface_declaration.name,
+                method_name,
+                method_declaration.parameters.len(),
+                arguments.len()
+            ),
+            None,
+        ));
+    }
+
+    let interface_value_pointer = compiled_receiver.value.ok_or_else(|| {
+        build_failed(
+            "interface method receiver produced no runtime value".to_string(),
+            None,
+        )
+    })?;
+    let data_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        interface_value_pointer,
+        INTERFACE_VALUE_DATA_POINTER_OFFSET,
+    );
+    let vtable_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        interface_value_pointer,
+        INTERFACE_VALUE_VTABLE_POINTER_OFFSET,
+    );
+    let method_pointer_offset_bytes = i32::try_from(method_index * 8).map_err(|_| {
+        build_failed(
+            "interface method index exceeds supported offset range".to_string(),
+            None,
+        )
+    })?;
+    let function_pointer = function_builder.ins().load(
+        types::I64,
+        MemFlags::new(),
+        vtable_pointer,
+        method_pointer_offset_bytes,
+    );
+
+    let mut call_values = Vec::with_capacity(arguments.len() + 1);
+    call_values.push(data_pointer);
+    for (parameter, argument_expression) in method_declaration.parameters.iter().zip(arguments) {
+        let compiled_argument = compile_expression(
+            state,
+            function_builder,
+            compilation_context,
+            argument_expression,
+        )?;
+        if compiled_argument.terminates {
+            return Ok(compiled_argument);
+        }
+        if !is_type_assignable(
+            state,
+            &compiled_argument.type_reference,
+            &parameter.type_reference,
+        ) {
+            return Err(build_failed(
+                format!(
+                    "method argument type mismatch for '{}.{}': expected {}, got {}",
+                    interface_declaration.name,
+                    method_name,
+                    type_reference_display(&parameter.type_reference),
+                    type_reference_display(&compiled_argument.type_reference)
+                ),
+                None,
+            ));
+        }
+        let lowered_argument = runtime_value_for_expected_type(
+            state,
+            function_builder,
+            compiled_argument.value,
+            &compiled_argument.type_reference,
+            &parameter.type_reference,
+        )?;
+        call_values.push(lowered_argument.ok_or_else(|| {
+            build_failed(
+                "interface method argument produced no runtime value".to_string(),
+                None,
+            )
+        })?);
+    }
+
+    let mut call_signature = state.module.make_signature();
+    call_signature.params.push(AbiParam::new(types::I64));
+    for parameter in &method_declaration.parameters {
+        call_signature
+            .params
+            .push(AbiParam::new(cranelift_type_for(&parameter.type_reference)));
+    }
+    if !matches!(
+        method_declaration.return_type,
+        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
+    ) {
+        call_signature
+            .returns
+            .push(AbiParam::new(cranelift_type_for(
+                &method_declaration.return_type,
+            )));
+    }
+    let signature_reference = function_builder.import_signature(call_signature);
+    let call =
+        function_builder
+            .ins()
+            .call_indirect(signature_reference, function_pointer, &call_values);
+
+    if matches!(
+        method_declaration.return_type,
+        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
+    ) {
+        Ok(TypedValue {
+            value: None,
+            type_reference: method_declaration.return_type.clone(),
+            terminates: matches!(
+                method_declaration.return_type,
+                ExecutableTypeReference::Never
+            ),
+        })
+    } else {
+        Ok(TypedValue {
+            value: Some(function_builder.inst_results(call)[0]),
+            type_reference: method_declaration.return_type.clone(),
             terminates: false,
         })
     }
@@ -2047,6 +2301,30 @@ fn runtime_value_for_expected_type(
         let union_box_pointer = box_union_value(state, function_builder, raw_value, actual_type)?;
         return Ok(Some(union_box_pointer));
     }
+
+    if let Ok(interface_declaration) =
+        resolve_interface_declaration_by_type_reference(state, expected_type)
+        && let Ok((struct_declaration, _)) = resolve_struct_type_details(state, actual_type)
+        && struct_implements_interface(struct_declaration, interface_declaration)
+    {
+        let interface_declaration = interface_declaration.clone();
+        let struct_declaration = struct_declaration.clone();
+        let data_pointer = value.ok_or_else(|| {
+            build_failed(
+                "value expected for struct-to-interface conversion".to_string(),
+                None,
+            )
+        })?;
+        let interface_value_pointer = box_interface_value(
+            state,
+            function_builder,
+            data_pointer,
+            &struct_declaration,
+            &interface_declaration,
+        )?;
+        return Ok(Some(interface_value_pointer));
+    }
+
     Ok(value)
 }
 
@@ -2101,7 +2379,7 @@ fn emit_union_match_condition(
 
     let is_enum_variant_pattern = matches!(
         matched_type_reference,
-        ExecutableTypeReference::NominalType { name } if name.contains('.')
+        ExecutableTypeReference::NominalType { name, .. } if name.contains('.')
     );
     if !is_enum_variant_pattern {
         return Ok(tag_matches_i8);
@@ -2113,7 +2391,7 @@ fn emit_union_match_condition(
         union_box_pointer,
         UNION_BOX_PAYLOAD_OFFSET,
     );
-    let ExecutableTypeReference::NominalType { name } = matched_type_reference else {
+    let ExecutableTypeReference::NominalType { name, .. } = matched_type_reference else {
         return Ok(tag_matches_i8);
     };
     let (enum_name, variant_name) = split_enum_variant_type_name(name)?;
@@ -2171,16 +2449,25 @@ fn type_reference_matches_pattern_type(
 }
 
 fn is_type_assignable(
+    state: &CompilationState,
     actual_type: &ExecutableTypeReference,
     expected_type: &ExecutableTypeReference,
 ) -> bool {
     if actual_type == expected_type {
         return true;
     }
+
+    if let Ok(interface_declaration) =
+        resolve_interface_declaration_by_type_reference(state, expected_type)
+        && let Ok((struct_declaration, _)) = resolve_struct_type_details(state, actual_type)
+    {
+        return struct_implements_interface(struct_declaration, interface_declaration);
+    }
+
     match expected_type {
         ExecutableTypeReference::Union { members } => members
             .iter()
-            .any(|member| is_type_assignable(actual_type, member)),
+            .any(|member| is_type_assignable(state, actual_type, member)),
         _ => false,
     }
 }
@@ -2195,7 +2482,7 @@ fn union_type_tag_for_type_reference(
         ExecutableTypeReference::Nil | ExecutableTypeReference::Never => Ok(UNION_TAG_NIL),
         ExecutableTypeReference::TypeParameter { .. }
         | ExecutableTypeReference::NominalTypeApplication { .. } => Ok(UNION_TAG_STRUCT),
-        ExecutableTypeReference::NominalType { name } => {
+        ExecutableTypeReference::NominalType { name, .. } => {
             if name.contains('.') {
                 Ok(UNION_TAG_ENUM_VARIANT)
             } else {
@@ -2280,22 +2567,51 @@ fn resolve_struct_type_details<'state>(
     CompilerFailure,
 > {
     match type_reference {
-        ExecutableTypeReference::NominalType { name } => {
-            let struct_declaration = state
-                .struct_declaration_by_reference
-                .values()
-                .find(|declaration| declaration.name == *name)
-                .ok_or_else(|| build_failed(format!("unknown struct type '{name}'"), None))?;
+        ExecutableTypeReference::NominalType {
+            nominal_type_reference,
+            name,
+        } => {
+            let struct_declaration = if let Some(nominal_type_reference) = nominal_type_reference {
+                state
+                    .struct_declaration_by_reference
+                    .values()
+                    .find(|declaration| {
+                        declaration.struct_reference.package_path
+                            == nominal_type_reference.package_path
+                            && declaration.struct_reference.symbol_name
+                                == nominal_type_reference.symbol_name
+                    })
+            } else {
+                state
+                    .struct_declaration_by_reference
+                    .values()
+                    .find(|declaration| declaration.name == *name)
+            }
+            .ok_or_else(|| build_failed(format!("unknown struct type '{name}'"), None))?;
             Ok((struct_declaration, BTreeMap::new()))
         }
         ExecutableTypeReference::NominalTypeApplication {
+            base_nominal_type_reference,
             base_name,
             arguments,
         } => {
-            let struct_declaration = state
-                .struct_declaration_by_reference
-                .values()
-                .find(|declaration| declaration.name == *base_name)
+            let struct_declaration =
+                if let Some(base_nominal_type_reference) = base_nominal_type_reference {
+                    state
+                        .struct_declaration_by_reference
+                        .values()
+                        .find(|declaration| {
+                            declaration.struct_reference.package_path
+                                == base_nominal_type_reference.package_path
+                                && declaration.struct_reference.symbol_name
+                                    == base_nominal_type_reference.symbol_name
+                        })
+                } else {
+                    state
+                        .struct_declaration_by_reference
+                        .values()
+                        .find(|declaration| declaration.name == *base_name)
+                }
                 .ok_or_else(|| build_failed(format!("unknown struct type '{base_name}'"), None))?;
             let type_substitutions_by_type_parameter_name =
                 type_substitutions_for_struct_type(struct_declaration, type_reference)?;
@@ -2323,6 +2639,143 @@ fn resolve_struct_type_details<'state>(
             None,
         )),
     }
+}
+
+fn resolve_interface_declaration_by_type_reference<'state>(
+    state: &'state CompilationState,
+    type_reference: &ExecutableTypeReference,
+) -> Result<&'state ExecutableInterfaceDeclaration, CompilerFailure> {
+    let (ExecutableTypeReference::NominalType {
+        nominal_type_reference: Some(interface_reference),
+        ..
+    }
+    | ExecutableTypeReference::NominalTypeApplication {
+        base_nominal_type_reference: Some(interface_reference),
+        ..
+    }) = type_reference
+    else {
+        return Err(build_failed(
+            format!(
+                "expected interface type, found {}",
+                type_reference_display(type_reference)
+            ),
+            None,
+        ));
+    };
+    state
+        .interface_declaration_by_reference
+        .get(&ExecutableInterfaceReference {
+            package_path: interface_reference.package_path.clone(),
+            symbol_name: interface_reference.symbol_name.clone(),
+        })
+        .ok_or_else(|| {
+            build_failed(
+                format!(
+                    "unknown interface type '{}::{}'",
+                    interface_reference.package_path, interface_reference.symbol_name
+                ),
+                None,
+            )
+        })
+}
+
+fn struct_implements_interface(
+    struct_declaration: &ExecutableStructDeclaration,
+    interface_declaration: &ExecutableInterfaceDeclaration,
+) -> bool {
+    struct_declaration
+        .implemented_interfaces
+        .iter()
+        .any(|implemented_interface| {
+            implemented_interface.package_path
+                == interface_declaration.interface_reference.package_path
+                && implemented_interface.symbol_name
+                    == interface_declaration.interface_reference.symbol_name
+        })
+}
+
+fn box_interface_value(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    data_pointer: Value,
+    struct_declaration: &ExecutableStructDeclaration,
+    interface_declaration: &ExecutableInterfaceDeclaration,
+) -> Result<Value, CompilerFailure> {
+    let vtable_pointer = build_interface_vtable(
+        state,
+        function_builder,
+        struct_declaration,
+        interface_declaration,
+    )?;
+    let interface_value_pointer =
+        allocate_heap_bytes(state, function_builder, INTERFACE_VALUE_SIZE_BYTES)?;
+    let mem_flags = MemFlags::new();
+    function_builder.ins().store(
+        mem_flags,
+        data_pointer,
+        interface_value_pointer,
+        INTERFACE_VALUE_DATA_POINTER_OFFSET,
+    );
+    function_builder.ins().store(
+        mem_flags,
+        vtable_pointer,
+        interface_value_pointer,
+        INTERFACE_VALUE_VTABLE_POINTER_OFFSET,
+    );
+    Ok(interface_value_pointer)
+}
+
+fn build_interface_vtable(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    struct_declaration: &ExecutableStructDeclaration,
+    interface_declaration: &ExecutableInterfaceDeclaration,
+) -> Result<Value, CompilerFailure> {
+    let vtable_size_bytes =
+        i64::try_from(interface_declaration.methods.len() * 8).map_err(|_| {
+            build_failed(
+                "interface vtable size exceeds supported allocation range".to_string(),
+                None,
+            )
+        })?;
+    let vtable_pointer = allocate_heap_bytes(state, function_builder, vtable_size_bytes)?;
+    let mem_flags = MemFlags::new();
+
+    for (method_index, interface_method) in interface_declaration.methods.iter().enumerate() {
+        let method_key = MethodKey {
+            struct_reference: struct_declaration.struct_reference.clone(),
+            method_name: interface_method.name.clone(),
+        };
+        let method_record = state.method_record_by_key.get(&method_key).ok_or_else(|| {
+            build_failed(
+                format!(
+                    "type '{}' does not provide method '{}' required by interface '{}'",
+                    struct_declaration.name, interface_method.name, interface_declaration.name
+                ),
+                None,
+            )
+        })?;
+        let function_reference = state
+            .module
+            .declare_func_in_func(method_record.id, function_builder.func);
+        let function_pointer = function_builder
+            .ins()
+            .func_addr(types::I64, function_reference);
+        let method_offset_bytes = i32::try_from(method_index * 8).map_err(|_| {
+            build_failed(
+                "interface vtable offset exceeds supported range".to_string(),
+                None,
+            )
+        })?;
+        function_builder.ins().store(
+            mem_flags,
+            function_pointer,
+            vtable_pointer,
+            method_offset_bytes,
+        );
+    }
+
+    Ok(vtable_pointer)
 }
 
 fn type_substitutions_for_struct_type(
@@ -2380,9 +2833,11 @@ fn substitute_type_reference(
                 .collect(),
         },
         ExecutableTypeReference::NominalTypeApplication {
+            base_nominal_type_reference,
             base_name,
             arguments,
         } => ExecutableTypeReference::NominalTypeApplication {
+            base_nominal_type_reference: base_nominal_type_reference.clone(),
             base_name: base_name.clone(),
             arguments: arguments
                 .iter()
@@ -2390,6 +2845,13 @@ fn substitute_type_reference(
                     substitute_type_reference(argument, type_substitutions_by_type_parameter_name)
                 })
                 .collect(),
+        },
+        ExecutableTypeReference::NominalType {
+            nominal_type_reference,
+            name,
+        } => ExecutableTypeReference::NominalType {
+            nominal_type_reference: nominal_type_reference.clone(),
+            name: name.clone(),
         },
         _ => type_reference.clone(),
     }
@@ -2403,10 +2865,11 @@ fn type_reference_display(type_reference: &ExecutableTypeReference) -> String {
         ExecutableTypeReference::Nil => "nil".to_string(),
         ExecutableTypeReference::Never => "never".to_string(),
         ExecutableTypeReference::TypeParameter { name }
-        | ExecutableTypeReference::NominalType { name } => name.clone(),
+        | ExecutableTypeReference::NominalType { name, .. } => name.clone(),
         ExecutableTypeReference::NominalTypeApplication {
             base_name,
             arguments,
+            ..
         } => format!(
             "{}[{}]",
             base_name,

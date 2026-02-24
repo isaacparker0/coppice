@@ -1,0 +1,10 @@
+visible type Printable :: interface {
+    function label(self) -> string,
+}
+
+visible type User implements Printable :: struct {
+    name: string,
+    function label(self) -> string {
+        return self.name
+    },
+}

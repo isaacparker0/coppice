@@ -1,0 +1,2 @@
+${INPUT_DIR}/main.bin.copp: error: build failed due to diagnostics
+lib/lib.copp: error: type mismatch: expected string, got int64 (lib/lib.copp:1:9)

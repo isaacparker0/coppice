@@ -1,0 +1,16 @@
+import workspace/lib_a { Printable as APrintable, User as AUser }
+import workspace/lib_b { Printable as BPrintable, User as BUser }
+
+function renderA(value: APrintable) -> string {
+    return value.toString()
+}
+
+function renderB(value: BPrintable) -> string {
+    return value.label()
+}
+
+function main() -> nil {
+    print(renderA(AUser { name: "Ada" }))
+    print(renderB(BUser { name: "Ben" }))
+    return nil
+}

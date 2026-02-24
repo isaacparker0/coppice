@@ -6,6 +6,7 @@ use compiler__source::Span;
 pub struct TypeAnnotatedFile {
     pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
     pub constant_declarations: Vec<TypeAnnotatedConstantDeclaration>,
+    pub interface_declarations: Vec<TypeAnnotatedInterfaceDeclaration>,
     pub struct_declarations: Vec<TypeAnnotatedStructDeclaration>,
     pub function_declarations: Vec<TypeAnnotatedFunctionDeclaration>,
 }
@@ -18,6 +19,18 @@ pub struct TypeAnnotatedCallableReference {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TypeAnnotatedStructReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedInterfaceReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeAnnotatedNominalTypeReference {
     pub package_path: String,
     pub symbol_name: String,
 }
@@ -90,8 +103,26 @@ pub struct TypeAnnotatedStructDeclaration {
     pub name: String,
     pub struct_reference: TypeAnnotatedStructReference,
     pub type_parameters: Vec<TypeAnnotatedTypeParameter>,
+    pub implemented_interfaces: Vec<TypeAnnotatedInterfaceReference>,
     pub fields: Vec<TypeAnnotatedStructFieldDeclaration>,
     pub methods: Vec<TypeAnnotatedMethodDeclaration>,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedInterfaceDeclaration {
+    pub name: String,
+    pub interface_reference: TypeAnnotatedInterfaceReference,
+    pub methods: Vec<TypeAnnotatedInterfaceMethodDeclaration>,
+    pub span: Span,
+}
+
+#[derive(Clone)]
+pub struct TypeAnnotatedInterfaceMethodDeclaration {
+    pub name: String,
+    pub self_mutable: bool,
+    pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
+    pub return_type: TypeAnnotatedTypeName,
     pub span: Span,
 }
 
@@ -279,6 +310,7 @@ pub struct TypeAnnotatedTypeName {
 #[derive(Clone)]
 pub struct TypeAnnotatedTypeNameSegment {
     pub name: String,
+    pub nominal_type_reference: Option<TypeAnnotatedNominalTypeReference>,
     pub type_arguments: Vec<TypeAnnotatedTypeName>,
     pub span: Span,
 }
@@ -297,10 +329,12 @@ pub enum TypeAnnotatedResolvedTypeArgument {
         name: String,
     },
     NominalTypeApplication {
+        base_nominal_type_reference: Option<TypeAnnotatedNominalTypeReference>,
         base_name: String,
         arguments: Vec<TypeAnnotatedResolvedTypeArgument>,
     },
     NominalType {
+        nominal_type_reference: Option<TypeAnnotatedNominalTypeReference>,
         name: String,
     },
 }

@@ -1,0 +1,5 @@
+visible GREETING: string := 1
+
+visible function greet() -> string {
+    return GREETING
+}

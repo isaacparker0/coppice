@@ -2,20 +2,21 @@ use compiler__diagnostics::PhaseDiagnostic;
 use compiler__executable_program::{
     ExecutableBinaryOperator, ExecutableCallTarget, ExecutableCallableReference,
     ExecutableConstantDeclaration, ExecutableConstantReference, ExecutableEnumVariantReference,
-    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableMatchArm,
-    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableParameterDeclaration,
-    ExecutableProgram, ExecutableStatement, ExecutableStructDeclaration,
-    ExecutableStructFieldDeclaration, ExecutableStructLiteralField, ExecutableStructReference,
-    ExecutableTypeReference, ExecutableUnaryOperator,
+    ExecutableExpression, ExecutableFunctionDeclaration, ExecutableInterfaceDeclaration,
+    ExecutableInterfaceMethodDeclaration, ExecutableInterfaceReference, ExecutableMatchArm,
+    ExecutableMatchPattern, ExecutableMethodDeclaration, ExecutableNominalTypeReference,
+    ExecutableParameterDeclaration, ExecutableProgram, ExecutableStatement,
+    ExecutableStructDeclaration, ExecutableStructFieldDeclaration, ExecutableStructLiteralField,
+    ExecutableStructReference, ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedConstantDeclaration,
     TypeAnnotatedExpression, TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration,
-    TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration,
-    TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedInterfaceDeclaration, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
+    TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
 };
 
 #[must_use]
@@ -36,19 +37,29 @@ pub fn lower_type_annotated_build_unit(
         validate_main_signature_from_type_analysis(binary_entrypoint_file, &mut diagnostics);
 
     let mut all_struct_declarations = Vec::new();
+    let mut all_interface_declarations = Vec::new();
     let mut all_constant_declarations = Vec::new();
     let mut all_function_declarations = Vec::new();
     all_struct_declarations.extend(binary_entrypoint_file.struct_declarations.iter().cloned());
+    all_interface_declarations.extend(
+        binary_entrypoint_file
+            .interface_declarations
+            .iter()
+            .cloned(),
+    );
     all_constant_declarations.extend(binary_entrypoint_file.constant_declarations.iter().cloned());
     all_function_declarations.extend(binary_entrypoint_file.function_declarations.iter().cloned());
     for dependency_file in dependency_library_files {
         all_struct_declarations.extend(dependency_file.struct_declarations.iter().cloned());
+        all_interface_declarations.extend(dependency_file.interface_declarations.iter().cloned());
         all_constant_declarations.extend(dependency_file.constant_declarations.iter().cloned());
         all_function_declarations.extend(dependency_file.function_declarations.iter().cloned());
     }
 
     let constant_declarations =
         lower_constant_declarations(&all_constant_declarations, &mut diagnostics);
+    let interface_declarations =
+        lower_interface_declarations(&all_interface_declarations, &mut diagnostics);
     let struct_declarations = lower_struct_declarations(&all_struct_declarations, &mut diagnostics);
     let function_declarations =
         lower_function_declarations(&all_function_declarations, &mut diagnostics);
@@ -69,6 +80,7 @@ pub fn lower_type_annotated_build_unit(
         value: ExecutableProgram {
             entrypoint_callable_reference,
             constant_declarations,
+            interface_declarations,
             struct_declarations,
             function_declarations,
         },
@@ -191,6 +203,14 @@ fn lower_struct_declarations(
             });
         }
         if struct_supported {
+            let implemented_interfaces = struct_declaration
+                .implemented_interfaces
+                .iter()
+                .map(|implemented_interface| ExecutableInterfaceReference {
+                    package_path: implemented_interface.package_path.clone(),
+                    symbol_name: implemented_interface.symbol_name.clone(),
+                })
+                .collect::<Vec<_>>();
             lowered.push(ExecutableStructDeclaration {
                 name: struct_declaration.name.clone(),
                 struct_reference: ExecutableStructReference {
@@ -198,6 +218,7 @@ fn lower_struct_declarations(
                     symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
                 },
                 type_parameter_names: type_parameter_names.clone(),
+                implemented_interfaces,
                 fields: executable_fields,
                 methods: lower_method_declarations(
                     &struct_declaration.methods,
@@ -206,6 +227,67 @@ fn lower_struct_declarations(
                 ),
             });
         }
+    }
+    lowered
+}
+
+fn lower_interface_declarations(
+    interface_declarations: &[TypeAnnotatedInterfaceDeclaration],
+    diagnostics: &mut Vec<PhaseDiagnostic>,
+) -> Vec<ExecutableInterfaceDeclaration> {
+    let mut lowered = Vec::new();
+    for interface_declaration in interface_declarations {
+        let mut interface_methods_supported = true;
+        let mut methods = Vec::new();
+        for method in &interface_declaration.methods {
+            let mut method_supported = true;
+            let mut executable_parameters = Vec::new();
+            for parameter in &method.parameters {
+                let Some(type_reference) =
+                    lower_type_name_to_type_reference(&parameter.type_name, true, &[], diagnostics)
+                else {
+                    interface_methods_supported = false;
+                    method_supported = false;
+                    break;
+                };
+                executable_parameters.push(ExecutableParameterDeclaration {
+                    name: parameter.name.clone(),
+                    type_reference,
+                });
+            }
+            if !method_supported {
+                continue;
+            }
+            let Some(return_type) =
+                lower_type_name_to_type_reference(&method.return_type, true, &[], diagnostics)
+            else {
+                interface_methods_supported = false;
+                continue;
+            };
+            methods.push(ExecutableInterfaceMethodDeclaration {
+                name: method.name.clone(),
+                self_mutable: method.self_mutable,
+                parameters: executable_parameters,
+                return_type,
+            });
+        }
+        if !interface_methods_supported {
+            continue;
+        }
+        lowered.push(ExecutableInterfaceDeclaration {
+            name: interface_declaration.name.clone(),
+            interface_reference: ExecutableInterfaceReference {
+                package_path: interface_declaration
+                    .interface_reference
+                    .package_path
+                    .clone(),
+                symbol_name: interface_declaration
+                    .interface_reference
+                    .symbol_name
+                    .clone(),
+            },
+            methods,
+        });
     }
     lowered
 }
@@ -424,6 +506,7 @@ fn lower_expression(
                 variant_name: enum_variant_reference.variant_name.clone(),
             },
             type_reference: ExecutableTypeReference::NominalType {
+                nominal_type_reference: None,
                 name: format!(
                     "{}.{}",
                     enum_variant_reference.enum_name, enum_variant_reference.variant_name
@@ -611,9 +694,16 @@ fn lower_type_reference_to_type_reference(
             ExecutableTypeReference::TypeParameter { name: name.clone() }
         }
         TypeAnnotatedResolvedTypeArgument::NominalTypeApplication {
+            base_nominal_type_reference,
             base_name,
             arguments,
         } => ExecutableTypeReference::NominalTypeApplication {
+            base_nominal_type_reference: base_nominal_type_reference.as_ref().map(|reference| {
+                ExecutableNominalTypeReference {
+                    package_path: reference.package_path.clone(),
+                    symbol_name: reference.symbol_name.clone(),
+                }
+            }),
             base_name: base_name.clone(),
             arguments: arguments
                 .iter()
@@ -622,9 +712,18 @@ fn lower_type_reference_to_type_reference(
                 })
                 .collect(),
         },
-        TypeAnnotatedResolvedTypeArgument::NominalType { name } => {
-            ExecutableTypeReference::NominalType { name: name.clone() }
-        }
+        TypeAnnotatedResolvedTypeArgument::NominalType {
+            nominal_type_reference,
+            name,
+        } => ExecutableTypeReference::NominalType {
+            nominal_type_reference: nominal_type_reference.as_ref().map(|reference| {
+                ExecutableNominalTypeReference {
+                    package_path: reference.package_path.clone(),
+                    symbol_name: reference.symbol_name.clone(),
+                }
+            }),
+            name: name.clone(),
+        },
     }
 }
 
@@ -774,11 +873,24 @@ fn lower_type_name_segment_to_type_reference(
                     })
                     .collect::<Option<Vec<_>>>()?;
                 Some(ExecutableTypeReference::NominalTypeApplication {
+                    base_nominal_type_reference: type_name_segment
+                        .nominal_type_reference
+                        .as_ref()
+                        .map(|reference| ExecutableNominalTypeReference {
+                            package_path: reference.package_path.clone(),
+                            symbol_name: reference.symbol_name.clone(),
+                        }),
                     base_name: type_name_segment.name.clone(),
                     arguments,
                 })
             } else {
                 Some(ExecutableTypeReference::NominalType {
+                    nominal_type_reference: type_name_segment.nominal_type_reference.as_ref().map(
+                        |reference| ExecutableNominalTypeReference {
+                            package_path: reference.package_path.clone(),
+                            symbol_name: reference.symbol_name.clone(),
+                        },
+                    ),
                     name: type_name_segment.name.clone(),
                 })
             }

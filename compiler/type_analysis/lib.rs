@@ -18,12 +18,15 @@ use compiler__type_annotated_program::{
     TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference,
     TypeAnnotatedConstantDeclaration, TypeAnnotatedConstantReference,
     TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature, TypeAnnotatedMatchArm,
-    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
-    TypeAnnotatedParameterDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
-    TypeAnnotatedStructLiteralField, TypeAnnotatedStructReference, TypeAnnotatedTypeName,
-    TypeAnnotatedTypeNameSegment, TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
+    TypeAnnotatedInterfaceDeclaration, TypeAnnotatedInterfaceMethodDeclaration,
+    TypeAnnotatedInterfaceReference, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
+    TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
+    TypeAnnotatedNominalTypeReference, TypeAnnotatedParameterDeclaration,
+    TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
+    TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
 };
 
 mod assignability;
@@ -44,6 +47,9 @@ struct TypeAnalysisSummary {
     struct_reference_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedStructReference>,
     enum_variant_reference_by_expression_id:
         BTreeMap<SemanticExpressionId, TypeAnnotatedEnumVariantReference>,
+    nominal_type_reference_by_local_name: HashMap<String, TypeAnnotatedNominalTypeReference>,
+    implemented_interface_references_by_struct_name:
+        HashMap<String, Vec<TypeAnnotatedInterfaceReference>>,
     type_declarations_for_annotations: Vec<SemanticTypeDeclaration>,
     constant_declarations_for_annotations: Vec<SemanticConstantDeclaration>,
     function_declarations_for_annotations: Vec<SemanticFunctionDeclaration>,
@@ -70,39 +76,50 @@ pub fn check_package_unit(
         PhaseStatus::PreventsDownstreamExecution
     };
 
+    let mut type_annotated_file = TypeAnnotatedFile {
+        function_signature_by_name: function_signature_by_name_from_summary(
+            &summary.file_typecheck_summary,
+        ),
+        constant_declarations: build_constant_declaration_annotations(
+            package_path,
+            &summary.constant_declarations_for_annotations,
+            &summary.call_target_by_expression_id,
+            &summary.resolved_type_argument_types_by_expression_id,
+            &summary.struct_reference_by_expression_id,
+            &summary.enum_variant_reference_by_expression_id,
+            &summary.constant_reference_by_expression_id,
+        ),
+        interface_declarations: build_interface_declaration_annotations(
+            package_path,
+            &summary.type_declarations_for_annotations,
+        ),
+        struct_declarations: build_struct_declaration_annotations(
+            package_path,
+            &summary.type_declarations_for_annotations,
+            &summary.implemented_interface_references_by_struct_name,
+            &summary.call_target_by_expression_id,
+            &summary.resolved_type_argument_types_by_expression_id,
+            &summary.struct_reference_by_expression_id,
+            &summary.enum_variant_reference_by_expression_id,
+            &summary.constant_reference_by_expression_id,
+        ),
+        function_declarations: build_function_declaration_annotations(
+            package_path,
+            &summary.function_declarations_for_annotations,
+            &summary.call_target_by_expression_id,
+            &summary.resolved_type_argument_types_by_expression_id,
+            &summary.struct_reference_by_expression_id,
+            &summary.enum_variant_reference_by_expression_id,
+            &summary.constant_reference_by_expression_id,
+        ),
+    };
+    annotate_nominal_type_references(
+        &mut type_annotated_file,
+        &summary.nominal_type_reference_by_local_name,
+    );
+
     PhaseOutput {
-        value: TypeAnnotatedFile {
-            function_signature_by_name: function_signature_by_name_from_summary(
-                &summary.file_typecheck_summary,
-            ),
-            constant_declarations: build_constant_declaration_annotations(
-                package_path,
-                &summary.constant_declarations_for_annotations,
-                &summary.call_target_by_expression_id,
-                &summary.resolved_type_argument_types_by_expression_id,
-                &summary.struct_reference_by_expression_id,
-                &summary.enum_variant_reference_by_expression_id,
-                &summary.constant_reference_by_expression_id,
-            ),
-            struct_declarations: build_struct_declaration_annotations(
-                package_path,
-                &summary.type_declarations_for_annotations,
-                &summary.call_target_by_expression_id,
-                &summary.resolved_type_argument_types_by_expression_id,
-                &summary.struct_reference_by_expression_id,
-                &summary.enum_variant_reference_by_expression_id,
-                &summary.constant_reference_by_expression_id,
-            ),
-            function_declarations: build_function_declaration_annotations(
-                package_path,
-                &summary.function_declarations_for_annotations,
-                &summary.call_target_by_expression_id,
-                &summary.resolved_type_argument_types_by_expression_id,
-                &summary.struct_reference_by_expression_id,
-                &summary.enum_variant_reference_by_expression_id,
-                &summary.constant_reference_by_expression_id,
-            ),
-        },
+        value: type_annotated_file,
         diagnostics,
         status,
     }
@@ -251,6 +268,10 @@ fn build_function_declaration_annotations(
 fn build_struct_declaration_annotations(
     package_path: &str,
     type_declarations: &[SemanticTypeDeclaration],
+    implemented_interface_references_by_struct_name: &HashMap<
+        String,
+        Vec<TypeAnnotatedInterfaceReference>,
+    >,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
         SemanticExpressionId,
@@ -291,6 +312,10 @@ fn build_struct_declaration_annotations(
                             span: type_parameter.span.clone(),
                         })
                         .collect(),
+                    implemented_interfaces: implemented_interface_references_by_struct_name
+                        .get(&type_declaration.name)
+                        .cloned()
+                        .unwrap_or_default(),
                     fields: fields
                         .iter()
                         .map(|field| TypeAnnotatedStructFieldDeclaration {
@@ -343,6 +368,52 @@ fn build_struct_declaration_annotations(
             }
             compiler__semantic_program::SemanticTypeDeclarationKind::Enum { .. }
             | compiler__semantic_program::SemanticTypeDeclarationKind::Interface { .. }
+            | compiler__semantic_program::SemanticTypeDeclarationKind::Union { .. } => None,
+        })
+        .collect()
+}
+
+fn build_interface_declaration_annotations(
+    package_path: &str,
+    type_declarations: &[SemanticTypeDeclaration],
+) -> Vec<TypeAnnotatedInterfaceDeclaration> {
+    type_declarations
+        .iter()
+        .filter_map(|type_declaration| match &type_declaration.kind {
+            compiler__semantic_program::SemanticTypeDeclarationKind::Interface { methods } => {
+                Some(TypeAnnotatedInterfaceDeclaration {
+                    name: type_declaration.name.clone(),
+                    interface_reference: TypeAnnotatedInterfaceReference {
+                        package_path: package_path.to_string(),
+                        symbol_name: type_declaration.name.clone(),
+                    },
+                    methods: methods
+                        .iter()
+                        .map(|method| TypeAnnotatedInterfaceMethodDeclaration {
+                            name: method.name.clone(),
+                            self_mutable: method.self_mutable,
+                            parameters: method
+                                .parameters
+                                .iter()
+                                .map(|parameter| TypeAnnotatedParameterDeclaration {
+                                    name: parameter.name.clone(),
+                                    type_name: type_annotated_type_name_from_semantic_type_name(
+                                        &parameter.type_name,
+                                    ),
+                                    span: parameter.span.clone(),
+                                })
+                                .collect(),
+                            return_type: type_annotated_type_name_from_semantic_type_name(
+                                &method.return_type,
+                            ),
+                            span: method.span.clone(),
+                        })
+                        .collect(),
+                    span: type_declaration.span.clone(),
+                })
+            }
+            compiler__semantic_program::SemanticTypeDeclarationKind::Struct { .. }
+            | compiler__semantic_program::SemanticTypeDeclarationKind::Enum { .. }
             | compiler__semantic_program::SemanticTypeDeclarationKind::Union { .. } => None,
         })
         .collect()
@@ -1079,6 +1150,7 @@ fn type_annotated_type_name_from_semantic_type_name(
             .iter()
             .map(|name_segment| TypeAnnotatedTypeNameSegment {
                 name: name_segment.name.clone(),
+                nominal_type_reference: None,
                 type_arguments: name_segment
                     .type_arguments
                     .iter()
@@ -1088,6 +1160,303 @@ fn type_annotated_type_name_from_semantic_type_name(
             })
             .collect(),
         span: type_name.span.clone(),
+    }
+}
+
+fn annotate_nominal_type_references(
+    type_annotated_file: &mut TypeAnnotatedFile,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    for constant_declaration in &mut type_annotated_file.constant_declarations {
+        annotate_type_name_nominal_references(
+            &mut constant_declaration.type_name,
+            nominal_type_reference_by_local_name,
+        );
+        annotate_expression_nominal_references(
+            &mut constant_declaration.initializer,
+            nominal_type_reference_by_local_name,
+        );
+    }
+
+    for interface_declaration in &mut type_annotated_file.interface_declarations {
+        for method in &mut interface_declaration.methods {
+            for parameter in &mut method.parameters {
+                annotate_type_name_nominal_references(
+                    &mut parameter.type_name,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            annotate_type_name_nominal_references(
+                &mut method.return_type,
+                nominal_type_reference_by_local_name,
+            );
+        }
+    }
+
+    for struct_declaration in &mut type_annotated_file.struct_declarations {
+        for field in &mut struct_declaration.fields {
+            annotate_type_name_nominal_references(
+                &mut field.type_name,
+                nominal_type_reference_by_local_name,
+            );
+        }
+        for method in &mut struct_declaration.methods {
+            for parameter in &mut method.parameters {
+                annotate_type_name_nominal_references(
+                    &mut parameter.type_name,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            annotate_type_name_nominal_references(
+                &mut method.return_type,
+                nominal_type_reference_by_local_name,
+            );
+            for statement in &mut method.statements {
+                annotate_statement_nominal_references(
+                    statement,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+    }
+
+    for function_declaration in &mut type_annotated_file.function_declarations {
+        for type_parameter in &mut function_declaration.type_parameters {
+            if let Some(constraint) = &mut type_parameter.constraint {
+                annotate_type_name_nominal_references(
+                    constraint,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        for parameter in &mut function_declaration.parameters {
+            annotate_type_name_nominal_references(
+                &mut parameter.type_name,
+                nominal_type_reference_by_local_name,
+            );
+        }
+        annotate_type_name_nominal_references(
+            &mut function_declaration.return_type,
+            nominal_type_reference_by_local_name,
+        );
+        for statement in &mut function_declaration.statements {
+            annotate_statement_nominal_references(statement, nominal_type_reference_by_local_name);
+        }
+    }
+}
+
+fn annotate_statement_nominal_references(
+    statement: &mut TypeAnnotatedStatement,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    match statement {
+        TypeAnnotatedStatement::Binding { initializer, .. } => {
+            annotate_expression_nominal_references(
+                initializer,
+                nominal_type_reference_by_local_name,
+            );
+        }
+        TypeAnnotatedStatement::Assign { value, .. }
+        | TypeAnnotatedStatement::Expression { value, .. }
+        | TypeAnnotatedStatement::Return { value, .. } => {
+            annotate_expression_nominal_references(value, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedStatement::If {
+            condition,
+            then_statements,
+            else_statements,
+            ..
+        } => {
+            annotate_expression_nominal_references(condition, nominal_type_reference_by_local_name);
+            for statement in then_statements {
+                annotate_statement_nominal_references(
+                    statement,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            if let Some(else_statements) = else_statements {
+                for statement in else_statements {
+                    annotate_statement_nominal_references(
+                        statement,
+                        nominal_type_reference_by_local_name,
+                    );
+                }
+            }
+        }
+        TypeAnnotatedStatement::For {
+            condition,
+            body_statements,
+            ..
+        } => {
+            if let Some(condition) = condition {
+                annotate_expression_nominal_references(
+                    condition,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            for statement in body_statements {
+                annotate_statement_nominal_references(
+                    statement,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedStatement::Break { .. } | TypeAnnotatedStatement::Continue { .. } => {}
+    }
+}
+
+fn annotate_expression_nominal_references(
+    expression: &mut TypeAnnotatedExpression,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    match expression {
+        TypeAnnotatedExpression::IntegerLiteral { .. }
+        | TypeAnnotatedExpression::BooleanLiteral { .. }
+        | TypeAnnotatedExpression::NilLiteral { .. }
+        | TypeAnnotatedExpression::StringLiteral { .. }
+        | TypeAnnotatedExpression::NameReference { .. }
+        | TypeAnnotatedExpression::EnumVariantLiteral { .. } => {}
+        TypeAnnotatedExpression::StructLiteral {
+            type_name, fields, ..
+        } => {
+            annotate_type_name_nominal_references(type_name, nominal_type_reference_by_local_name);
+            for field in fields {
+                annotate_expression_nominal_references(
+                    &mut field.value,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedExpression::FieldAccess { target, .. } => {
+            annotate_expression_nominal_references(target, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedExpression::Unary { expression, .. } => {
+            annotate_expression_nominal_references(
+                expression,
+                nominal_type_reference_by_local_name,
+            );
+        }
+        TypeAnnotatedExpression::Binary { left, right, .. } => {
+            annotate_expression_nominal_references(left, nominal_type_reference_by_local_name);
+            annotate_expression_nominal_references(right, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedExpression::Call {
+            callee,
+            arguments,
+            type_arguments,
+            resolved_type_arguments,
+            ..
+        } => {
+            annotate_expression_nominal_references(callee, nominal_type_reference_by_local_name);
+            for argument in arguments {
+                annotate_expression_nominal_references(
+                    argument,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            for type_argument in type_arguments {
+                annotate_type_name_nominal_references(
+                    type_argument,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+            for resolved_type_argument in resolved_type_arguments {
+                annotate_resolved_type_argument_nominal_references(
+                    resolved_type_argument,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedExpression::Match { target, arms, .. } => {
+            annotate_expression_nominal_references(target, nominal_type_reference_by_local_name);
+            for arm in arms {
+                annotate_match_pattern_nominal_references(
+                    &mut arm.pattern,
+                    nominal_type_reference_by_local_name,
+                );
+                annotate_expression_nominal_references(
+                    &mut arm.value,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedExpression::Matches {
+            value, type_name, ..
+        } => {
+            annotate_expression_nominal_references(value, nominal_type_reference_by_local_name);
+            annotate_type_name_nominal_references(type_name, nominal_type_reference_by_local_name);
+        }
+    }
+}
+
+fn annotate_resolved_type_argument_nominal_references(
+    resolved_type_argument: &mut TypeAnnotatedResolvedTypeArgument,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    match resolved_type_argument {
+        TypeAnnotatedResolvedTypeArgument::Int64
+        | TypeAnnotatedResolvedTypeArgument::Boolean
+        | TypeAnnotatedResolvedTypeArgument::String
+        | TypeAnnotatedResolvedTypeArgument::Nil
+        | TypeAnnotatedResolvedTypeArgument::Never
+        | TypeAnnotatedResolvedTypeArgument::TypeParameter { .. } => {}
+        TypeAnnotatedResolvedTypeArgument::Union { members } => {
+            for member in members {
+                annotate_resolved_type_argument_nominal_references(
+                    member,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedResolvedTypeArgument::NominalTypeApplication {
+            base_nominal_type_reference,
+            base_name,
+            arguments,
+        } => {
+            *base_nominal_type_reference =
+                nominal_type_reference_by_local_name.get(base_name).cloned();
+            for argument in arguments {
+                annotate_resolved_type_argument_nominal_references(
+                    argument,
+                    nominal_type_reference_by_local_name,
+                );
+            }
+        }
+        TypeAnnotatedResolvedTypeArgument::NominalType {
+            nominal_type_reference,
+            name,
+        } => {
+            *nominal_type_reference = nominal_type_reference_by_local_name.get(name).cloned();
+        }
+    }
+}
+
+fn annotate_match_pattern_nominal_references(
+    pattern: &mut TypeAnnotatedMatchPattern,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    match pattern {
+        TypeAnnotatedMatchPattern::Type { type_name, .. }
+        | TypeAnnotatedMatchPattern::Binding { type_name, .. } => {
+            annotate_type_name_nominal_references(type_name, nominal_type_reference_by_local_name);
+        }
+    }
+}
+
+fn annotate_type_name_nominal_references(
+    type_name: &mut TypeAnnotatedTypeName,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) {
+    for segment in &mut type_name.names {
+        segment.nominal_type_reference = nominal_type_reference_by_local_name
+            .get(&segment.name)
+            .cloned();
+        for type_argument in &mut segment.type_arguments {
+            annotate_type_name_nominal_references(
+                type_argument,
+                nominal_type_reference_by_local_name,
+            );
+        }
     }
 }
 
@@ -1101,6 +1470,7 @@ fn type_annotated_resolved_type_argument_from_type(
         Type::Nil => TypeAnnotatedResolvedTypeArgument::Nil,
         Type::Never => TypeAnnotatedResolvedTypeArgument::Never,
         Type::Named(named) => TypeAnnotatedResolvedTypeArgument::NominalType {
+            nominal_type_reference: None,
             name: named.display_name.clone(),
         },
         Type::TypeParameter(name) => {
@@ -1108,6 +1478,7 @@ fn type_annotated_resolved_type_argument_from_type(
         }
         Type::Applied { base, arguments } => {
             TypeAnnotatedResolvedTypeArgument::NominalTypeApplication {
+                base_nominal_type_reference: None,
                 base_name: base.display_name.clone(),
                 arguments: arguments
                     .iter()
@@ -1421,10 +1792,71 @@ impl<'a> TypeChecker<'a> {
             enum_variant_reference_by_expression_id: self
                 .enum_variant_reference_by_expression_id
                 .clone(),
+            nominal_type_reference_by_local_name: self.nominal_type_reference_by_local_name(),
+            implemented_interface_references_by_struct_name: self
+                .implemented_interface_references_by_struct_name(type_declarations),
             type_declarations_for_annotations: Vec::new(),
             constant_declarations_for_annotations: Vec::new(),
             function_declarations_for_annotations: Vec::new(),
         }
+    }
+
+    fn nominal_type_reference_by_local_name(
+        &self,
+    ) -> HashMap<String, TypeAnnotatedNominalTypeReference> {
+        let mut nominal_type_reference_by_local_name = HashMap::new();
+        for (local_name, type_info) in &self.types {
+            nominal_type_reference_by_local_name.insert(
+                local_name.clone(),
+                TypeAnnotatedNominalTypeReference {
+                    package_path: type_info.package_path.clone(),
+                    symbol_name: type_info.nominal_type_id.symbol_name.clone(),
+                },
+            );
+        }
+        nominal_type_reference_by_local_name
+    }
+
+    fn implemented_interface_references_by_struct_name(
+        &self,
+        type_declarations: &[SemanticTypeDeclaration],
+    ) -> HashMap<String, Vec<TypeAnnotatedInterfaceReference>> {
+        let mut implemented_interface_references_by_struct_name = HashMap::new();
+        for type_declaration in type_declarations {
+            let compiler__semantic_program::SemanticTypeDeclarationKind::Struct { .. } =
+                &type_declaration.kind
+            else {
+                continue;
+            };
+            let Some(type_info) = self.types.get(&type_declaration.name) else {
+                continue;
+            };
+            let interface_references = type_info
+                .implemented_interface_entries
+                .iter()
+                .filter_map(|entry| {
+                    self.type_annotated_interface_reference_from_type(&entry.resolved_type)
+                })
+                .collect::<Vec<_>>();
+            implemented_interface_references_by_struct_name
+                .insert(type_declaration.name.clone(), interface_references);
+        }
+        implemented_interface_references_by_struct_name
+    }
+
+    fn type_annotated_interface_reference_from_type(
+        &self,
+        value_type: &Type,
+    ) -> Option<TypeAnnotatedInterfaceReference> {
+        let nominal_type_id = Self::nominal_type_id_for_type(value_type)?;
+        let type_info = self.type_info_by_nominal_type_id(&nominal_type_id)?;
+        if !matches!(type_info.kind, TypeKind::Interface { .. }) {
+            return None;
+        }
+        Some(TypeAnnotatedInterfaceReference {
+            package_path: type_info.package_path.clone(),
+            symbol_name: nominal_type_id.symbol_name.clone(),
+        })
     }
 
     fn imported_constant_type(&self, name: &str) -> Option<Type> {

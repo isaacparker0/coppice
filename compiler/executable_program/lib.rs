@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct ExecutableProgram {
     pub entrypoint_callable_reference: ExecutableCallableReference,
     pub constant_declarations: Vec<ExecutableConstantDeclaration>,
+    pub interface_declarations: Vec<ExecutableInterfaceDeclaration>,
     pub struct_declarations: Vec<ExecutableStructDeclaration>,
     pub function_declarations: Vec<ExecutableFunctionDeclaration>,
 }
@@ -45,12 +46,25 @@ pub struct ExecutableStructDeclaration {
     pub name: String,
     pub struct_reference: ExecutableStructReference,
     pub type_parameter_names: Vec<String>,
+    pub implemented_interfaces: Vec<ExecutableInterfaceReference>,
     pub fields: Vec<ExecutableStructFieldDeclaration>,
     pub methods: Vec<ExecutableMethodDeclaration>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ExecutableStructReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ExecutableInterfaceReference {
+    pub package_path: String,
+    pub symbol_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutableNominalTypeReference {
     pub package_path: String,
     pub symbol_name: String,
 }
@@ -83,6 +97,21 @@ pub struct ExecutableMethodDeclaration {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutableInterfaceDeclaration {
+    pub name: String,
+    pub interface_reference: ExecutableInterfaceReference,
+    pub methods: Vec<ExecutableInterfaceMethodDeclaration>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecutableInterfaceMethodDeclaration {
+    pub name: String,
+    pub self_mutable: bool,
+    pub parameters: Vec<ExecutableParameterDeclaration>,
+    pub return_type: ExecutableTypeReference,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecutableConstantDeclaration {
     pub name: String,
     pub constant_reference: ExecutableConstantReference,
@@ -104,10 +133,12 @@ pub enum ExecutableTypeReference {
         name: String,
     },
     NominalTypeApplication {
+        base_nominal_type_reference: Option<ExecutableNominalTypeReference>,
         base_name: String,
         arguments: Vec<ExecutableTypeReference>,
     },
     NominalType {
+        nominal_type_reference: Option<ExecutableNominalTypeReference>,
         name: String,
     },
 }

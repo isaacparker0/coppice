@@ -34,6 +34,7 @@ pub struct CheckedTarget {
 
 struct AnalyzedTarget {
     diagnostics: Vec<RenderedDiagnostic>,
+    all_diagnostics_by_file: BTreeMap<PathBuf, Vec<RenderedDiagnostic>>,
     source_by_path: BTreeMap<String, String>,
     workspace_root: PathBuf,
     workspace: Workspace,
@@ -205,6 +206,7 @@ fn analyze_target_with_workspace_root(
     let scope_is_workspace = scoped_package_paths.is_none();
 
     let mut rendered_diagnostics = Vec::new();
+    let mut all_diagnostics_by_file = BTreeMap::<PathBuf, Vec<RenderedDiagnostic>>::new();
     let mut source_by_path = BTreeMap::new();
     let mut parsed_units = Vec::new();
     let mut package_path_by_file = BTreeMap::new();
@@ -237,14 +239,19 @@ fn analyze_target_with_workspace_root(
             let rendered_path = display_path(&absolute_path);
             source_by_path.insert(rendered_path.clone(), source.clone());
             let parse_result = parse_file(&source, role);
-            if package_in_scope {
-                for diagnostic in &parse_result.diagnostics {
-                    rendered_diagnostics.push(render_diagnostic(
-                        DiagnosticPhase::Parsing,
-                        rendered_path.clone(),
-                        diagnostic.clone(),
-                    ));
-                }
+            for diagnostic in &parse_result.diagnostics {
+                let rendered_diagnostic = render_diagnostic(
+                    DiagnosticPhase::Parsing,
+                    rendered_path.clone(),
+                    diagnostic.clone(),
+                );
+                push_rendered_diagnostic(
+                    &mut rendered_diagnostics,
+                    &mut all_diagnostics_by_file,
+                    &relative_path,
+                    rendered_diagnostic,
+                    package_in_scope,
+                );
             }
             parsed_units.push(ParsedUnit {
                 package_id: package.id,
@@ -271,26 +278,38 @@ fn analyze_target_with_workspace_root(
         let file_role_rules_result = file_role_rules::check_file(&parsed_unit.parsed);
         parsed_unit.phase_state.file_role_rules = file_role_rules_result.status;
 
-        if !scope_is_workspace
-            && !scoped_package_paths
-                .as_ref()
-                .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
-        {
-            continue;
-        }
+        let parsed_unit_in_scope = is_parsed_unit_in_scope(
+            parsed_unit,
+            scope_is_workspace,
+            scoped_package_paths.as_ref(),
+        );
         for diagnostic in syntax_rules_result.diagnostics {
-            rendered_diagnostics.push(render_diagnostic(
+            let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::SyntaxRules,
                 display_path(&diagnostic_display_base.join(&parsed_unit.path)),
                 diagnostic,
-            ));
+            );
+            push_rendered_diagnostic(
+                &mut rendered_diagnostics,
+                &mut all_diagnostics_by_file,
+                &parsed_unit.path,
+                rendered_diagnostic,
+                parsed_unit_in_scope,
+            );
         }
         for diagnostic in file_role_rules_result.diagnostics {
-            rendered_diagnostics.push(render_diagnostic(
+            let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::FileRoleRules,
                 display_path(&diagnostic_display_base.join(&parsed_unit.path)),
                 diagnostic,
-            ));
+            );
+            push_rendered_diagnostic(
+                &mut rendered_diagnostics,
+                &mut all_diagnostics_by_file,
+                &parsed_unit.path,
+                rendered_diagnostic,
+                parsed_unit_in_scope,
+            );
         }
     }
 
@@ -317,18 +336,23 @@ fn analyze_target_with_workspace_root(
     } in resolution_result.diagnostics
     {
         if let Some(parsed_unit) = parsed_units.iter().find(|unit| unit.path == path) {
-            if !scope_is_workspace
-                && !scoped_package_paths
-                    .as_ref()
-                    .is_some_and(|scoped| scoped.contains(&parsed_unit.package_path))
-            {
-                continue;
-            }
-            rendered_diagnostics.push(render_diagnostic(
+            let parsed_unit_in_scope = is_parsed_unit_in_scope(
+                parsed_unit,
+                scope_is_workspace,
+                scoped_package_paths.as_ref(),
+            );
+            let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::Resolution,
                 display_path(&diagnostic_display_base.join(&path)),
                 PhaseDiagnostic::new(message, span),
-            ));
+            );
+            push_rendered_diagnostic(
+                &mut rendered_diagnostics,
+                &mut all_diagnostics_by_file,
+                &path,
+                rendered_diagnostic,
+                parsed_unit_in_scope,
+            );
         }
     }
 
@@ -350,14 +374,19 @@ fn analyze_target_with_workspace_root(
             scope_is_workspace,
             scoped_package_paths.as_ref(),
         );
-        if parsed_unit_in_scope {
-            for diagnostic in diagnostics {
-                rendered_diagnostics.push(render_diagnostic(
-                    DiagnosticPhase::SemanticLowering,
-                    display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                    diagnostic,
-                ));
-            }
+        for diagnostic in diagnostics {
+            let rendered_diagnostic = render_diagnostic(
+                DiagnosticPhase::SemanticLowering,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                diagnostic,
+            );
+            push_rendered_diagnostic(
+                &mut rendered_diagnostics,
+                &mut all_diagnostics_by_file,
+                &parsed_unit.path,
+                rendered_diagnostic,
+                parsed_unit_in_scope,
+            );
         }
         if matches!(parsed_unit.phase_state.semantic_lowering, PhaseStatus::Ok) {
             semantic_file_by_path.insert(parsed_unit.path.clone(), value);
@@ -408,28 +437,30 @@ fn analyze_target_with_workspace_root(
             type_annotated_file_by_path
                 .insert(parsed_unit.path.clone(), type_analysis_result.value.clone());
         }
-        if parsed_unit_in_scope {
-            for diagnostic in type_analysis_result.diagnostics {
-                rendered_diagnostics.push(render_diagnostic(
-                    DiagnosticPhase::TypeAnalysis,
-                    display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                    diagnostic,
-                ));
-            }
+        for diagnostic in type_analysis_result.diagnostics {
+            let rendered_diagnostic = render_diagnostic(
+                DiagnosticPhase::TypeAnalysis,
+                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                diagnostic,
+            );
+            push_rendered_diagnostic(
+                &mut rendered_diagnostics,
+                &mut all_diagnostics_by_file,
+                &parsed_unit.path,
+                rendered_diagnostic,
+                parsed_unit_in_scope,
+            );
         }
     }
 
-    rendered_diagnostics.sort_by(|left, right| {
-        left.path
-            .cmp(&right.path)
-            .then(left.span.line.cmp(&right.span.line))
-            .then(left.span.column.cmp(&right.span.column))
-            .then(left.message.cmp(&right.message))
-            .then(left.phase.cmp(&right.phase))
-    });
+    sort_rendered_diagnostics(&mut rendered_diagnostics);
+    for diagnostics in all_diagnostics_by_file.values_mut() {
+        sort_rendered_diagnostics(diagnostics);
+    }
 
     Ok(AnalyzedTarget {
         diagnostics: rendered_diagnostics,
+        all_diagnostics_by_file,
         source_by_path,
         workspace_root,
         workspace,
@@ -594,6 +625,33 @@ fn render_diagnostic(
     }
 }
 
+fn push_rendered_diagnostic(
+    in_scope_diagnostics: &mut Vec<RenderedDiagnostic>,
+    all_diagnostics_by_file: &mut BTreeMap<PathBuf, Vec<RenderedDiagnostic>>,
+    file_path: &Path,
+    rendered_diagnostic: RenderedDiagnostic,
+    include_in_scope_output: bool,
+) {
+    if include_in_scope_output {
+        in_scope_diagnostics.push(rendered_diagnostic.clone());
+    }
+    all_diagnostics_by_file
+        .entry(file_path.to_path_buf())
+        .or_default()
+        .push(rendered_diagnostic);
+}
+
+fn sort_rendered_diagnostics(diagnostics: &mut [RenderedDiagnostic]) {
+    diagnostics.sort_by(|left, right| {
+        left.path
+            .cmp(&right.path)
+            .then(left.span.line.cmp(&right.span.line))
+            .then(left.span.column.cmp(&right.span.column))
+            .then(left.message.cmp(&right.message))
+            .then(left.phase.cmp(&right.phase))
+    });
+}
+
 fn display_path(path: &Path) -> String {
     let absolute_path = if path.is_absolute() {
         path.to_path_buf()
@@ -653,6 +711,22 @@ pub fn build_target_with_workspace_root(
         binary_entrypoint_package_path,
         &analyzed_target.resolved_imports,
     );
+    let mut reachable_diagnostics = Vec::new();
+    for (file_path, file_diagnostics) in &analyzed_target.all_diagnostics_by_file {
+        let Some(package_path) = analyzed_target.package_path_by_file.get(file_path) else {
+            continue;
+        };
+        if !reachable_package_paths.contains(package_path) {
+            continue;
+        }
+        reachable_diagnostics.extend(file_diagnostics.iter().cloned());
+    }
+    sort_rendered_diagnostics(&mut reachable_diagnostics);
+    if !reachable_diagnostics.is_empty() {
+        return Err(build_failed_from_rendered_diagnostics(
+            &reachable_diagnostics,
+        ));
+    }
     let dependency_library_files = analyzed_target
         .type_annotated_file_by_path
         .iter()
