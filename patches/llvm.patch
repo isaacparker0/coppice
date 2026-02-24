@@ -34,11 +34,58 @@
      name = "cpp_compile_actions_without_header_parsing",
      # See https://github.com/bazelbuild/rules_cc/blob/6dd2ef1fefbca004da449578c00d8ffb91a459ca/cc/toolchains/actions/BUILD#L224
 
+--- toolchain/bootstrap/declare_toolchains.bzl
++++ toolchain/bootstrap/declare_toolchains.bzl
+@@ -162,6 +162,7 @@
+             prefix + "/bin/lld",
+             prefix + "/bin/wasm-ld",
+         ],
++        visibility = ["//visibility:public"],
+     )
+ 
+     bootstrap_binary(
+
+--- toolchain/llvm/llvm.bzl
++++ toolchain/llvm/llvm.bzl
+@@ -147,6 +147,7 @@
+             "bin/lld" + suffix,
+             "bin/wasm-ld" + suffix,
+         ],
++        visibility = ["//visibility:public"],
+     )
+ 
+     cc_tool(
+
+--- toolchain/selects.bzl
++++ toolchain/selects.bzl
+@@ -10,6 +10,20 @@
+         "@llvm//toolchain:bootstrapped_toolchain": "@llvm//toolchain/bootstrap:" + binary,
+     })
+ 
++def platform_link_action_tool():
++    return select({
++        "@llvm//platforms/config:macos_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-darwin-arm64//:lld" % LLVM_VERSION,
++        "@llvm//platforms/config:linux_x86_64_prebuilt": "@llvm-toolchain-minimal-%s-linux-amd64//:lld" % LLVM_VERSION,
++        "@llvm//platforms/config:linux_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-linux-arm64//:lld" % LLVM_VERSION,
++        "@llvm//platforms/config:windows_aarch64_prebuilt": "@llvm-toolchain-minimal-%s-windows-arm64//:lld" % LLVM_VERSION,
++        "@llvm//platforms/config:windows_x86_64_prebuilt": "@llvm-toolchain-minimal-%s-windows-amd64//:lld" % LLVM_VERSION,
++        "@llvm//platforms/config:macos_aarch64": "@llvm//toolchain/bootstrap:macos_aarch64/lld",
++        "@llvm//platforms/config:linux_x86_64": "@llvm//toolchain/bootstrap:linux_x86_64/lld",
++        "@llvm//platforms/config:linux_aarch64": "@llvm//toolchain/bootstrap:linux_aarch64/lld",
++        "@llvm//platforms/config:windows_aarch64": "@llvm//toolchain/bootstrap:windows_aarch64/lld",
++        "@llvm//platforms/config:windows_x86_64": "@llvm//toolchain/bootstrap:windows_x86_64/lld",
++    })
++
+ def platform_extra_binary(binary):
+     return select({
+         "@llvm//platforms/config:macos_aarch64": "@toolchain-extra-prebuilts-darwin-arm64//:%s" % binary,
+
 --- tools/internal/BUILD.bazel
 +++ tools/internal/BUILD.bazel
-@@ -1,4 +1,9 @@
+@@ -1,4 +1,10 @@
  load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 +load("@rules_cc//cc:cc_library.bzl", "cc_library")
++load("@llvm//toolchain:selects.bzl", "platform_link_action_tool")
 +load(
 +    ":linker_contracts.bzl",
 +    "linker_contract_from_cc_toolchain",
@@ -46,7 +93,7 @@
  
  cc_binary(
      name = "header-parser",
-@@ -11,3 +16,119 @@
+@@ -11,3 +17,126 @@
      srcs = ["static_library_validator.cc"],
      visibility = ["//visibility:public"],
  )
@@ -54,6 +101,12 @@
 +linker_contract_from_cc_toolchain(
 +    name = "linker_contract",
 +    out = "linker_contract.txt",
++)
++
++alias(
++    name = "link_action_tool",
++    actual = platform_link_action_tool(),
++    visibility = ["//visibility:private"],
 +)
 +
 +genrule(
@@ -65,7 +118,7 @@
 +        "",
 +        "namespace llvm {",
 +        "",
-+        "const char* kLinkerWrapperClangRlocation = \"$(rlocationpath //tools:clang++)\";",
++        "const char* kLinkerWrapperLinkerToolRlocation = \"$(rlocationpath //tools:clang++)\";",
 +        "const char* kLinkerWrapperContractRlocation = \"$(rlocationpath :linker_contract)\";",
 +        "const char* kLinkerWrapperLibcxxSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libcxx:libcxx_library_search_directory)\";",
 +        "const char* kLinkerWrapperLibunwindSearchDirectoryRlocation = \"$(rlocationpath //runtimes/libunwind:libunwind_library_search_directory)\";",
@@ -77,6 +130,7 @@
 +        "//runtimes/libcxx:libcxx_library_search_directory",
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//tools:clang++",
++        ":link_action_tool",
 +        ":linker_contract",
 +    ],
 +)
@@ -97,7 +151,7 @@
 +        "//runtimes:resource_directory",
 +        "//runtimes/libcxx:libcxx_library_search_directory",
 +        "//runtimes/libunwind:libunwind_library_search_directory",
-+        "//tools:clang++",
++        ":link_action_tool",
 +        "@macos_sdk//sysroot:sysroot_files",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
@@ -125,7 +179,7 @@
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
-+        "//tools:clang++",
++        ":link_action_tool",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
@@ -152,7 +206,7 @@
 +        "//runtimes/libunwind:libunwind_library_search_directory",
 +        "//runtimes/glibc:glibc_library_search_directory",
 +        "//runtimes:resource_directory",
-+        "//tools:clang++",
++        ":link_action_tool",
 +        "@compiler-rt//:clang_rt.builtins.static",
 +        ":linker_contract",
 +    ],
@@ -546,9 +600,9 @@
 +    return 2;
 +  }
 +
-+  const std::string clang_path =
-+      ResolveRunfilePath(*runfiles, llvm::kLinkerWrapperClangRlocation,
-+                         "platform clang++");
++  const std::string linker_tool_path =
++      ResolveRunfilePath(*runfiles, llvm::kLinkerWrapperLinkerToolRlocation,
++                         "platform linker tool");
 +  const std::string contract_path = ResolveRunfilePath(
 +      *runfiles, llvm::kLinkerWrapperContractRlocation,
 +      "linker contract");
@@ -559,7 +613,7 @@
 +
 +  std::vector<std::string> argument_storage;
 +  argument_storage.reserve(static_cast<size_t>(argc) + 24);
-+  argument_storage.push_back(clang_path);
++  argument_storage.push_back(linker_tool_path);
 +
 +  AppendLinkerContractArguments(contract_path, workspace_execroot, output_base,
 +                                runfiles_root, *runfiles, &argument_storage);
@@ -575,9 +629,9 @@
 +  }
 +  exec_arguments.push_back(nullptr);
 +
-+  execv(clang_path.c_str(), exec_arguments.data());
++  execv(linker_tool_path.c_str(), exec_arguments.data());
 +  fprintf(stderr, "linker_wrapper: execv failed for '%s': %s\n",
-+          clang_path.c_str(), strerror(errno));
++          linker_tool_path.c_str(), strerror(errno));
 +  return 2;
 +}
 
@@ -588,7 +642,7 @@
 +
 +namespace llvm {
 +
-+extern const char* kLinkerWrapperClangRlocation;
++extern const char* kLinkerWrapperLinkerToolRlocation;
 +extern const char* kLinkerWrapperContractRlocation;
 +extern const char* kLinkerWrapperLibcxxSearchDirectoryRlocation;
 +extern const char* kLinkerWrapperLibunwindSearchDirectoryRlocation;
