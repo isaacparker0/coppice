@@ -1,6 +1,8 @@
 name: Renovate
 on:
     workflow_dispatch:
+    schedule:
+        - cron: "0 9 * * *"
 env:
     # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate
     RENOVATE_VERSION: "43.31.1"
