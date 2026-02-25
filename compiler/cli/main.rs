@@ -8,7 +8,8 @@ use compiler__check_pipeline::{
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
-    CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
+    CompilerCheckJsonOutput, CompilerCheckSafeFix, CompilerFailure, CompilerFailureKind,
+    RenderedDiagnostic, ReportFormat,
 };
 
 #[derive(Parser)]
@@ -27,11 +28,15 @@ enum Command {
         path: Option<String>,
         #[arg(long, default_value_t = ReportFormat::Text)]
         format: ReportFormat,
+        #[arg(long)]
+        strict: bool,
     },
     Build {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+        #[arg(long)]
+        strict: bool,
     },
     Fix {
         path: Option<String>,
@@ -40,6 +45,8 @@ enum Command {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+        #[arg(long)]
+        strict: bool,
     },
     Lsp {
         #[arg(long)]
@@ -51,12 +58,25 @@ fn main() {
     let command_line = CommandLine::parse();
     let workspace_root = command_line.workspace_root.as_deref();
     match command_line.command {
-        Command::Check { path, format } => {
+        Command::Check {
+            path,
+            format,
+            strict,
+        } => {
             let path = path.unwrap_or_else(|| ".".to_string());
-            run_check(&path, workspace_root, format);
+            run_check(&path, workspace_root, format, strict);
         }
-        Command::Build { path, output_dir } => {
-            match build_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
+        Command::Build {
+            path,
+            output_dir,
+            strict,
+        } => {
+            match build_target_with_workspace_root(
+                &path,
+                workspace_root,
+                output_dir.as_deref(),
+                strict,
+            ) {
                 Ok(built) => println!("{}", built.executable_path),
                 Err(error) => {
                     render_compiler_failure_text(&path, &error);
@@ -68,8 +88,17 @@ fn main() {
             let path = path.unwrap_or_else(|| ".".to_string());
             run_fix(&path, workspace_root);
         }
-        Command::Run { path, output_dir } => {
-            match run_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
+        Command::Run {
+            path,
+            output_dir,
+            strict,
+        } => {
+            match run_target_with_workspace_root(
+                &path,
+                workspace_root,
+                output_dir.as_deref(),
+                strict,
+            ) {
                 Ok(exit_code) => {
                     if exit_code != 0 {
                         process::exit(exit_code);
@@ -121,32 +150,60 @@ fn run_fix(path: &str, workspace_root: Option<&str>) {
     }
 }
 
-fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportFormat) {
+fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportFormat, strict: bool) {
     match check_target_with_workspace_root(path, workspace_root) {
-        Ok(checked_target) => match report_format {
-            ReportFormat::Text => {
-                if checked_target.diagnostics.is_empty() {
-                    println!("ok");
-                } else {
-                    render_diagnostics_text(
-                        &checked_target.diagnostics,
-                        &checked_target.source_by_path,
-                    );
-                    process::exit(1);
+        Ok(checked_target) => {
+            let safe_fixes =
+                safe_fix_summaries(&checked_target.safe_autofix_edits_by_workspace_relative_path);
+            let has_pending_safe_fixes = !safe_fixes.is_empty();
+            let strict_policy_failure =
+                strict && has_pending_safe_fixes && checked_target.diagnostics.is_empty();
+            let strict_policy_error = strict_policy_failure.then(|| CompilerFailure {
+                kind: CompilerFailureKind::CheckFailed,
+                message: "check failed due to pending safe autofixes".to_string(),
+                path: Some(path.to_string()),
+                details: safe_fixes
+                    .iter()
+                    .map(|safe_fix| compiler__reports::CompilerFailureDetail {
+                        message: format!("{} pending safe autofix edits", safe_fix.edit_count),
+                        path: Some(safe_fix.path.clone()),
+                    })
+                    .collect(),
+            });
+
+            match report_format {
+                ReportFormat::Text => {
+                    if !checked_target.diagnostics.is_empty() {
+                        render_diagnostics_text(
+                            &checked_target.diagnostics,
+                            &checked_target.source_by_path,
+                        );
+                    } else if let Some(error) = &strict_policy_error {
+                        render_compiler_failure_text(path, error);
+                    } else {
+                        println!("ok");
+                    }
+                    if has_pending_safe_fixes {
+                        render_safe_fixes_text(&safe_fixes);
+                    }
+                    if !checked_target.diagnostics.is_empty() || strict_policy_failure {
+                        process::exit(1);
+                    }
+                }
+                ReportFormat::Json => {
+                    let output = CompilerCheckJsonOutput {
+                        ok: checked_target.diagnostics.is_empty() && !strict_policy_failure,
+                        diagnostics: checked_target.diagnostics.clone(),
+                        safe_fixes: safe_fixes.clone(),
+                        error: strict_policy_error,
+                    };
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    if !checked_target.diagnostics.is_empty() || strict_policy_failure {
+                        process::exit(1);
+                    }
                 }
             }
-            ReportFormat::Json => {
-                let output = CompilerCheckJsonOutput {
-                    ok: checked_target.diagnostics.is_empty(),
-                    diagnostics: checked_target.diagnostics.clone(),
-                    error: None,
-                };
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
-                if !checked_target.diagnostics.is_empty() {
-                    process::exit(1);
-                }
-            }
-        },
+        }
         Err(error) => {
             match report_format {
                 ReportFormat::Text => {
@@ -156,6 +213,7 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     let output = CompilerCheckJsonOutput {
                         ok: false,
                         diagnostics: Vec::new(),
+                        safe_fixes: Vec::new(),
                         error: Some(error),
                     };
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
@@ -163,6 +221,39 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
             }
             process::exit(1);
         }
+    }
+}
+
+fn safe_fix_summaries(
+    safe_autofix_edits_by_workspace_relative_path: &std::collections::BTreeMap<
+        String,
+        Vec<compiler__fix_edits::TextEdit>,
+    >,
+) -> Vec<CompilerCheckSafeFix> {
+    safe_autofix_edits_by_workspace_relative_path
+        .iter()
+        .map(|(path, text_edits)| CompilerCheckSafeFix {
+            path: path.clone(),
+            edit_count: text_edits.len(),
+        })
+        .collect()
+}
+
+fn render_safe_fixes_text(safe_fixes: &[CompilerCheckSafeFix]) {
+    if safe_fixes.is_empty() {
+        return;
+    }
+    let total_edit_count: usize = safe_fixes.iter().map(|safe_fix| safe_fix.edit_count).sum();
+    eprintln!(
+        "safe autofixes available in {} files ({} edits total)",
+        safe_fixes.len(),
+        total_edit_count
+    );
+    for safe_fix in safe_fixes {
+        eprintln!(
+            "{}: {} pending safe autofix edits",
+            safe_fix.path, safe_fix.edit_count
+        );
     }
 }
 

@@ -22,8 +22,25 @@ pub fn build_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
     output_directory_override: Option<&str>,
+    strict: bool,
 ) -> Result<BuiltTarget, CompilerFailure> {
     let mut analyzed_target = analyze_target_with_workspace_root(path, workspace_root_override)?;
+    if strict
+        && !analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path
+            .is_empty()
+    {
+        let safe_autofix_edit_count_by_workspace_relative_path = analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path
+            .iter()
+            .map(|(workspace_relative_path, text_edits)| {
+                (workspace_relative_path.clone(), text_edits.len())
+            })
+            .collect::<BTreeMap<_, _>>();
+        return Err(build_failed_from_pending_safe_autofixes(
+            &safe_autofix_edit_count_by_workspace_relative_path,
+        ));
+    }
     if !analyzed_target
         .canonical_source_override_by_workspace_relative_path
         .is_empty()
@@ -151,9 +168,14 @@ pub fn run_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
     output_directory_override: Option<&str>,
+    strict: bool,
 ) -> Result<i32, CompilerFailure> {
-    let built =
-        build_target_with_workspace_root(path, workspace_root_override, output_directory_override)?;
+    let built = build_target_with_workspace_root(
+        path,
+        workspace_root_override,
+        output_directory_override,
+        strict,
+    )?;
     run_program(Path::new(&built.executable_path))
 }
 
@@ -243,6 +265,25 @@ fn build_failed_from_rendered_diagnostics(diagnostics: &[RenderedDiagnostic]) ->
                 ),
                 path: Some(diagnostic.path.clone()),
             })
+            .collect(),
+    }
+}
+
+fn build_failed_from_pending_safe_autofixes(
+    safe_autofix_edit_count_by_workspace_relative_path: &BTreeMap<String, usize>,
+) -> CompilerFailure {
+    CompilerFailure {
+        kind: CompilerFailureKind::BuildFailed,
+        message: "build failed due to pending safe autofixes".to_string(),
+        path: None,
+        details: safe_autofix_edit_count_by_workspace_relative_path
+            .iter()
+            .map(
+                |(workspace_relative_path, text_edit_count)| CompilerFailureDetail {
+                    message: format!("{text_edit_count} pending safe autofix edits"),
+                    path: Some(workspace_relative_path.clone()),
+                },
+            )
             .collect(),
     }
 }

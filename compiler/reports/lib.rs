@@ -70,6 +70,7 @@ pub struct CompilerFailure {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CompilerFailureKind {
+    CheckFailed,
     ReadSource,
     WriteSource,
     InvalidWorkspaceRoot,
@@ -94,6 +95,14 @@ pub struct CompilerFailureDetail {
 pub struct CompilerCheckJsonOutput {
     pub ok: bool,
     pub diagnostics: Vec<RenderedDiagnostic>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub safe_fixes: Vec<CompilerCheckSafeFix>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<CompilerFailure>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CompilerCheckSafeFix {
+    pub path: String,
+    pub edit_count: usize,
 }
