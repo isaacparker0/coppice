@@ -540,6 +540,13 @@ impl TypeChecker<'_> {
     ) -> Type {
         let value_type = self.check_expression(value);
         let pattern_type = self.resolve_match_pattern_type_name(type_name, &type_name.span);
+        if pattern_type == Type::Nil {
+            self.error(
+                "use '== nil' or '!= nil' instead of 'matches nil'",
+                type_name.span.clone(),
+            );
+            return Type::Boolean;
+        }
         if value_type == Type::Unknown || pattern_type == Type::Unknown {
             return Type::Boolean;
         }

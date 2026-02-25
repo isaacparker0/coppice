@@ -4,6 +4,7 @@
 .env.local
 .pnpm-store
 .terraform
+.vite
 bazel-*
 node_modules
 target

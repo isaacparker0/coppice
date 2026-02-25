@@ -1,0 +1,3 @@
+function hasValue(value: int64 | nil) -> boolean {
+    return value matches nil
+}
