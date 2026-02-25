@@ -28,10 +28,11 @@ function activate(context) {
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    // TODO: Make server command/args configurable via extension settings.
-    const serverCommand = path.join(workspaceRoot, "bin", "coppice-lsp");
-    const serverArgs = ["--workspace-root", workspaceRoot, "lsp"];
-    outputChannel.appendLine(`[activate] workspaceRoot=${workspaceRoot}`);
+    // TODO: if we were to publish the extension, we would need to make server
+    // command configurable via extension settings.
+    const serverCommand = path.join(workspaceRoot, "bin", "coppice");
+    const serverArgs = ["lsp"];
+    outputChannel.appendLine(`[activate] workspaceFolder=${workspaceRoot}`);
     outputChannel.appendLine(`[activate] serverCommand=${serverCommand}`);
     outputChannel.appendLine(
         `[activate] serverArgs=${JSON.stringify(serverArgs)}`,

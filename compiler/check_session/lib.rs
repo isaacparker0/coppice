@@ -6,7 +6,7 @@ use compiler__reports::CompilerFailure;
 
 pub struct CheckSession {
     workspace_root: Option<String>,
-    source_override_by_workspace_relative_path: BTreeMap<String, String>,
+    source_override_by_path: BTreeMap<String, String>,
 }
 
 impl CheckSession {
@@ -14,7 +14,7 @@ impl CheckSession {
     pub fn new(workspace_root: Option<String>) -> Self {
         Self {
             workspace_root: workspace_root.map(|root| normalize_workspace_root(&root)),
-            source_override_by_workspace_relative_path: BTreeMap::new(),
+            source_override_by_path: BTreeMap::new(),
         }
     }
 
@@ -27,21 +27,20 @@ impl CheckSession {
         self.workspace_root = workspace_root.map(|root| normalize_workspace_root(&root));
     }
 
-    pub fn open_or_update_document(&mut self, workspace_relative_path: &str, source: String) {
-        self.source_override_by_workspace_relative_path
-            .insert(workspace_relative_path.to_string(), source);
+    pub fn open_or_update_document(&mut self, path: &str, source: String) {
+        self.source_override_by_path
+            .insert(path.to_string(), source);
     }
 
-    pub fn close_document(&mut self, workspace_relative_path: &str) {
-        self.source_override_by_workspace_relative_path
-            .remove(workspace_relative_path);
+    pub fn close_document(&mut self, path: &str) {
+        self.source_override_by_path.remove(path);
     }
 
     pub fn check_target(&self, path: &str) -> Result<CheckedTarget, CompilerFailure> {
         check_target_with_workspace_root_and_overrides(
             path,
             self.workspace_root.as_deref(),
-            &self.source_override_by_workspace_relative_path,
+            &self.source_override_by_path,
         )
     }
 }

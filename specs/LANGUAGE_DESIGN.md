@@ -1007,14 +1007,19 @@ Built into the compiler, not a separate tool.
 Command invocation policy:
 
 - Commands are run from workspace root.
-- Workspace root is explicit:
-  - default: current working directory
-  - override: `--workspace-root <path>`
-- A valid workspace root must contain `PACKAGE.copp` at its root.
-- Invoking with an invalid workspace root is a compile-time error.
+- Workspace root resolution:
+  - explicit override: `--workspace-root <path>`
+  - default discovery: nearest ancestor `COPPICE_WORKSPACE` marker from the
+    target path (or current working directory when no explicit target path is
+    provided)
+- If workspace root cannot be resolved, command fails before package discovery.
+- `PACKAGE.copp` defines package boundaries, not workspace root.
 - `check` (no path) is canonical and equivalent to `check .`.
-- `check <path>` accepts a file or directory path resolved relative to workspace
-  root.
+- `check <path>` accepts a file or directory path.
+  - with `--workspace-root`, relative paths are resolved against that workspace
+    root.
+  - without `--workspace-root`, relative paths are resolved against current
+    working directory.
 - If `<path>` is a source file (including `.bin.copp`/`.test.copp`), the
   compiler resolves its owning package and checks that package.
 - If a source file has no owning package, `check` fails with a package ownership
@@ -1023,7 +1028,7 @@ Command invocation policy:
 Intent:
 
 - one canonical default (`check`)
-- explicit workspace boundary (no implicit root searching)
+- explicit workspace boundary (marker-based; override supported)
 - deterministic build graph scope
 
 ---

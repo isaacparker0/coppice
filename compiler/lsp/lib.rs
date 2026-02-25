@@ -79,7 +79,6 @@ impl LspServer {
         let id = message.get("id").cloned().unwrap_or(Value::Null);
         match method {
             "initialize" => {
-                self.initialize_from_params(message.get("params"));
                 let result = json!({
                     "capabilities": {
                         "textDocumentSync": {
@@ -191,41 +190,19 @@ impl LspServer {
         }
     }
 
-    fn initialize_from_params(&mut self, params: Option<&Value>) {
-        if self.check_session.workspace_root().is_some() {
-            return;
-        }
-        let Some(params) = params else {
-            return;
-        };
-        let workspace_root = params
-            .get("rootUri")
-            .and_then(Value::as_str)
-            .and_then(uri_to_file_path)
-            .or_else(|| {
-                params
-                    .get("rootPath")
-                    .and_then(Value::as_str)
-                    .map(PathBuf::from)
-            });
-        if let Some(path) = workspace_root {
-            self.check_session
-                .set_workspace_root(Some(path_to_key(&path)));
-        }
-    }
-
     fn update_document_and_publish<W: Write>(
         &mut self,
         writer: &mut W,
         uri: &str,
         text: String,
     ) -> Result<(), CompilerFailure> {
-        let Some(workspace_relative_path) = self.uri_to_workspace_relative_path(uri) else {
+        let Some(absolute_path) = uri_to_file_path(uri) else {
             return Ok(());
         };
+        let target_path = path_to_key(&absolute_path);
         self.check_session
-            .open_or_update_document(&workspace_relative_path, text);
-        self.recheck_target_and_publish(writer, &workspace_relative_path)
+            .open_or_update_document(&target_path, text);
+        self.recheck_target_and_publish(writer, &target_path)
     }
 
     fn close_document_and_publish<W: Write>(
@@ -233,29 +210,26 @@ impl LspServer {
         writer: &mut W,
         uri: &str,
     ) -> Result<(), CompilerFailure> {
-        let Some(workspace_relative_path) = self.uri_to_workspace_relative_path(uri) else {
+        let Some(absolute_path) = uri_to_file_path(uri) else {
             return Ok(());
         };
-        self.check_session.close_document(&workspace_relative_path);
-        self.recheck_target_and_publish(writer, &workspace_relative_path)
+        let target_path = path_to_key(&absolute_path);
+        self.check_session.close_document(&target_path);
+        self.recheck_target_and_publish(writer, &target_path)
     }
 
     fn recheck_target_and_publish<W: Write>(
         &mut self,
         writer: &mut W,
-        workspace_relative_path: &str,
+        target_path: &str,
     ) -> Result<(), CompilerFailure> {
-        match self.check_session.check_target(workspace_relative_path) {
-            Ok(checked_target) => self.publish_checked_target(
-                writer,
-                checked_target.diagnostics,
-                workspace_relative_path,
-            ),
+        match self.check_session.check_target(target_path) {
+            Ok(checked_target) => {
+                self.publish_checked_target(writer, checked_target.diagnostics, target_path)
+            }
             Err(error) => {
                 Self::publish_log_message(writer, &error.message)?;
-                if let Some(target_uri) =
-                    self.workspace_relative_path_to_uri(workspace_relative_path)
-                {
+                if let Some(target_uri) = Self::path_to_uri(target_path) {
                     Self::publish_diagnostics(writer, &target_uri, &[])?;
                     self.published_diagnostic_uri_set.insert(target_uri);
                 }
@@ -268,11 +242,11 @@ impl LspServer {
         &mut self,
         writer: &mut W,
         diagnostics: Vec<RenderedDiagnostic>,
-        workspace_relative_path: &str,
+        target_path: &str,
     ) -> Result<(), CompilerFailure> {
         let mut diagnostics_by_uri = BTreeMap::<String, Vec<Value>>::new();
         for diagnostic in diagnostics {
-            let Some(uri) = self.diagnostic_path_to_uri(&diagnostic.path) else {
+            let Some(uri) = Self::diagnostic_path_to_uri(&diagnostic.path) else {
                 continue;
             };
             diagnostics_by_uri
@@ -281,7 +255,7 @@ impl LspServer {
                 .push(rendered_diagnostic_to_lsp_diagnostic(&diagnostic));
         }
 
-        if let Some(target_uri) = self.workspace_relative_path_to_uri(workspace_relative_path) {
+        if let Some(target_uri) = Self::path_to_uri(target_path) {
             diagnostics_by_uri.entry(target_uri).or_default();
         }
 
@@ -335,25 +309,28 @@ impl LspServer {
         )
     }
 
-    fn uri_to_workspace_relative_path(&self, uri: &str) -> Option<String> {
-        let workspace_root = self.check_session.workspace_root()?;
-        let absolute_path = uri_to_file_path(uri)?;
-        let relative_path = absolute_path.strip_prefix(workspace_root).ok()?;
-        Some(path_to_key(relative_path))
-    }
-
-    fn workspace_relative_path_to_uri(&self, workspace_relative_path: &str) -> Option<String> {
-        let workspace_root = self.check_session.workspace_root()?;
-        let absolute_path = Path::new(workspace_root).join(workspace_relative_path);
+    fn diagnostic_path_to_uri(diagnostic_path: &str) -> Option<String> {
+        let diagnostic_file_path = Path::new(diagnostic_path);
+        let absolute_path = if diagnostic_file_path.is_absolute() {
+            diagnostic_file_path.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .ok()
+                .map(|current_directory| current_directory.join(diagnostic_file_path))?
+        };
         Some(file_path_to_uri(&absolute_path))
     }
 
-    fn diagnostic_path_to_uri(&self, diagnostic_path: &str) -> Option<String> {
-        let diagnostic_file_path = Path::new(diagnostic_path);
-        if diagnostic_file_path.is_absolute() {
-            return Some(file_path_to_uri(diagnostic_file_path));
-        }
-        self.workspace_relative_path_to_uri(diagnostic_path)
+    fn path_to_uri(path: &str) -> Option<String> {
+        let path = PathBuf::from(path);
+        let absolute_path = if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()
+                .ok()
+                .map(|current_directory| current_directory.join(path))?
+        };
+        Some(file_path_to_uri(&absolute_path))
     }
 }
 

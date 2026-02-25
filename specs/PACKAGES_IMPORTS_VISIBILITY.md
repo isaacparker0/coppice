@@ -32,7 +32,9 @@ The model intentionally prefers explicitness over minimal boilerplate.
 3. **Symbol**: top-level declaration (type, function, constant).
 4. **External**: from a different package path.
 5. **Workspace root**: the root directory of the current Coppice workspace.
-6. **Import package path**: an import-origin-prefixed package path used in
+6. **Workspace marker**: a file named `COPPICE_WORKSPACE` that marks a Coppice
+   workspace root.
+7. **Import package path**: an import-origin-prefixed package path used in
    `import` declarations.
 
 ---
@@ -65,16 +67,17 @@ A directory is a package if and only if it contains `PACKAGE.copp`.
 Without a nested `PACKAGE.copp`, subdirectory files belong to the parent
 package.
 
-All Coppice commands are evaluated relative to workspace root. Invoking
-`coppice` commands outside workspace root is a compile-time error unless a
-workspace root is explicitly provided by CLI flag.
+All Coppice commands are evaluated relative to workspace root.
 
-Workspace root validity:
+Workspace root resolution:
 
-1. Default workspace root is current working directory.
-2. CLI may override with `--workspace-root <path>`.
-3. A workspace root is valid only if `PACKAGE.copp` exists at that root.
-4. If workspace root is invalid, command fails before package discovery.
+1. CLI may explicitly override with `--workspace-root <path>`.
+2. Without `--workspace-root`, tools discover workspace root via nearest
+   ancestor `COPPICE_WORKSPACE` marker from the target path (or current working
+   directory when no explicit target path is provided).
+3. If no workspace root can be resolved, command fails before package discovery.
+4. `PACKAGE.copp` does not define workspace root.
+5. `COPPICE_WORKSPACE` does not define package boundaries.
 
 Any `.copp` source file not owned by any package (no ancestor `PACKAGE.copp` up
 to workspace root) is a compile error.
@@ -94,6 +97,26 @@ Rationale:
 2. keeps mapping to Bazel package targets deterministic
 3. avoids introducing a second "standalone file mode" with different semantics
 4. keeps workspace scope explicit and reviewable
+
+### Workspace Marker File (`COPPICE_WORKSPACE`)
+
+The workspace marker file is explicit, checked-in configuration.
+
+Rules:
+
+1. Marker filename is exactly `COPPICE_WORKSPACE`.
+2. File format is plain text; empty content is valid.
+3. Tooling must not synthesize/inject marker files implicitly at runtime.
+4. Standalone fixture/example workspaces that must resolve independently should
+   include their own `COPPICE_WORKSPACE` marker.
+5. Monorepo and nested standalone workspaces are both supported through nearest
+   ancestor marker resolution.
+
+Rationale:
+
+1. Keeps workspace boundaries explicit and reviewable in source control.
+2. Avoids hidden tool-specific behavior in editor/playground integration.
+3. Preserves one canonical import model (`workspace/...`) across environments.
 
 ### Example
 
