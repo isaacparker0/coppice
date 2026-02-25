@@ -166,14 +166,6 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             details: Vec::new(),
         });
     }
-    if !workspace_root.join("PACKAGE.copp").is_file() {
-        return Err(CompilerFailure {
-            kind: CompilerFailureKind::WorkspaceRootMissingManifest,
-            message: "not a Coppice workspace root (missing PACKAGE.copp)".to_string(),
-            path: Some(workspace_root_display),
-            details: Vec::new(),
-        });
-    }
 
     let target_path = PathBuf::from(path);
     let absolute_target_path = if target_path.is_absolute() {
@@ -229,6 +221,17 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             })
             .collect(),
     })?;
+    if workspace.packages().is_empty()
+        && metadata.is_dir()
+        && absolute_target_path == workspace_root
+    {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::PackageNotFound,
+            message: "workspace contains no packages (missing PACKAGE.copp)".to_string(),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
+    }
     let scoped_package_paths = scoped_package_paths_for_target(
         &workspace,
         &workspace_root,

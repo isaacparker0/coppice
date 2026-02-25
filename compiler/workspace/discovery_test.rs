@@ -48,18 +48,12 @@ fn assigns_files_to_nearest_manifest_package() {
 }
 
 #[test]
-fn errors_on_orphan_source_file() {
+fn ignores_orphan_source_file() {
     let workspace = TestWorkspace::new(&["orphans/lost.copp"]);
 
-    let errors = discover_workspace(workspace.path()).expect_err("discovery should fail");
-    assert_eq!(errors.len(), 1);
-    assert_eq!(
-        errors[0]
-            .path
-            .as_ref()
-            .map(|path| compiler__source::path_to_key(path)),
-        Some("orphans/lost.copp".to_string())
-    );
+    let discovered_workspace =
+        discover_workspace(workspace.path()).expect("discovery should succeed");
+    assert!(discovered_workspace.packages().is_empty());
 }
 
 #[test]

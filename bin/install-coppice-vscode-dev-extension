@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+extension_source_dir="${repo_root}/tools/vscode/coppice-lsp"
+extensions_dir="${VSCODE_EXTENSIONS_DIR:-${HOME}/.vscode/extensions}"
+installed_link_path="${extensions_dir}/coppice.coppice-lsp-dev"
+
+if [[ ! -d "${extension_source_dir}" ]]; then
+  echo "error: extension source directory not found: ${extension_source_dir}" >&2
+  exit 1
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "error: pnpm is required but not found in PATH" >&2
+  exit 1
+fi
+
+mkdir -p "${extensions_dir}"
+
+if [[ -e "${installed_link_path}" && ! -L "${installed_link_path}" ]]; then
+  echo "error: ${installed_link_path} exists and is not a symlink" >&2
+  exit 1
+fi
+
+(
+  cd "${extension_source_dir}"
+  pnpm install --frozen-lockfile
+)
+
+rm -f "${installed_link_path}"
+ln -s "${extension_source_dir}" "${installed_link_path}"
+
+echo "installed: ${installed_link_path} -> ${extension_source_dir}"
+echo "next: restart VS Code (or run 'Developer: Reload Window') in your monorepo window."

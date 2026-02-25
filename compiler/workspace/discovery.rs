@@ -45,11 +45,6 @@ pub fn discover_workspace(root_directory: &Path) -> Result<Workspace, Vec<Discov
                 .entry(package_root)
                 .or_default()
                 .push(source_path);
-        } else {
-            errors.push(DiscoveryError::new(
-                "source file is not owned by any package",
-                Some(source_path),
-            ));
         }
     }
 
@@ -102,7 +97,9 @@ fn collect_workspace_entries(
     entries.sort_by(|left, right| compare_paths(&left.path(), &right.path()));
 
     for entry in entries {
-        let mut file_type = entry.file_type()?;
+        let file_type = entry.file_type()?;
+        let mut is_file = file_type.is_file();
+        let mut is_directory = file_type.is_dir();
         if file_type.is_symlink() {
             let metadata = match fs::metadata(entry.path()) {
                 Ok(metadata) => metadata,
@@ -114,13 +111,19 @@ fn collect_workspace_entries(
                     return Err(error);
                 }
             };
-            file_type = metadata.file_type();
+            if metadata.file_type().is_dir() {
+                // Do not recurse into symlinked directories to keep workspace
+                // discovery deterministic and avoid traversing generated trees.
+                continue;
+            }
+            is_file = metadata.file_type().is_file();
+            is_directory = false;
         }
 
         let file_name = entry.file_name();
         let child_relative_path = relative_directory.join(file_name);
 
-        if file_type.is_dir() {
+        if is_directory {
             collect_workspace_entries(
                 workspace_root,
                 &child_relative_path,
@@ -131,7 +134,7 @@ fn collect_workspace_entries(
             continue;
         }
 
-        if !file_type.is_file() {
+        if !is_file {
             continue;
         }
 

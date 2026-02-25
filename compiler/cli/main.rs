@@ -36,7 +36,10 @@ enum Command {
         #[arg(long)]
         output_dir: Option<String>,
     },
-    Lsp,
+    Lsp {
+        #[arg(long)]
+        stdio: bool,
+    },
 }
 
 fn main() {
@@ -69,8 +72,8 @@ fn main() {
                 }
             }
         }
-        Command::Lsp => {
-            run_lsp(workspace_root);
+        Command::Lsp { stdio } => {
+            run_lsp(workspace_root, stdio);
         }
     }
 }
@@ -120,7 +123,11 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
     }
 }
 
-fn run_lsp(workspace_root: Option<&str>) {
+fn run_lsp(workspace_root: Option<&str>, stdio: bool) {
+    if !stdio {
+        eprintln!("lsp transport mode not specified; pass --stdio");
+        process::exit(1);
+    }
     if let Err(error) = run_lsp_stdio(workspace_root) {
         render_compiler_failure_text(".", &error);
         process::exit(1);

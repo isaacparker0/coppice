@@ -1,5 +1,7 @@
 packages:
-    - .
+    - "."
+    - "tools/vscode/coppice-lsp"
 
 autoInstallPeers: false
 strictPeerDependencies: true
+confirmModulesPurge: false
