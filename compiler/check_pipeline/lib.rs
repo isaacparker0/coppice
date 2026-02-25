@@ -25,6 +25,8 @@ use compiler__type_annotated_program::TypeResolvedDeclarations;
 use compiler__visibility::ResolvedImport;
 use compiler__workspace::{Workspace, discover_workspace};
 
+const WORKSPACE_MARKER_FILENAME: &str = "COPPICE_WORKSPACE";
+
 pub struct CheckedTarget {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub source_by_path: BTreeMap<String, String>,
@@ -133,45 +135,21 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     workspace_root_override: Option<&str>,
     source_override_by_workspace_relative_path: &BTreeMap<String, String>,
 ) -> Result<AnalyzedTarget, CompilerFailure> {
+    let workspace_root = resolve_workspace_root(path, workspace_root_override)?;
     let current_directory = std::env::current_dir().map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::ReadSource,
         message: error.to_string(),
         path: Some(".".to_string()),
         details: Vec::new(),
     })?;
-    let workspace_root_display =
-        workspace_root_override.map_or_else(|| ".".to_string(), ToString::to_string);
-    let workspace_root = if let Some(root) = workspace_root_override {
-        let parsed_root = PathBuf::from(root);
-        if parsed_root.is_absolute() {
-            parsed_root
-        } else {
-            current_directory.join(parsed_root)
-        }
-    } else {
-        current_directory
-    };
-    let workspace_root_metadata =
-        fs::metadata(&workspace_root).map_err(|error| CompilerFailure {
-            kind: CompilerFailureKind::InvalidWorkspaceRoot,
-            message: format!("invalid workspace root: {error}"),
-            path: Some(workspace_root_display.clone()),
-            details: Vec::new(),
-        })?;
-    if !workspace_root_metadata.is_dir() {
-        return Err(CompilerFailure {
-            kind: CompilerFailureKind::WorkspaceRootNotDirectory,
-            message: "workspace root must be a directory".to_string(),
-            path: Some(workspace_root_display.clone()),
-            details: Vec::new(),
-        });
-    }
 
     let target_path = PathBuf::from(path);
     let absolute_target_path = if target_path.is_absolute() {
         target_path.clone()
-    } else {
+    } else if workspace_root_override.is_some() {
         workspace_root.join(&target_path)
+    } else {
+        current_directory.join(&target_path)
     };
     let metadata = fs::metadata(&absolute_target_path).map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::ReadSource,
@@ -268,6 +246,10 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             let workspace_relative_key = path_to_key(&relative_path);
             let source = if let Some(override_source) =
                 source_override_by_workspace_relative_path.get(&workspace_relative_key)
+            {
+                override_source.clone()
+            } else if let Some(override_source) =
+                source_override_by_workspace_relative_path.get(&path_to_key(&absolute_path))
             {
                 override_source.clone()
             } else {
@@ -512,6 +494,94 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         resolved_imports,
         resolved_declarations_by_path,
     })
+}
+
+fn resolve_workspace_root(
+    path: &str,
+    workspace_root_override: Option<&str>,
+) -> Result<PathBuf, CompilerFailure> {
+    let current_directory = std::env::current_dir().map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: error.to_string(),
+        path: Some(".".to_string()),
+        details: Vec::new(),
+    })?;
+
+    if let Some(root_override) = workspace_root_override {
+        let workspace_root =
+            absolute_path_from_current_directory(&current_directory, root_override);
+        ensure_valid_workspace_root_directory(&workspace_root, root_override)?;
+        return Ok(workspace_root);
+    }
+
+    let absolute_target_path = absolute_path_from_current_directory(&current_directory, path);
+    let search_start_path = marker_search_start_path(&absolute_target_path);
+    let Some(workspace_root) = find_workspace_root_from_marker(&search_start_path) else {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootMissingManifest,
+            message: format!(
+                "workspace root marker not found (expected {WORKSPACE_MARKER_FILENAME})"
+            ),
+            path: Some(path.to_string()),
+            details: Vec::new(),
+        });
+    };
+    ensure_valid_workspace_root_directory(&workspace_root, &path_to_key(&workspace_root))?;
+    Ok(workspace_root)
+}
+
+fn absolute_path_from_current_directory(current_directory: &Path, raw_path: &str) -> PathBuf {
+    let parsed_path = PathBuf::from(raw_path);
+    if parsed_path.is_absolute() {
+        parsed_path
+    } else {
+        current_directory.join(parsed_path)
+    }
+}
+
+fn ensure_valid_workspace_root_directory(
+    workspace_root: &Path,
+    workspace_root_display: &str,
+) -> Result<(), CompilerFailure> {
+    let workspace_root_metadata =
+        fs::metadata(workspace_root).map_err(|error| CompilerFailure {
+            kind: CompilerFailureKind::InvalidWorkspaceRoot,
+            message: format!("invalid workspace root: {error}"),
+            path: Some(workspace_root_display.to_string()),
+            details: Vec::new(),
+        })?;
+    if !workspace_root_metadata.is_dir() {
+        return Err(CompilerFailure {
+            kind: CompilerFailureKind::WorkspaceRootNotDirectory,
+            message: "workspace root must be a directory".to_string(),
+            path: Some(workspace_root_display.to_string()),
+            details: Vec::new(),
+        });
+    }
+    Ok(())
+}
+
+fn marker_search_start_path(absolute_target_path: &Path) -> PathBuf {
+    if fs::metadata(absolute_target_path)
+        .map(|metadata| metadata.is_file())
+        .unwrap_or(false)
+    {
+        return absolute_target_path
+            .parent()
+            .map_or_else(|| absolute_target_path.to_path_buf(), Path::to_path_buf);
+    }
+    absolute_target_path.to_path_buf()
+}
+
+fn find_workspace_root_from_marker(search_start_path: &Path) -> Option<PathBuf> {
+    let mut current_path = search_start_path.to_path_buf();
+    loop {
+        if current_path.join(WORKSPACE_MARKER_FILENAME).is_file() {
+            return Some(current_path);
+        }
+        let parent = current_path.parent()?.to_path_buf();
+        current_path = parent;
+    }
 }
 
 fn collect_package_ids_by_path(workspace: &Workspace) -> BTreeMap<String, PackageId> {

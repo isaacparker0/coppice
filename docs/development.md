@@ -1,6 +1,7 @@
 # Development
 
-Run all commands from workspace root.
+Run all commands from a Coppice workspace. A workspace root is discovered via
+nearest-ancestor `COPPICE_WORKSPACE` marker unless `--workspace-root` is passed.
 
 ### Build and test
 
@@ -24,4 +25,10 @@ bazel run --run_in_cwd //compiler/cli:main -- \
 bazel run --run_in_cwd //compiler/cli:main -- \
   --workspace-root path/to/workspace \
   check path/inside/workspace/file.copp
+```
+
+```bash
+# Uses COPPICE_WORKSPACE marker discovery
+bazel run --run_in_cwd //compiler/cli:main -- \
+  check
 ```
