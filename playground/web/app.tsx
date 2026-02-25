@@ -20,6 +20,8 @@ type WorkspaceState = {
     entrypointPath: string | null;
 };
 
+type BottomPanelTab = "problems" | "output" | "errors";
+
 function defaultWorkspaceFiles(): WorkspaceFile[] {
     return [
         { path: "PACKAGE.copp", source: "" },
@@ -97,6 +99,9 @@ export function App() {
     const [stderr, setStderr] = useState("");
     const [statusText, setStatusText] = useState("idle");
     const [isRunDisabled, setIsRunDisabled] = useState(false);
+    const [activeBottomPanelTab, setActiveBottomPanelTab] = useState<
+        BottomPanelTab
+    >("problems");
 
     const workspaceRef = useRef(workspace);
     const sessionIdRef = useRef<string | null>(null);
@@ -218,6 +223,9 @@ export function App() {
         const nextDiagnostics = result.data.diagnostics ?? [];
         setDiagnostics(nextDiagnostics);
         applyDiagnosticMarkers(state, nextDiagnostics);
+        if (nextDiagnostics.length > 0) {
+            setActiveBottomPanelTab("problems");
+        }
         if (result.data.error) {
             setStatusText(`check failed: ${result.data.error.message}`);
             return;
@@ -258,12 +266,19 @@ export function App() {
             setStderr(result.data.stderr ?? "");
 
             if (result.data.error) {
+                setActiveBottomPanelTab("errors");
                 setStatusText(`run error: ${result.data.error.message}`);
                 return;
             }
             if (result.data.timed_out) {
+                setActiveBottomPanelTab("errors");
                 setStatusText("run timed out");
                 return;
+            }
+            if ((result.data.stderr ?? "").trim().length > 0) {
+                setActiveBottomPanelTab("errors");
+            } else {
+                setActiveBottomPanelTab("output");
             }
             setStatusText(`exit code ${result.data.exit_code ?? 0}`);
         } finally {
@@ -391,6 +406,7 @@ export function App() {
         setStdout("");
         setStderr("");
         setDiagnostics([]);
+        setActiveBottomPanelTab("problems");
         applyDiagnosticMarkers(nextWorkspace, []);
         setStatusText("new session");
         await runCheck();
@@ -420,234 +436,331 @@ export function App() {
     const entrypointPaths = workspace.fileOrder.filter((path) =>
         path.endsWith(".bin.copp")
     );
+    const actionButtonClassName =
+        "rounded-md border border-brand-700 bg-brand-700 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-70";
+    const fileActionButtonClassName =
+        "rounded-md border border-surface-300 bg-surface-50 px-2.5 py-1.5 text-xs font-medium text-surface-800 transition hover:bg-surface-100 disabled:cursor-not-allowed disabled:opacity-50";
+    const activeTabButtonClassName =
+        "rounded-md border border-surface-200 bg-surface-0 px-3 py-1.5 text-xs font-medium text-surface-900";
+    const inactiveTabButtonClassName =
+        "rounded-md border border-transparent px-3 py-1.5 text-xs text-surface-700 transition hover:border-surface-200 hover:bg-surface-100";
+    const panelClassName =
+        "rounded-xl border border-surface-200 bg-surface-0 p-3";
+    const problemsTabLabel = diagnostics.length > 0
+        ? `Problems (${diagnostics.length})`
+        : "Problems";
+    const isDeleteFileDisabled = workspace.activeFilePath === null ||
+        workspace.activeFilePath === "PACKAGE.copp";
 
     return (
-        <main className="layout">
-            <header className="topbar">
-                <h1>Coppice playground</h1>
-                <div className="actions">
-                    <button type="button" onClick={() => void resetSession()}>
-                        New session
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const proposedPath = window.prompt(
-                                "New file path",
-                                "lib/lib.copp",
-                            );
-                            if (!proposedPath) {
-                                return;
-                            }
-
-                            const path = proposedPath.trim();
-                            if (!path) {
-                                return;
-                            }
-                            if (!path.endsWith(".copp")) {
-                                setStatusText("file path must end with .copp");
-                                return;
-                            }
-                            if (path.startsWith("/") || path.includes("..")) {
-                                setStatusText(
-                                    "file path must be workspace-relative",
-                                );
-                                return;
-                            }
-                            if (workspaceRef.current.filesByPath.has(path)) {
-                                setStatusText("file already exists");
-                                return;
-                            }
-
-                            updateWorkspace((previousWorkspace) => {
-                                const filesByPath = new Map(
-                                    previousWorkspace.filesByPath,
-                                );
-                                filesByPath.set(path, "");
-                                const fileOrder = [
-                                    ...previousWorkspace.fileOrder,
-                                    path,
-                                ];
-                                return {
-                                    filesByPath,
-                                    fileOrder,
-                                    activeFilePath: path,
-                                    entrypointPath:
-                                        previousWorkspace.entrypointPath ??
-                                            (path.endsWith(".bin.copp")
-                                                ? path
-                                                : null),
-                                };
-                            });
-                            scheduleCheck();
-                        }}
-                    >
-                        New file
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const state = workspaceRef.current;
-                            if (!state.activeFilePath) {
-                                return;
-                            }
-                            if (state.activeFilePath === "PACKAGE.copp") {
-                                setStatusText("cannot delete PACKAGE.copp");
-                                return;
-                            }
-
-                            updateWorkspace((previousWorkspace) => {
-                                if (!previousWorkspace.activeFilePath) {
-                                    return previousWorkspace;
-                                }
-
-                                const filesByPath = new Map(
-                                    previousWorkspace.filesByPath,
-                                );
-                                filesByPath.delete(
-                                    previousWorkspace.activeFilePath,
-                                );
-                                const fileOrder = previousWorkspace.fileOrder
-                                    .filter(
-                                        (path) =>
-                                            path !==
-                                                previousWorkspace
-                                                    .activeFilePath,
-                                    );
-                                const binPaths = fileOrder.filter((path) =>
-                                    path.endsWith(".bin.copp")
-                                );
-                                return {
-                                    filesByPath,
-                                    fileOrder,
-                                    activeFilePath: fileOrder[0] ?? null,
-                                    entrypointPath:
-                                        previousWorkspace.entrypointPath ===
-                                                previousWorkspace.activeFilePath
-                                            ? (binPaths[0] ?? null)
-                                            : previousWorkspace.entrypointPath,
-                                };
-                            });
-                            scheduleCheck();
-                        }}
-                    >
-                        Delete file
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => void runProgram()}
-                        disabled={isRunDisabled}
-                    >
-                        Run
-                    </button>
+        <main className="flex min-h-screen w-full flex-col gap-4 bg-gradient-to-br from-canvas-50 via-canvas-100 to-canvas-200 p-4 text-surface-900 md:h-screen">
+            <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                    Coppice playground
+                </h1>
+                <div className="flex flex-col gap-1 md:items-end">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            className={actionButtonClassName}
+                            onClick={() => void resetSession()}
+                        >
+                            New session
+                        </button>
+                        <button
+                            type="button"
+                            className={actionButtonClassName}
+                            onClick={() => void runProgram()}
+                            disabled={isRunDisabled}
+                        >
+                            Run
+                        </button>
+                    </div>
+                    <span className="text-xs text-surface-700">{statusText}</span>
                 </div>
             </header>
 
-            <section className="workspace-pane panel">
-                <h2>Workspace</h2>
-                <label htmlFor="entrypoint">Entrypoint</label>
-                <select
-                    id="entrypoint"
-                    disabled={entrypointPaths.length === 0}
-                    value={workspace.entrypointPath ?? ""}
-                    onChange={(event) => {
-                        const nextEntrypoint = event.currentTarget.value ||
-                            null;
-                        updateWorkspace((previousWorkspace) => ({
-                            ...previousWorkspace,
-                            entrypointPath: nextEntrypoint,
-                        }));
-                        scheduleCheck();
-                    }}
-                >
-                    {entrypointPaths.length === 0
-                        ? <option value="">no .bin.copp files</option>
-                        : (
-                            entrypointPaths.map((path) => (
-                                <option key={path} value={path}>
-                                    {path}
-                                </option>
-                            ))
-                        )}
-                </select>
-                <ul id="file-list">
-                    {workspace.fileOrder.map((path) => (
-                        <li key={path}>
+            <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-12">
+                <section className={`${panelClassName} md:col-span-3 md:row-span-2`}>
+                    <h2 className="text-lg font-semibold">Workspace</h2>
+                    <label
+                        htmlFor="entrypoint"
+                        className="mt-3 block text-sm font-medium text-surface-700"
+                    >
+                        Entrypoint
+                    </label>
+                    <select
+                        id="entrypoint"
+                        className="mt-1 w-full rounded-md border border-surface-200 bg-surface-0 px-3 py-2 text-sm text-surface-900 transition focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-700/20 disabled:cursor-not-allowed disabled:opacity-70"
+                        disabled={entrypointPaths.length === 0}
+                        value={workspace.entrypointPath ?? ""}
+                        onChange={(event) => {
+                            const nextEntrypoint = event.currentTarget.value ||
+                                null;
+                            updateWorkspace((previousWorkspace) => ({
+                                ...previousWorkspace,
+                                entrypointPath: nextEntrypoint,
+                            }));
+                            scheduleCheck();
+                        }}
+                    >
+                        {entrypointPaths.length === 0
+                            ? <option value="">no .bin.copp files</option>
+                            : (
+                                entrypointPaths.map((path) => (
+                                    <option key={path} value={path}>
+                                        {path}
+                                    </option>
+                                ))
+                            )}
+                    </select>
+                    <div className="mt-4 flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-medium text-surface-700">
+                            Files
+                        </h3>
+                        <div className="flex items-center gap-1.5">
                             <button
                                 type="button"
-                                className={path === workspace.activeFilePath
-                                    ? "file-item active"
-                                    : "file-item"}
+                                className={fileActionButtonClassName}
                                 onClick={() => {
-                                    updateWorkspace((previousWorkspace) => ({
-                                        ...previousWorkspace,
-                                        activeFilePath: path,
-                                    }));
+                                    const proposedPath = window.prompt(
+                                        "New file path",
+                                        "lib/lib.copp",
+                                    );
+                                    if (!proposedPath) {
+                                        return;
+                                    }
+
+                                    const path = proposedPath.trim();
+                                    if (!path) {
+                                        return;
+                                    }
+                                    if (!path.endsWith(".copp")) {
+                                        setStatusText("file path must end with .copp");
+                                        return;
+                                    }
+                                    if (path.startsWith("/") || path.includes("..")) {
+                                        setStatusText(
+                                            "file path must be workspace-relative",
+                                        );
+                                        return;
+                                    }
+                                    if (workspaceRef.current.filesByPath.has(path)) {
+                                        setStatusText("file already exists");
+                                        return;
+                                    }
+
+                                    updateWorkspace((previousWorkspace) => {
+                                        const filesByPath = new Map(
+                                            previousWorkspace.filesByPath,
+                                        );
+                                        filesByPath.set(path, "");
+                                        const fileOrder = [
+                                            ...previousWorkspace.fileOrder,
+                                            path,
+                                        ];
+                                        return {
+                                            filesByPath,
+                                            fileOrder,
+                                            activeFilePath: path,
+                                            entrypointPath:
+                                                previousWorkspace.entrypointPath ??
+                                                    (path.endsWith(".bin.copp")
+                                                        ? path
+                                                        : null),
+                                        };
+                                    });
+                                    scheduleCheck();
                                 }}
                             >
-                                {path}
+                                New
                             </button>
-                        </li>
-                    ))}
-                </ul>
-            </section>
+                            <button
+                                type="button"
+                                className={fileActionButtonClassName}
+                                disabled={isDeleteFileDisabled}
+                                onClick={() => {
+                                    const state = workspaceRef.current;
+                                    if (!state.activeFilePath) {
+                                        return;
+                                    }
 
-            <section className="editor-pane panel">
-                <div className="editor-header">
-                    <h2 id="active-file-path">
-                        {workspace.activeFilePath ?? "(no file selected)"}
-                    </h2>
-                </div>
-                <div id="editor" ref={editorContainerRef} />
-            </section>
+                                    updateWorkspace((previousWorkspace) => {
+                                        if (!previousWorkspace.activeFilePath) {
+                                            return previousWorkspace;
+                                        }
 
-            <section className="diagnostics-pane panel">
-                <h2>Diagnostics</h2>
-                <ul id="diagnostics">
-                    {diagnostics.length === 0 ? <li>no diagnostics</li> : (
-                        diagnostics.map((diagnostic, index) => (
+                                        const filesByPath = new Map(
+                                            previousWorkspace.filesByPath,
+                                        );
+                                        filesByPath.delete(
+                                            previousWorkspace.activeFilePath,
+                                        );
+                                        const fileOrder = previousWorkspace.fileOrder
+                                            .filter(
+                                                (path) =>
+                                                    path !==
+                                                        previousWorkspace
+                                                            .activeFilePath,
+                                            );
+                                        const binPaths = fileOrder.filter((path) =>
+                                            path.endsWith(".bin.copp")
+                                        );
+                                        return {
+                                            filesByPath,
+                                            fileOrder,
+                                            activeFilePath: fileOrder[0] ?? null,
+                                            entrypointPath:
+                                                previousWorkspace.entrypointPath ===
+                                                        previousWorkspace
+                                                            .activeFilePath
+                                                    ? (binPaths[0] ?? null)
+                                                    : previousWorkspace
+                                                        .entrypointPath,
+                                        };
+                                    });
+                                    scheduleCheck();
+                                }}
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                    <ul className="mt-2 list-none p-0">
+                        {workspace.fileOrder.map((path) => (
                             <li
-                                key={`${diagnostic.path}-${index}`}
-                                className="error"
+                                key={path}
+                                className="mb-1 last:mb-0"
                             >
                                 <button
                                     type="button"
-                                    className="diagnostic-link"
+                                    className={path === workspace.activeFilePath
+                                        ? "w-full border-l-2 border-l-brand-700 bg-brand-50 px-3 py-2.5 text-left text-sm font-medium text-brand-800"
+                                        : "w-full border-l-2 border-l-transparent bg-transparent px-3 py-2.5 text-left text-sm text-surface-700 transition hover:bg-surface-100 hover:text-surface-900"}
                                     onClick={() => {
-                                        if (
-                                            !workspaceRef.current.filesByPath
-                                                .has(
-                                                    diagnostic.path,
-                                                )
-                                        ) {
-                                            return;
-                                        }
-                                        updateWorkspace((
-                                            previousWorkspace,
-                                        ) => ({
+                                        updateWorkspace((previousWorkspace) => ({
                                             ...previousWorkspace,
-                                            activeFilePath: diagnostic.path,
+                                            activeFilePath: path,
                                         }));
                                     }}
                                 >
-                                    {`${diagnostic.path}:${diagnostic.span.line}:${diagnostic.span.column} ${diagnostic.message}`}
+                                    <span className="inline-flex items-center gap-2">
+                                        <span
+                                            aria-hidden="true"
+                                            className={path === workspace.activeFilePath
+                                                ? "h-3 w-3 rounded-sm border border-brand-700 bg-brand-100"
+                                                : "h-3 w-3 rounded-sm border border-surface-400 bg-transparent"}
+                                        />
+                                        <span>{path}</span>
+                                    </span>
                                 </button>
                             </li>
-                        ))
-                    )}
-                </ul>
-            </section>
+                        ))}
+                    </ul>
+                </section>
 
-            <section className="output-pane panel">
-                <h2>Program output</h2>
-                <pre id="stdout">{stdout}</pre>
-                <h2>Program errors</h2>
-                <pre id="stderr">{stderr}</pre>
-            </section>
+                <section className={`${panelClassName} flex min-h-0 flex-col md:col-span-9`}>
+                    <h2 className="mb-2 text-lg font-semibold">
+                        {workspace.activeFilePath ?? "(no file selected)"}
+                    </h2>
+                    <div
+                        id="editor"
+                        className="h-full min-h-80 w-full overflow-hidden rounded-lg border border-surface-200 md:min-h-0"
+                        ref={editorContainerRef}
+                    />
+                </section>
 
-            <footer className="status">
-                <span id="status">{statusText}</span>
-            </footer>
+                <section className={`${panelClassName} flex h-56 min-h-0 flex-col md:col-span-9`}>
+                    <div className="mb-3 flex items-center gap-2 border-b border-surface-200 pb-2">
+                        <button
+                            type="button"
+                            className={activeBottomPanelTab === "problems"
+                                ? activeTabButtonClassName
+                                : inactiveTabButtonClassName}
+                            onClick={() => setActiveBottomPanelTab("problems")}
+                        >
+                            {problemsTabLabel}
+                        </button>
+                        <button
+                            type="button"
+                            className={activeBottomPanelTab === "output"
+                                ? activeTabButtonClassName
+                                : inactiveTabButtonClassName}
+                            onClick={() => setActiveBottomPanelTab("output")}
+                        >
+                            Output
+                        </button>
+                        <button
+                            type="button"
+                            className={activeBottomPanelTab === "errors"
+                                ? activeTabButtonClassName
+                                : inactiveTabButtonClassName}
+                            onClick={() => setActiveBottomPanelTab("errors")}
+                        >
+                            Errors
+                        </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto">
+                        {activeBottomPanelTab === "problems"
+                            ? (
+                                <ul className="list-none p-0">
+                                    {diagnostics.length === 0
+                                        ? (
+                                            <li className="py-1 text-sm text-surface-700">
+                                                no diagnostics
+                                            </li>
+                                        )
+                                        : (
+                                            diagnostics.map((diagnostic, index) => (
+                                                <li
+                                                    key={`${diagnostic.path}-${index}`}
+                                                    className="border-b border-surface-200 py-1 last:border-b-0"
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 text-left text-sm text-danger-700 hover:bg-danger-50"
+                                                        onClick={() => {
+                                                            if (
+                                                                !workspaceRef
+                                                                    .current
+                                                                    .filesByPath
+                                                                    .has(
+                                                                        diagnostic
+                                                                            .path,
+                                                                    )
+                                                            ) {
+                                                                return;
+                                                            }
+                                                            updateWorkspace((
+                                                                previousWorkspace,
+                                                            ) => ({
+                                                                ...previousWorkspace,
+                                                                activeFilePath:
+                                                                    diagnostic.path,
+                                                            }));
+                                                        }}
+                                                    >
+                                                        {`${diagnostic.path}:${diagnostic.span.line}:${diagnostic.span.column} ${diagnostic.message}`}
+                                                    </button>
+                                                </li>
+                                            ))
+                                        )}
+                                </ul>
+                            )
+                            : activeBottomPanelTab === "output"
+                            ? (
+                                <pre className="m-0 min-h-full whitespace-pre-wrap rounded-lg bg-surface-50 p-2 font-mono text-sm">
+                                    {stdout || "(no output)"}
+                                </pre>
+                            )
+                            : (
+                                <pre className="m-0 min-h-full whitespace-pre-wrap rounded-lg bg-surface-50 p-2 font-mono text-sm">
+                                    {stderr || "(no errors)"}
+                                </pre>
+                            )}
+                    </div>
+                </section>
+            </div>
         </main>
     );
 }

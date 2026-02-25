@@ -42,10 +42,12 @@ vite_bin.vite(
         ],
         exclude = ["vite.config.ts"],
     ) + [
+        "//:node_modules/@tailwindcss/vite",
         "//:node_modules/@vitejs/plugin-react",
         "//:node_modules/monaco-editor",
         "//:node_modules/react",
         "//:node_modules/react-dom",
+        "//:node_modules/tailwindcss",
         "//:node_modules/vite",
     ],
     args = [
