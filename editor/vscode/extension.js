@@ -31,8 +31,9 @@ function activate(context) {
     const configuredWorkspaceRoot = vscode.workspace
         .getConfiguration("coppice")
         .get("workspaceRoot");
-    // TODO: Make server command configurable via extension settings.
-    const serverCommand = path.join(workspaceRoot, "bin", "coppice-lsp");
+    // TODO: if we were to publish the extension, we would need to make server
+    // command configurable via extension settings.
+    const serverCommand = path.join(workspaceRoot, "bin", "coppice");
     const serverArgs = configuredWorkspaceRoot
         ? ["--workspace-root", configuredWorkspaceRoot, "lsp"]
         : ["lsp"];
