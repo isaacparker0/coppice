@@ -135,22 +135,24 @@ Initial guidance:
 
 ---
 
-## Bazel Execution Semantics
+## Execution Environments
 
-### Action mode (sandboxed)
+Autofix behavior must be consistent across standalone CLI and Bazel execution.
 
-1. Source file writes are forbidden.
-2. Compiler may:
-   - read source
-   - compute autofixes
-   - canonicalize in-memory for compilation
-   - emit diagnostics and optional fix artifacts in declared outputs
-3. Compiler must not rely on side effects in source tree for correctness.
+1. `fix` is a CLI command in both environments.
+2. `fix` may write source files only in user-invoked, workspace-write contexts.
+3. `build`/`run`/`test` must not rely on source-tree writes for correctness.
+4. In sandboxed action contexts, compilation may use in-memory canonicalized
+   source and may emit fix artifacts as action outputs.
 
-### User-invoked CLI mode (`bazel run` or standalone CLI)
+---
 
-1. `fix` may write source files in workspace.
-2. Write behavior must be explicit by command/flag, never implicit in `build`.
+## Current Policy
+
+1. Developer iteration uses non-strict `build`/`run`.
+2. CI enforces strict mode so pending safe autofixes fail.
+3. Source rewrites happen via explicit `fix`, not during build/test actions.
+4. Pre-commit/editor workflows should run `fix` before CI.
 
 ---
 
