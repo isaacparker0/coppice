@@ -1,0 +1,76 @@
+type Box[T] :: struct {
+    value: T,
+}
+
+type Pair[A, B] :: struct {
+    first: A,
+    second: B,
+}
+
+function identity[T](value: T) -> T {
+    return value
+}
+
+function zip[A, B](first: A, second: B) -> Pair[A, B] {
+    return Pair[A, B] {
+        first: first,
+        second: second,
+    }
+}
+
+function flip[A, B](value: Pair[A, B]) -> Pair[B, A] {
+    return Pair[B, A] {
+        first: value.second,
+        second: value.first,
+    }
+}
+
+function nest[A, B, C](a: A, b: B, c: C) -> Pair[A, Pair[B, C]] {
+    return Pair[A, Pair[B, C]] {
+        first: a,
+        second: Pair[B, C] {
+            first: b,
+            second: c,
+        },
+    }
+}
+
+function flatten[T](value: Box[Box[T]]) -> Box[T] {
+    return value.value
+}
+
+function mapFirst[A, B, C](value: Pair[A, B], mapper: function(A) -> C) -> Pair[C, B] {
+    return Pair[C, B] {
+        first: mapper(value.first),
+        second: value.second,
+    }
+}
+
+function addBang(value: string) -> string {
+    return value + "!"
+}
+
+function main() -> nil {
+    print("identity[int64]: " + string(identity[int64](7)))
+    print("identity inferred: " + identity("lens"))
+
+    zipped := zip("build", 42)
+    flipped := flip(zipped)
+    print("zip: " + zipped.first + ", " + string(zipped.second))
+    print("flip: " + string(flipped.first) + ", " + flipped.second)
+
+    layered := nest("v1", 3, "done")
+    print(
+        "nest: "
+            + layered.first
+            + ", "
+            + string(layered.second.first)
+            + ", "
+            + layered.second.second
+    )
+
+    mapped := mapFirst(zip("type", 9), addBang)
+    print("mapFirst: " + mapped.first + ", " + string(mapped.second))
+
+    return nil
+}
