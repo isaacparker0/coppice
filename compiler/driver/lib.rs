@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use compiler__cranelift_backend::{BuildArtifactIdentity, build_program, run_program};
 use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
-use compiler__executable_lowering::lower_type_annotated_build_unit;
+use compiler__executable_lowering::lower_resolved_declarations_build_unit;
 use compiler__file_role_rules as file_role_rules;
 use compiler__package_symbols::{
     PackageSymbolFileInput, ResolvedImportBindingSummary, ResolvedImportSummary,
@@ -23,7 +23,7 @@ use compiler__semantic_program::SemanticFile;
 use compiler__source::{FileRole, compare_paths, path_to_key};
 use compiler__syntax_rules as syntax_rules;
 use compiler__type_analysis as type_analysis;
-use compiler__type_annotated_program::TypeAnnotatedFile;
+use compiler__type_annotated_program::TypeResolvedDeclarations;
 use compiler__visibility::ResolvedImport;
 use compiler__workspace::{Workspace, discover_workspace};
 
@@ -43,7 +43,7 @@ struct AnalyzedTarget {
     package_path_by_file: BTreeMap<PathBuf, String>,
     file_role_by_path: BTreeMap<PathBuf, FileRole>,
     resolved_imports: Vec<ResolvedImport>,
-    type_annotated_file_by_path: BTreeMap<PathBuf, TypeAnnotatedFile>,
+    resolved_declarations_by_path: BTreeMap<PathBuf, TypeResolvedDeclarations>,
 }
 
 struct ParsedUnit {
@@ -410,7 +410,7 @@ fn analyze_target_with_workspace_root(
         build_typed_public_symbol_table(&package_symbol_file_inputs, &typecheck_resolved_imports);
     let imported_bindings_by_file =
         typed_public_symbol_table.imported_bindings_by_file(&typecheck_resolved_imports);
-    let mut type_annotated_file_by_path = BTreeMap::new();
+    let mut resolved_declarations_by_path = BTreeMap::new();
 
     for parsed_unit in &parsed_units {
         if !parsed_unit.phase_state.can_run_type_analysis() {
@@ -433,9 +433,8 @@ fn analyze_target_with_workspace_root(
             semantic_file,
             imported_bindings,
         );
-        if matches!(type_analysis_result.status, PhaseStatus::Ok) {
-            type_annotated_file_by_path
-                .insert(parsed_unit.path.clone(), type_analysis_result.value.clone());
+        if let Ok(resolved_declarations) = type_analysis_result.value {
+            resolved_declarations_by_path.insert(parsed_unit.path.clone(), resolved_declarations);
         }
         for diagnostic in type_analysis_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
@@ -469,7 +468,7 @@ fn analyze_target_with_workspace_root(
         package_path_by_file,
         file_role_by_path,
         resolved_imports,
-        type_annotated_file_by_path,
+        resolved_declarations_by_path,
     })
 }
 
@@ -689,12 +688,12 @@ pub fn build_target_with_workspace_root(
         &analyzed_target.absolute_target_path,
         analyzed_target.target_is_file,
     )?;
-    let binary_entrypoint_type_annotated_file = analyzed_target
-        .type_annotated_file_by_path
+    let binary_entrypoint_resolved_declarations = analyzed_target
+        .resolved_declarations_by_path
         .get(&binary_entrypoint)
         .ok_or_else(|| CompilerFailure {
             kind: CompilerFailureKind::BuildFailed,
-            message: "missing type-annotated program for binary entrypoint".to_string(),
+            message: "missing resolved declarations for binary entrypoint".to_string(),
             path: Some(path_to_key(&binary_entrypoint)),
             details: Vec::new(),
         })?;
@@ -727,10 +726,10 @@ pub fn build_target_with_workspace_root(
             &reachable_diagnostics,
         ));
     }
-    let dependency_library_files = analyzed_target
-        .type_annotated_file_by_path
+    let dependency_library_resolved_declarations = analyzed_target
+        .resolved_declarations_by_path
         .iter()
-        .filter_map(|(path, type_annotated_file)| {
+        .filter_map(|(path, resolved_declarations)| {
             if path == &binary_entrypoint {
                 return None;
             }
@@ -741,12 +740,12 @@ pub fn build_target_with_workspace_root(
             if !reachable_package_paths.contains(file_package_path) {
                 return None;
             }
-            Some(type_annotated_file)
+            Some(resolved_declarations)
         })
         .collect::<Vec<_>>();
-    let executable_lowering_result = lower_type_annotated_build_unit(
-        binary_entrypoint_type_annotated_file,
-        &dependency_library_files,
+    let executable_lowering_result = lower_resolved_declarations_build_unit(
+        binary_entrypoint_resolved_declarations,
+        &dependency_library_resolved_declarations,
     );
     if !matches!(executable_lowering_result.status, PhaseStatus::Ok) {
         return Err(CompilerFailure {

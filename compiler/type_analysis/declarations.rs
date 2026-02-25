@@ -5,13 +5,13 @@ use compiler__semantic_program::{
     SemanticTypeDeclarationKind,
 };
 use compiler__semantic_types::{
-    GenericTypeParameter, ImportedTypeShape, NominalTypeId, NominalTypeRef,
+    GenericTypeParameter, ImportedTypeShape, NominalTypeId, NominalTypeRef, TypedFunctionSignature,
 };
 
 use super::{
     FunctionInfo, ImplementedInterfaceEntry, ImportedTypeDeclaration, InterfaceMethodSignature,
     MethodInfo, MethodKey, TypeAnnotatedCallTarget, TypeAnnotatedCallableReference, TypeChecker,
-    TypeInfo, TypeKind, TypedFunctionSignature,
+    TypeInfo, TypeKind,
 };
 
 struct ImportedTypeBinding {

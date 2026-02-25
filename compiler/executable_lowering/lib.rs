@@ -16,54 +16,90 @@ use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedAssignTarget, TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget,
-    TypeAnnotatedConstantDeclaration, TypeAnnotatedExpression, TypeAnnotatedFile,
-    TypeAnnotatedFunctionDeclaration, TypeAnnotatedInterfaceDeclaration, TypeAnnotatedMatchArm,
-    TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument,
-    TypeAnnotatedStatement, TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName,
-    TypeAnnotatedUnaryOperator,
+    TypeAnnotatedConstantDeclaration, TypeAnnotatedExpression, TypeAnnotatedFunctionDeclaration,
+    TypeAnnotatedInterfaceDeclaration, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
+    TypeAnnotatedMethodDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedTypeName, TypeAnnotatedUnaryOperator,
+    TypeResolvedDeclarations,
 };
 
 #[must_use]
-pub fn lower_type_annotated_file(
-    type_annotated_file: &TypeAnnotatedFile,
+pub fn lower_resolved_declarations(
+    resolved_declarations: &TypeResolvedDeclarations,
 ) -> PhaseOutput<ExecutableProgram> {
-    lower_type_annotated_build_unit(type_annotated_file, &[])
+    lower_resolved_declarations_build_unit(resolved_declarations, &[])
 }
 
 #[must_use]
-pub fn lower_type_annotated_build_unit(
-    binary_entrypoint_file: &TypeAnnotatedFile,
-    dependency_library_files: &[&TypeAnnotatedFile],
+pub fn lower_resolved_declarations_build_unit(
+    binary_entrypoint_resolved_declarations: &TypeResolvedDeclarations,
+    dependency_library_resolved_declarations: &[&TypeResolvedDeclarations],
 ) -> PhaseOutput<ExecutableProgram> {
     let mut diagnostics = Vec::new();
 
-    let entrypoint_callable_reference =
-        validate_main_signature_from_type_analysis(binary_entrypoint_file, &mut diagnostics);
+    let entrypoint_callable_reference = validate_main_signature_from_resolved_declarations(
+        binary_entrypoint_resolved_declarations,
+        &mut diagnostics,
+    );
 
     let mut all_struct_declarations = Vec::new();
     let mut all_interface_declarations = Vec::new();
     let mut all_constant_declarations = Vec::new();
     let mut all_function_declarations = Vec::new();
-    all_struct_declarations.extend(binary_entrypoint_file.struct_declarations.iter().cloned());
+    all_struct_declarations.extend(
+        binary_entrypoint_resolved_declarations
+            .struct_declarations
+            .iter()
+            .cloned(),
+    );
     all_interface_declarations.extend(
-        binary_entrypoint_file
+        binary_entrypoint_resolved_declarations
             .interface_declarations
             .iter()
             .cloned(),
     );
-    all_constant_declarations.extend(binary_entrypoint_file.constant_declarations.iter().cloned());
-    all_function_declarations.extend(binary_entrypoint_file.function_declarations.iter().cloned());
-    for dependency_file in dependency_library_files {
-        all_struct_declarations.extend(dependency_file.struct_declarations.iter().cloned());
-        all_interface_declarations.extend(dependency_file.interface_declarations.iter().cloned());
-        all_constant_declarations.extend(dependency_file.constant_declarations.iter().cloned());
-        all_function_declarations.extend(dependency_file.function_declarations.iter().cloned());
+    all_constant_declarations.extend(
+        binary_entrypoint_resolved_declarations
+            .constant_declarations
+            .iter()
+            .cloned(),
+    );
+    all_function_declarations.extend(
+        binary_entrypoint_resolved_declarations
+            .function_declarations
+            .iter()
+            .cloned(),
+    );
+    for dependency_resolved_declarations in dependency_library_resolved_declarations {
+        all_struct_declarations.extend(
+            dependency_resolved_declarations
+                .struct_declarations
+                .iter()
+                .cloned(),
+        );
+        all_interface_declarations.extend(
+            dependency_resolved_declarations
+                .interface_declarations
+                .iter()
+                .cloned(),
+        );
+        all_constant_declarations.extend(
+            dependency_resolved_declarations
+                .constant_declarations
+                .iter()
+                .cloned(),
+        );
+        all_function_declarations.extend(
+            dependency_resolved_declarations
+                .function_declarations
+                .iter()
+                .cloned(),
+        );
     }
 
     let constant_declarations =
         lower_constant_declarations(&all_constant_declarations, &mut diagnostics);
-    let interface_declarations =
-        lower_interface_declarations(&all_interface_declarations, &mut diagnostics);
+    let interface_declarations = lower_interface_declarations(&all_interface_declarations);
     let struct_declarations = lower_struct_declarations(&all_struct_declarations, &mut diagnostics);
     let function_declarations =
         lower_function_declarations(&all_function_declarations, &mut diagnostics);
@@ -99,14 +135,8 @@ fn lower_constant_declarations(
 ) -> Vec<ExecutableConstantDeclaration> {
     let mut lowered = Vec::new();
     for constant_declaration in constant_declarations {
-        let Some(type_reference) = lower_type_name_to_type_reference(
-            &constant_declaration.type_name,
-            true,
-            &[],
-            diagnostics,
-        ) else {
-            continue;
-        };
+        let type_reference =
+            lower_type_reference_to_type_reference(&constant_declaration.type_reference, &[]);
         lowered.push(ExecutableConstantDeclaration {
             name: constant_declaration.name.clone(),
             constant_reference: ExecutableConstantReference {
@@ -126,8 +156,6 @@ fn lower_function_declarations(
 ) -> Vec<ExecutableFunctionDeclaration> {
     let mut lowered = Vec::new();
     for function_declaration in function_declarations {
-        let mut function_supported = true;
-        let mut executable_parameters = Vec::new();
         let type_parameter_names = function_declaration
             .type_parameters
             .iter()
@@ -135,44 +163,35 @@ fn lower_function_declarations(
             .collect::<Vec<_>>();
         let mut type_parameter_constraint_interface_reference_by_name = BTreeMap::new();
         for type_parameter in &function_declaration.type_parameters {
-            let Some(constraint) = &type_parameter.constraint else {
-                continue;
-            };
-            let Some(interface_reference) =
-                lower_constraint_type_name_to_interface_reference(constraint, diagnostics)
+            let Some(constraint_interface_reference) =
+                &type_parameter.constraint_interface_reference
             else {
                 continue;
             };
-            type_parameter_constraint_interface_reference_by_name
-                .insert(type_parameter.name.clone(), interface_reference);
+            type_parameter_constraint_interface_reference_by_name.insert(
+                type_parameter.name.clone(),
+                ExecutableInterfaceReference {
+                    package_path: constraint_interface_reference.package_path.clone(),
+                    symbol_name: constraint_interface_reference.symbol_name.clone(),
+                },
+            );
         }
-        for parameter in &function_declaration.parameters {
-            let Some(type_reference) = lower_type_name_to_type_reference(
-                &parameter.type_name,
-                true,
-                &type_parameter_names,
-                diagnostics,
-            ) else {
-                function_supported = false;
-                continue;
-            };
-            executable_parameters.push(ExecutableParameterDeclaration {
+        let executable_parameters = function_declaration
+            .parameters
+            .iter()
+            .map(|parameter| ExecutableParameterDeclaration {
                 name: parameter.name.clone(),
                 mutable: parameter.mutable,
-                type_reference,
-            });
-        }
-        let Some(return_type) = lower_type_name_to_type_reference(
-            &function_declaration.return_type,
-            true,
+                type_reference: lower_type_reference_to_type_reference(
+                    &parameter.type_reference,
+                    &type_parameter_names,
+                ),
+            })
+            .collect();
+        let return_type = lower_type_reference_to_type_reference(
+            &function_declaration.return_type_reference,
             &type_parameter_names,
-            diagnostics,
-        ) else {
-            continue;
-        };
-        if !function_supported {
-            continue;
-        }
+        );
         lowered.push(ExecutableFunctionDeclaration {
             name: function_declaration.name.clone(),
             callable_reference: ExecutableCallableReference {
@@ -204,96 +223,73 @@ fn lower_struct_declarations(
             .iter()
             .map(|type_parameter| type_parameter.name.clone())
             .collect::<Vec<_>>();
-        let mut executable_fields = Vec::new();
-        let mut struct_supported = true;
-        for field in &struct_declaration.fields {
-            let Some(type_reference) = lower_type_name_to_type_reference(
-                &field.type_name,
-                false,
+        let executable_fields = struct_declaration
+            .fields
+            .iter()
+            .map(|field| ExecutableStructFieldDeclaration {
+                name: field.name.clone(),
+                type_reference: lower_type_reference_to_type_reference(
+                    &field.type_reference,
+                    &type_parameter_names,
+                ),
+            })
+            .collect();
+        let implemented_interfaces = struct_declaration
+            .implemented_interfaces
+            .iter()
+            .map(|implemented_interface| ExecutableInterfaceReference {
+                package_path: implemented_interface.package_path.clone(),
+                symbol_name: implemented_interface.symbol_name.clone(),
+            })
+            .collect::<Vec<_>>();
+        lowered.push(ExecutableStructDeclaration {
+            name: struct_declaration.name.clone(),
+            struct_reference: ExecutableStructReference {
+                package_path: struct_declaration.struct_reference.package_path.clone(),
+                symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
+            },
+            type_parameter_names: type_parameter_names.clone(),
+            implemented_interfaces,
+            fields: executable_fields,
+            methods: lower_method_declarations(
+                &struct_declaration.methods,
                 &type_parameter_names,
                 diagnostics,
-            ) else {
-                struct_supported = false;
-                continue;
-            };
-            executable_fields.push(ExecutableStructFieldDeclaration {
-                name: field.name.clone(),
-                type_reference,
-            });
-        }
-        if struct_supported {
-            let implemented_interfaces = struct_declaration
-                .implemented_interfaces
-                .iter()
-                .map(|implemented_interface| ExecutableInterfaceReference {
-                    package_path: implemented_interface.package_path.clone(),
-                    symbol_name: implemented_interface.symbol_name.clone(),
-                })
-                .collect::<Vec<_>>();
-            lowered.push(ExecutableStructDeclaration {
-                name: struct_declaration.name.clone(),
-                struct_reference: ExecutableStructReference {
-                    package_path: struct_declaration.struct_reference.package_path.clone(),
-                    symbol_name: struct_declaration.struct_reference.symbol_name.clone(),
-                },
-                type_parameter_names: type_parameter_names.clone(),
-                implemented_interfaces,
-                fields: executable_fields,
-                methods: lower_method_declarations(
-                    &struct_declaration.methods,
-                    &type_parameter_names,
-                    diagnostics,
-                ),
-            });
-        }
+            ),
+        });
     }
     lowered
 }
 
 fn lower_interface_declarations(
     interface_declarations: &[TypeAnnotatedInterfaceDeclaration],
-    diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Vec<ExecutableInterfaceDeclaration> {
     let mut lowered = Vec::new();
     for interface_declaration in interface_declarations {
-        let mut interface_methods_supported = true;
-        let mut methods = Vec::new();
-        for method in &interface_declaration.methods {
-            let mut method_supported = true;
-            let mut executable_parameters = Vec::new();
-            for parameter in &method.parameters {
-                let Some(type_reference) =
-                    lower_type_name_to_type_reference(&parameter.type_name, true, &[], diagnostics)
-                else {
-                    interface_methods_supported = false;
-                    method_supported = false;
-                    break;
-                };
-                executable_parameters.push(ExecutableParameterDeclaration {
-                    name: parameter.name.clone(),
-                    mutable: parameter.mutable,
-                    type_reference,
-                });
-            }
-            if !method_supported {
-                continue;
-            }
-            let Some(return_type) =
-                lower_type_name_to_type_reference(&method.return_type, true, &[], diagnostics)
-            else {
-                interface_methods_supported = false;
-                continue;
-            };
-            methods.push(ExecutableInterfaceMethodDeclaration {
+        let methods = interface_declaration
+            .methods
+            .iter()
+            .map(|method| ExecutableInterfaceMethodDeclaration {
                 name: method.name.clone(),
                 self_mutable: method.self_mutable,
-                parameters: executable_parameters,
-                return_type,
-            });
-        }
-        if !interface_methods_supported {
-            continue;
-        }
+                parameters: method
+                    .parameters
+                    .iter()
+                    .map(|parameter| ExecutableParameterDeclaration {
+                        name: parameter.name.clone(),
+                        mutable: parameter.mutable,
+                        type_reference: lower_type_reference_to_type_reference(
+                            &parameter.type_reference,
+                            &[],
+                        ),
+                    })
+                    .collect(),
+                return_type: lower_type_reference_to_type_reference(
+                    &method.return_type_reference,
+                    &[],
+                ),
+            })
+            .collect();
         lowered.push(ExecutableInterfaceDeclaration {
             name: interface_declaration.name.clone(),
             interface_reference: ExecutableInterfaceReference {
@@ -319,35 +315,22 @@ fn lower_method_declarations(
 ) -> Vec<ExecutableMethodDeclaration> {
     let mut lowered = Vec::new();
     for method_declaration in method_declarations {
-        let mut method_supported = true;
-        let mut executable_parameters = Vec::new();
-        for parameter in &method_declaration.parameters {
-            let Some(type_reference) = lower_type_name_to_type_reference(
-                &parameter.type_name,
-                true,
-                enclosing_type_parameter_names,
-                diagnostics,
-            ) else {
-                method_supported = false;
-                continue;
-            };
-            executable_parameters.push(ExecutableParameterDeclaration {
+        let executable_parameters = method_declaration
+            .parameters
+            .iter()
+            .map(|parameter| ExecutableParameterDeclaration {
                 name: parameter.name.clone(),
                 mutable: parameter.mutable,
-                type_reference,
-            });
-        }
-        let Some(return_type) = lower_type_name_to_type_reference(
-            &method_declaration.return_type,
-            true,
+                type_reference: lower_type_reference_to_type_reference(
+                    &parameter.type_reference,
+                    enclosing_type_parameter_names,
+                ),
+            })
+            .collect();
+        let return_type = lower_type_reference_to_type_reference(
+            &method_declaration.return_type_reference,
             enclosing_type_parameter_names,
-            diagnostics,
-        ) else {
-            continue;
-        };
-        if !method_supported {
-            continue;
-        }
+        );
         lowered.push(ExecutableMethodDeclaration {
             name: method_declaration.name.clone(),
             self_mutable: method_declaration.self_mutable,
@@ -363,51 +346,54 @@ fn lower_method_declarations(
     lowered
 }
 
-fn validate_main_signature_from_type_analysis(
-    type_annotated_file: &TypeAnnotatedFile,
+fn validate_main_signature_from_resolved_declarations(
+    resolved_declarations: &TypeResolvedDeclarations,
     diagnostics: &mut Vec<PhaseDiagnostic>,
 ) -> Option<ExecutableCallableReference> {
-    let fallback_span_for_diagnostic = type_annotated_file
+    let fallback_span_for_diagnostic = resolved_declarations
         .function_declarations
         .iter()
         .find(|function_declaration| function_declaration.name == "main")
         .map_or_else(fallback_span, |main_function_declaration| {
             main_function_declaration.span.clone()
         });
-    let Some(main_signature) = type_annotated_file.function_signature_by_name.get("main") else {
+    let Some(main_declaration) = resolved_declarations
+        .function_declarations
+        .iter()
+        .find(|function_declaration| function_declaration.name == "main")
+    else {
         diagnostics.push(PhaseDiagnostic::new(
             "build mode requires type analysis information for main",
             fallback_span_for_diagnostic,
         ));
         return None;
     };
-    if main_signature.type_parameter_count != 0 {
+    if !main_declaration.type_parameters.is_empty() {
         diagnostics.push(PhaseDiagnostic::new(
             "build mode currently supports only non-generic main()",
             fallback_span_for_diagnostic.clone(),
         ));
     }
-    if main_signature.parameter_count != 0 {
+    if !main_declaration.parameters.is_empty() {
         diagnostics.push(PhaseDiagnostic::new(
             "build mode currently supports only parameterless main()",
             fallback_span_for_diagnostic.clone(),
         ));
     }
-    if !main_signature.returns_nil {
+    if !matches!(
+        main_declaration.return_type_reference,
+        TypeAnnotatedResolvedTypeArgument::Nil
+    ) {
         diagnostics.push(PhaseDiagnostic::new(
             "build mode currently supports only main() -> nil",
             fallback_span_for_diagnostic,
         ));
     }
 
-    type_annotated_file
-        .function_declarations
-        .iter()
-        .find(|function_declaration| function_declaration.name == "main")
-        .map(|function_declaration| ExecutableCallableReference {
-            package_path: function_declaration.callable_reference.package_path.clone(),
-            symbol_name: function_declaration.callable_reference.symbol_name.clone(),
-        })
+    Some(ExecutableCallableReference {
+        package_path: main_declaration.callable_reference.package_path.clone(),
+        symbol_name: main_declaration.callable_reference.symbol_name.clone(),
+    })
 }
 
 fn lower_statements(
@@ -549,6 +535,7 @@ fn lower_expression(
             name,
             constant_reference,
             callable_reference,
+            type_reference,
             ..
         } => ExecutableExpression::Identifier {
             name: name.clone(),
@@ -564,6 +551,10 @@ fn lower_expression(
                     symbol_name: callable_reference.symbol_name.clone(),
                 }
             }),
+            type_reference: lower_type_reference_to_type_reference(
+                type_reference,
+                type_parameter_names,
+            ),
         },
         TypeAnnotatedExpression::EnumVariantLiteral {
             enum_variant_reference,
@@ -1079,38 +1070,6 @@ fn lower_match_pattern(
             })
         }
     }
-}
-
-fn lower_constraint_type_name_to_interface_reference(
-    type_name: &TypeAnnotatedTypeName,
-    diagnostics: &mut Vec<PhaseDiagnostic>,
-) -> Option<ExecutableInterfaceReference> {
-    if type_name.names.len() != 1 {
-        diagnostics.push(PhaseDiagnostic::new(
-            "constraint type must be a single nominal interface type",
-            type_name.span.clone(),
-        ));
-        return None;
-    }
-    let type_name_segment = &type_name.names[0];
-    if !type_name_segment.type_arguments.is_empty() {
-        diagnostics.push(PhaseDiagnostic::new(
-            "constraint interfaces with type arguments are not supported in build mode yet",
-            type_name_segment.span.clone(),
-        ));
-        return None;
-    }
-    let Some(nominal_type_reference) = &type_name_segment.nominal_type_reference else {
-        diagnostics.push(PhaseDiagnostic::new(
-            "constraint type must resolve to a nominal interface type",
-            type_name_segment.span.clone(),
-        ));
-        return None;
-    };
-    Some(ExecutableInterfaceReference {
-        package_path: nominal_type_reference.package_path.clone(),
-        symbol_name: nominal_type_reference.symbol_name.clone(),
-    })
 }
 
 fn fallback_span() -> Span {

@@ -20,6 +20,15 @@ function addTwo(mut value: int64) -> int64 {
     return value
 }
 
+type Maybe[T] :: T | nil
+
+function coalesce[T](value: Maybe[T], fallback: T) -> T {
+    if value != nil {
+        return value
+    }
+    return fallback
+}
+
 function main() -> nil {
     localMapper: function(int64) -> int64 := plusOne
     importedMapper: function(int64) -> int64 := plusTwo
@@ -34,5 +43,7 @@ function main() -> nil {
     } else {
         print("value not 10")
     }
+    print(string(coalesce[int64](nil, 9)))
+    print(string(coalesce[int64](5, 9)))
     return nil
 }

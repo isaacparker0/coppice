@@ -140,7 +140,10 @@ impl TypeChecker<'_> {
                     .map(|argument| self.check_expression(argument))
                     .collect::<Vec<_>>();
                 let resolved_target = if let SemanticExpression::NameReference {
-                    name, span, ..
+                    id,
+                    name,
+                    span,
+                    ..
                 } = callee.as_ref()
                 {
                     if self.name_reference_resolves_to_value_binding(name) {
@@ -189,15 +192,23 @@ impl TypeChecker<'_> {
                             }
                             Type::Boolean
                         };
-                        Some(ResolvedCallTarget {
+                        let resolved_target = ResolvedCallTarget {
                             display_name: name.clone(),
-                            parameter_types: vec![Type::Unknown],
+                            parameter_types: vec![argument_type],
                             return_type,
                             resolved_type_arguments: Vec::new(),
                             call_target: Some(TypeAnnotatedCallTarget::BuiltinFunction {
                                 function_name: name.clone(),
                             }),
-                        })
+                        };
+                        self.resolved_type_by_expression_id.insert(
+                            *id,
+                            Type::Function {
+                                parameter_types: resolved_target.parameter_types.clone(),
+                                return_type: Box::new(resolved_target.return_type.clone()),
+                            },
+                        );
+                        Some(resolved_target)
                     } else if let Some(info) = self.functions.get(name).cloned() {
                         let instantiated = self.instantiate_function_call_signature(
                             name,
@@ -208,13 +219,21 @@ impl TypeChecker<'_> {
                             &argument_types,
                             span,
                         );
-                        Some(ResolvedCallTarget {
+                        let resolved_target = ResolvedCallTarget {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
                             resolved_type_arguments: instantiated.resolved_type_arguments,
                             call_target: Some(info.call_target.clone()),
-                        })
+                        };
+                        self.resolved_type_by_expression_id.insert(
+                            *id,
+                            Type::Function {
+                                parameter_types: resolved_target.parameter_types.clone(),
+                                return_type: Box::new(resolved_target.return_type.clone()),
+                            },
+                        );
+                        Some(resolved_target)
                     } else if let Some(info) = self.imported_functions.get(name).cloned() {
                         self.mark_import_used(name);
                         let instantiated = self.instantiate_function_call_signature(
@@ -226,13 +245,21 @@ impl TypeChecker<'_> {
                             &argument_types,
                             span,
                         );
-                        Some(ResolvedCallTarget {
+                        let resolved_target = ResolvedCallTarget {
                             display_name: name.clone(),
                             parameter_types: instantiated.parameter_types,
                             return_type: instantiated.return_type,
                             resolved_type_arguments: instantiated.resolved_type_arguments,
                             call_target: Some(info.call_target.clone()),
-                        })
+                        };
+                        self.resolved_type_by_expression_id.insert(
+                            *id,
+                            Type::Function {
+                                parameter_types: resolved_target.parameter_types.clone(),
+                                return_type: Box::new(resolved_target.return_type.clone()),
+                            },
+                        );
+                        Some(resolved_target)
                     } else {
                         if self.imported_bindings.contains_key(name) {
                             self.mark_import_used(name);

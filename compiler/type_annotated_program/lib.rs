@@ -1,11 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
-
 use compiler__source::Span;
 
-#[derive(Clone, Default)]
-pub struct TypeAnnotatedFile {
-    pub function_signature_by_name: HashMap<String, TypeAnnotatedFunctionSignature>,
-    pub resolved_type_by_expression_id: BTreeMap<u32, TypeAnnotatedResolvedTypeArgument>,
+#[derive(Clone)]
+pub struct TypeResolvedDeclarations {
     pub constant_declarations: Vec<TypeAnnotatedConstantDeclaration>,
     pub interface_declarations: Vec<TypeAnnotatedInterfaceDeclaration>,
     pub struct_declarations: Vec<TypeAnnotatedStructDeclaration>,
@@ -59,17 +55,10 @@ pub enum TypeAnnotatedCallTarget {
 }
 
 #[derive(Clone)]
-pub struct TypeAnnotatedFunctionSignature {
-    pub type_parameter_count: usize,
-    pub parameter_count: usize,
-    pub returns_nil: bool,
-}
-
-#[derive(Clone)]
 pub struct TypeAnnotatedConstantDeclaration {
     pub name: String,
     pub constant_reference: TypeAnnotatedConstantReference,
-    pub type_name: TypeAnnotatedTypeName,
+    pub type_reference: TypeAnnotatedResolvedTypeArgument,
     pub initializer: TypeAnnotatedExpression,
     pub span: Span,
 }
@@ -80,7 +69,7 @@ pub struct TypeAnnotatedFunctionDeclaration {
     pub callable_reference: TypeAnnotatedCallableReference,
     pub type_parameters: Vec<TypeAnnotatedTypeParameter>,
     pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
-    pub return_type: TypeAnnotatedTypeName,
+    pub return_type_reference: TypeAnnotatedResolvedTypeArgument,
     pub span: Span,
     pub statements: Vec<TypeAnnotatedStatement>,
 }
@@ -88,7 +77,7 @@ pub struct TypeAnnotatedFunctionDeclaration {
 #[derive(Clone)]
 pub struct TypeAnnotatedTypeParameter {
     pub name: String,
-    pub constraint: Option<TypeAnnotatedTypeName>,
+    pub constraint_interface_reference: Option<TypeAnnotatedInterfaceReference>,
     pub span: Span,
 }
 
@@ -96,7 +85,7 @@ pub struct TypeAnnotatedTypeParameter {
 pub struct TypeAnnotatedParameterDeclaration {
     pub name: String,
     pub mutable: bool,
-    pub type_name: TypeAnnotatedTypeName,
+    pub type_reference: TypeAnnotatedResolvedTypeArgument,
     pub span: Span,
 }
 
@@ -124,14 +113,14 @@ pub struct TypeAnnotatedInterfaceMethodDeclaration {
     pub name: String,
     pub self_mutable: bool,
     pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
-    pub return_type: TypeAnnotatedTypeName,
+    pub return_type_reference: TypeAnnotatedResolvedTypeArgument,
     pub span: Span,
 }
 
 #[derive(Clone)]
 pub struct TypeAnnotatedStructFieldDeclaration {
     pub name: String,
-    pub type_name: TypeAnnotatedTypeName,
+    pub type_reference: TypeAnnotatedResolvedTypeArgument,
     pub span: Span,
 }
 
@@ -140,7 +129,7 @@ pub struct TypeAnnotatedMethodDeclaration {
     pub name: String,
     pub self_mutable: bool,
     pub parameters: Vec<TypeAnnotatedParameterDeclaration>,
-    pub return_type: TypeAnnotatedTypeName,
+    pub return_type_reference: TypeAnnotatedResolvedTypeArgument,
     pub span: Span,
     pub statements: Vec<TypeAnnotatedStatement>,
 }
@@ -225,6 +214,7 @@ pub enum TypeAnnotatedExpression {
         kind: TypeAnnotatedNameReferenceKind,
         constant_reference: Option<TypeAnnotatedConstantReference>,
         callable_reference: Option<TypeAnnotatedCallableReference>,
+        type_reference: TypeAnnotatedResolvedTypeArgument,
         span: Span,
     },
     EnumVariantLiteral {

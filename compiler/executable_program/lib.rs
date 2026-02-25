@@ -216,6 +216,7 @@ pub enum ExecutableExpression {
         name: String,
         constant_reference: Option<ExecutableConstantReference>,
         callable_reference: Option<ExecutableCallableReference>,
+        type_reference: ExecutableTypeReference,
     },
     EnumVariantLiteral {
         enum_variant_reference: ExecutableEnumVariantReference,

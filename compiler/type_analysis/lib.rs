@@ -10,24 +10,23 @@ use compiler__semantic_program::{
     SemanticUnaryOperator,
 };
 use compiler__semantic_types::{
-    FileTypecheckSummary, GenericTypeParameter, ImportedBinding, ImportedSymbol,
-    ImportedTypeDeclaration, NominalTypeId, NominalTypeRef, Type, TypedFunctionSignature,
-    TypedSymbol, type_from_builtin_name,
+    GenericTypeParameter, ImportedBinding, ImportedSymbol, ImportedTypeDeclaration, NominalTypeId,
+    NominalTypeRef, Type, type_from_builtin_name,
 };
 use compiler__source::Span;
 use compiler__type_annotated_program::{
     TypeAnnotatedAssignTarget, TypeAnnotatedBinaryOperator, TypeAnnotatedCallTarget,
     TypeAnnotatedCallableReference, TypeAnnotatedConstantDeclaration,
     TypeAnnotatedConstantReference, TypeAnnotatedEnumVariantReference, TypeAnnotatedExpression,
-    TypeAnnotatedFile, TypeAnnotatedFunctionDeclaration, TypeAnnotatedFunctionSignature,
-    TypeAnnotatedInterfaceDeclaration, TypeAnnotatedInterfaceMethodDeclaration,
-    TypeAnnotatedInterfaceReference, TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern,
-    TypeAnnotatedMethodDeclaration, TypeAnnotatedNameReferenceKind,
-    TypeAnnotatedNominalTypeReference, TypeAnnotatedParameterDeclaration,
-    TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement, TypeAnnotatedStructDeclaration,
-    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
-    TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
-    TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
+    TypeAnnotatedFunctionDeclaration, TypeAnnotatedInterfaceDeclaration,
+    TypeAnnotatedInterfaceMethodDeclaration, TypeAnnotatedInterfaceReference,
+    TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration,
+    TypeAnnotatedNameReferenceKind, TypeAnnotatedNominalTypeReference,
+    TypeAnnotatedParameterDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
+    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
+    TypeAnnotatedStructLiteralField, TypeAnnotatedStructReference, TypeAnnotatedTypeName,
+    TypeAnnotatedTypeNameSegment, TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
+    TypeResolvedDeclarations,
 };
 
 mod assignability;
@@ -39,7 +38,6 @@ mod type_narrowing;
 mod unused_bindings;
 
 struct TypeAnalysisSummary {
-    file_typecheck_summary: FileTypecheckSummary,
     resolved_type_by_expression_id: BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     constant_reference_by_expression_id:
@@ -55,6 +53,19 @@ struct TypeAnalysisSummary {
     type_declarations_for_annotations: Vec<SemanticTypeDeclaration>,
     constant_declarations_for_annotations: Vec<SemanticConstantDeclaration>,
     function_declarations_for_annotations: Vec<SemanticFunctionDeclaration>,
+    resolved_declarations: ResolvedDeclarations,
+}
+
+#[derive(Clone)]
+pub enum TypeAnalysisBlockingReason {
+    TypeErrorsPresent,
+}
+
+struct ResolvedDeclarations {
+    constants_by_name: HashMap<String, ConstantInfo>,
+    functions_by_name: HashMap<String, FunctionInfo>,
+    types_by_name: HashMap<String, TypeInfo>,
+    methods_by_key: HashMap<MethodKey, MethodInfo>,
 }
 
 #[must_use]
@@ -63,7 +74,7 @@ pub fn check_package_unit(
     package_path: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
-) -> PhaseOutput<TypeAnnotatedFile> {
+) -> PhaseOutput<Result<TypeResolvedDeclarations, TypeAnalysisBlockingReason>> {
     let mut diagnostics = Vec::new();
     let summary = analyze_package_unit(
         package_id,
@@ -78,23 +89,33 @@ pub fn check_package_unit(
         PhaseStatus::PreventsDownstreamExecution
     };
 
-    let mut type_annotated_file = TypeAnnotatedFile {
-        function_signature_by_name: function_signature_by_name_from_summary(
-            &summary.file_typecheck_summary,
-        ),
-        resolved_type_by_expression_id: summary
-            .resolved_type_by_expression_id
-            .iter()
-            .filter_map(|(expression_id, value_type)| {
-                Some((
-                    expression_id.0,
-                    type_annotated_resolved_type_argument_from_type(value_type)?,
-                ))
-            })
-            .collect(),
+    let value = if matches!(status, PhaseStatus::Ok) {
+        Ok(build_resolved_declarations(
+            package_path,
+            &summary,
+            &summary.nominal_type_reference_by_local_name,
+        ))
+    } else {
+        Err(TypeAnalysisBlockingReason::TypeErrorsPresent)
+    };
+
+    PhaseOutput {
+        value,
+        diagnostics,
+        status,
+    }
+}
+
+fn build_resolved_declarations(
+    package_path: &str,
+    summary: &TypeAnalysisSummary,
+    nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
+) -> TypeResolvedDeclarations {
+    let mut resolved_declarations = TypeResolvedDeclarations {
         constant_declarations: build_constant_declaration_annotations(
             package_path,
             &summary.constant_declarations_for_annotations,
+            &summary.resolved_declarations,
             &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
@@ -105,11 +126,13 @@ pub fn check_package_unit(
         interface_declarations: build_interface_declaration_annotations(
             package_path,
             &summary.type_declarations_for_annotations,
+            &summary.resolved_declarations,
         ),
         struct_declarations: build_struct_declaration_annotations(
             package_path,
             &summary.type_declarations_for_annotations,
             &summary.implemented_interface_references_by_struct_name,
+            &summary.resolved_declarations,
             &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
@@ -120,6 +143,7 @@ pub fn check_package_unit(
         function_declarations: build_function_declaration_annotations(
             package_path,
             &summary.function_declarations_for_annotations,
+            &summary.resolved_declarations,
             &summary.resolved_type_by_expression_id,
             &summary.call_target_by_expression_id,
             &summary.resolved_type_argument_types_by_expression_id,
@@ -129,40 +153,16 @@ pub fn check_package_unit(
         ),
     };
     annotate_nominal_type_references(
-        &mut type_annotated_file,
-        &summary.nominal_type_reference_by_local_name,
+        &mut resolved_declarations,
+        nominal_type_reference_by_local_name,
     );
-
-    PhaseOutput {
-        value: type_annotated_file,
-        diagnostics,
-        status,
-    }
-}
-
-fn function_signature_by_name_from_summary(
-    summary: &FileTypecheckSummary,
-) -> HashMap<String, TypeAnnotatedFunctionSignature> {
-    let mut function_signature_by_name = HashMap::new();
-    for (name, typed_symbol) in &summary.typed_symbol_by_name {
-        let TypedSymbol::Function(function_signature) = typed_symbol else {
-            continue;
-        };
-        function_signature_by_name.insert(
-            name.clone(),
-            TypeAnnotatedFunctionSignature {
-                type_parameter_count: function_signature.type_parameters.len(),
-                parameter_count: function_signature.parameter_types.len(),
-                returns_nil: function_signature.return_type == Type::Nil,
-            },
-        );
-    }
-    function_signature_by_name
+    resolved_declarations
 }
 
 fn build_constant_declaration_annotations(
     package_path: &str,
     constant_declarations: &[SemanticConstantDeclaration],
+    resolved_declarations: &ResolvedDeclarations,
     resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
@@ -184,25 +184,31 @@ fn build_constant_declaration_annotations(
 ) -> Vec<TypeAnnotatedConstantDeclaration> {
     constant_declarations
         .iter()
-        .map(|constant_declaration| TypeAnnotatedConstantDeclaration {
-            name: constant_declaration.name.clone(),
-            constant_reference: TypeAnnotatedConstantReference {
-                package_path: package_path.to_string(),
-                symbol_name: constant_declaration.name.clone(),
-            },
-            type_name: type_annotated_type_name_from_semantic_type_name(
-                &constant_declaration.type_name,
-            ),
-            initializer: type_annotated_expression_from_semantic_expression(
-                &constant_declaration.expression,
-                resolved_type_by_expression_id,
-                call_target_by_expression_id,
-                resolved_type_argument_types_by_expression_id,
-                struct_reference_by_expression_id,
-                enum_variant_reference_by_expression_id,
-                constant_reference_by_expression_id,
-            ),
-            span: constant_declaration.span.clone(),
+        .map(|constant_declaration| {
+            let resolved_type = resolved_declarations
+                .constants_by_name
+                .get(&constant_declaration.name)
+                .map(|constant_info| constant_info.value_type.clone())
+                .expect("constant declaration must have resolved type info");
+            TypeAnnotatedConstantDeclaration {
+                name: constant_declaration.name.clone(),
+                constant_reference: TypeAnnotatedConstantReference {
+                    package_path: package_path.to_string(),
+                    symbol_name: constant_declaration.name.clone(),
+                },
+                type_reference: type_annotated_resolved_type_argument_from_type(&resolved_type)
+                    .expect("constant type must be fully resolved"),
+                initializer: type_annotated_expression_from_semantic_expression(
+                    &constant_declaration.expression,
+                    resolved_type_by_expression_id,
+                    call_target_by_expression_id,
+                    resolved_type_argument_types_by_expression_id,
+                    struct_reference_by_expression_id,
+                    enum_variant_reference_by_expression_id,
+                    constant_reference_by_expression_id,
+                ),
+                span: constant_declaration.span.clone(),
+            }
         })
         .collect()
 }
@@ -210,6 +216,7 @@ fn build_constant_declaration_annotations(
 fn build_function_declaration_annotations(
     package_path: &str,
     function_declarations: &[SemanticFunctionDeclaration],
+    resolved_declarations: &ResolvedDeclarations,
     resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
@@ -231,56 +238,75 @@ fn build_function_declaration_annotations(
 ) -> Vec<TypeAnnotatedFunctionDeclaration> {
     function_declarations
         .iter()
-        .map(|function_declaration| TypeAnnotatedFunctionDeclaration {
-            name: function_declaration.name.clone(),
-            callable_reference: TypeAnnotatedCallableReference {
-                package_path: package_path.to_string(),
-                symbol_name: function_declaration.name.clone(),
-            },
-            type_parameters: function_declaration
-                .type_parameters
-                .iter()
-                .map(|type_parameter| TypeAnnotatedTypeParameter {
-                    name: type_parameter.name.clone(),
-                    constraint: type_parameter
-                        .constraint
-                        .as_ref()
-                        .map(type_annotated_type_name_from_semantic_type_name),
-                    span: type_parameter.span.clone(),
-                })
-                .collect(),
-            parameters: function_declaration
-                .parameters
-                .iter()
-                .map(|parameter| TypeAnnotatedParameterDeclaration {
-                    name: parameter.name.clone(),
-                    mutable: parameter.mutable,
-                    type_name: type_annotated_type_name_from_semantic_type_name(
-                        &parameter.type_name,
-                    ),
-                    span: parameter.span.clone(),
-                })
-                .collect(),
-            return_type: type_annotated_type_name_from_semantic_type_name(
-                &function_declaration.return_type,
-            ),
-            span: function_declaration.span.clone(),
-            statements: function_declaration
-                .body
-                .statements
-                .iter()
-                .map(|statement| {
-                    type_annotated_statement_from_semantic_statement(
-                        statement,
-                        resolved_type_by_expression_id,
-                        call_target_by_expression_id,
-                        resolved_type_argument_types_by_expression_id,
-                        struct_reference_by_expression_id,
-                        enum_variant_reference_by_expression_id,
-                        constant_reference_by_expression_id,
+        .map(|function_declaration| {
+            let function_info = resolved_declarations
+                .functions_by_name
+                .get(&function_declaration.name)
+                .expect("function declaration must have resolved signature");
+            TypeAnnotatedFunctionDeclaration {
+                name: function_declaration.name.clone(),
+                callable_reference: TypeAnnotatedCallableReference {
+                    package_path: package_path.to_string(),
+                    symbol_name: function_declaration.name.clone(),
+                },
+                type_parameters: function_declaration
+                    .type_parameters
+                    .iter()
+                    .zip(function_info.type_parameters.iter())
+                    .map(
+                        |(type_parameter, resolved_type_parameter)| TypeAnnotatedTypeParameter {
+                            name: type_parameter.name.clone(),
+                            constraint_interface_reference: resolved_type_parameter
+                                .constraint
+                                .as_ref()
+                                .and_then(|constraint| {
+                                    type_annotated_interface_reference_from_type(
+                                        &resolved_declarations.types_by_name,
+                                        constraint,
+                                    )
+                                }),
+                            span: type_parameter.span.clone(),
+                        },
                     )
-                })
-                .collect(),
+                    .collect(),
+                parameters: function_declaration
+                    .parameters
+                    .iter()
+                    .zip(function_info.parameter_types.iter())
+                    .map(
+                        |(parameter, resolved_parameter_type)| TypeAnnotatedParameterDeclaration {
+                            name: parameter.name.clone(),
+                            mutable: parameter.mutable,
+                            type_reference: type_annotated_resolved_type_argument_from_type(
+                                resolved_parameter_type,
+                            )
+                            .expect("function parameter types must be fully resolved"),
+                            span: parameter.span.clone(),
+                        },
+                    )
+                    .collect(),
+                return_type_reference: type_annotated_resolved_type_argument_from_type(
+                    &function_info.return_type,
+                )
+                .expect("function return type must be fully resolved"),
+                span: function_declaration.span.clone(),
+                statements: function_declaration
+                    .body
+                    .statements
+                    .iter()
+                    .map(|statement| {
+                        type_annotated_statement_from_semantic_statement(
+                            statement,
+                            resolved_type_by_expression_id,
+                            call_target_by_expression_id,
+                            resolved_type_argument_types_by_expression_id,
+                            struct_reference_by_expression_id,
+                            enum_variant_reference_by_expression_id,
+                            constant_reference_by_expression_id,
+                        )
+                    })
+                    .collect(),
+            }
         })
         .collect()
 }
@@ -292,6 +318,7 @@ fn build_struct_declaration_annotations(
         String,
         Vec<TypeAnnotatedInterfaceReference>,
     >,
+    resolved_declarations: &ResolvedDeclarations,
     resolved_type_by_expression_id: &BTreeMap<SemanticExpressionId, Type>,
     call_target_by_expression_id: &BTreeMap<SemanticExpressionId, TypeAnnotatedCallTarget>,
     resolved_type_argument_types_by_expression_id: &BTreeMap<
@@ -314,7 +341,17 @@ fn build_struct_declaration_annotations(
     type_declarations
         .iter()
         .filter_map(|type_declaration| match &type_declaration.kind {
-            compiler__semantic_program::SemanticTypeDeclarationKind::Struct { fields, methods } => {
+            compiler__semantic_program::SemanticTypeDeclarationKind::Struct {
+                fields: semantic_fields,
+                methods,
+            } => {
+                let type_info = resolved_declarations
+                    .types_by_name
+                    .get(&type_declaration.name)
+                    .expect("struct declaration must have resolved type info");
+                let TypeKind::Struct { fields } = &type_info.kind else {
+                    panic!("resolved struct declaration must have struct kind");
+                };
                 Some(TypeAnnotatedStructDeclaration {
                     name: type_declaration.name.clone(),
                     struct_reference: TypeAnnotatedStructReference {
@@ -324,13 +361,21 @@ fn build_struct_declaration_annotations(
                     type_parameters: type_declaration
                         .type_parameters
                         .iter()
-                        .map(|type_parameter| TypeAnnotatedTypeParameter {
-                            name: type_parameter.name.clone(),
-                            constraint: type_parameter
-                                .constraint
-                                .as_ref()
-                                .map(type_annotated_type_name_from_semantic_type_name),
-                            span: type_parameter.span.clone(),
+                        .zip(type_info.type_parameters.iter())
+                        .map(|(type_parameter, resolved_type_parameter)| {
+                            TypeAnnotatedTypeParameter {
+                                name: type_parameter.name.clone(),
+                                constraint_interface_reference: resolved_type_parameter
+                                    .constraint
+                                    .as_ref()
+                                    .and_then(|constraint| {
+                                        type_annotated_interface_reference_from_type(
+                                            &resolved_declarations.types_by_name,
+                                            constraint,
+                                        )
+                                    }),
+                                span: type_parameter.span.clone(),
+                            }
                         })
                         .collect(),
                     implemented_interfaces: implemented_interface_references_by_struct_name
@@ -339,51 +384,74 @@ fn build_struct_declaration_annotations(
                         .unwrap_or_default(),
                     fields: fields
                         .iter()
-                        .map(|field| TypeAnnotatedStructFieldDeclaration {
-                            name: field.name.clone(),
-                            type_name: type_annotated_type_name_from_semantic_type_name(
-                                &field.type_name,
-                            ),
-                            span: field.span.clone(),
+                        .zip(semantic_fields.iter())
+                        .map(|((field_name, field_type), semantic_field)| {
+                            TypeAnnotatedStructFieldDeclaration {
+                                name: field_name.clone(),
+                                type_reference: type_annotated_resolved_type_argument_from_type(
+                                    field_type,
+                                )
+                                .expect("struct field types must be fully resolved"),
+                                span: semantic_field.span.clone(),
+                            }
                         })
                         .collect(),
                     methods: methods
                         .iter()
-                        .map(|method| TypeAnnotatedMethodDeclaration {
-                            name: method.name.clone(),
-                            self_mutable: method.self_mutable,
-                            parameters: method
-                                .parameters
-                                .iter()
-                                .map(|parameter| TypeAnnotatedParameterDeclaration {
-                                    name: parameter.name.clone(),
-                                    mutable: parameter.mutable,
-                                    type_name: type_annotated_type_name_from_semantic_type_name(
-                                        &parameter.type_name,
-                                    ),
-                                    span: parameter.span.clone(),
-                                })
-                                .collect(),
-                            return_type: type_annotated_type_name_from_semantic_type_name(
-                                &method.return_type,
-                            ),
-                            span: method.span.clone(),
-                            statements: method
-                                .body
-                                .statements
-                                .iter()
-                                .map(|statement| {
-                                    type_annotated_statement_from_semantic_statement(
-                                        statement,
-                                        resolved_type_by_expression_id,
-                                        call_target_by_expression_id,
-                                        resolved_type_argument_types_by_expression_id,
-                                        struct_reference_by_expression_id,
-                                        enum_variant_reference_by_expression_id,
-                                        constant_reference_by_expression_id,
+                        .map(|method| {
+                            let method_key = MethodKey {
+                                receiver_type_id: type_info.nominal_type_id.clone(),
+                                method_name: method.name.clone(),
+                            };
+                            let method_info = resolved_declarations
+                                .methods_by_key
+                                .get(&method_key)
+                                .expect("struct method must have resolved signature");
+                            TypeAnnotatedMethodDeclaration {
+                                name: method.name.clone(),
+                                self_mutable: method_info.self_mutable,
+                                parameters: method
+                                    .parameters
+                                    .iter()
+                                    .zip(method_info.parameter_types.iter())
+                                    .map(|(parameter, resolved_parameter_type)| {
+                                        TypeAnnotatedParameterDeclaration {
+                                            name: parameter.name.clone(),
+                                            mutable: parameter.mutable,
+                                            type_reference:
+                                                type_annotated_resolved_type_argument_from_type(
+                                                    resolved_parameter_type,
+                                                )
+                                                .expect(
+                                                    "method parameter types must be fully resolved",
+                                                ),
+                                            span: parameter.span.clone(),
+                                        }
+                                    })
+                                    .collect(),
+                                return_type_reference:
+                                    type_annotated_resolved_type_argument_from_type(
+                                        &method_info.return_type,
                                     )
-                                })
-                                .collect(),
+                                    .expect("method return type must be fully resolved"),
+                                span: method.span.clone(),
+                                statements: method
+                                    .body
+                                    .statements
+                                    .iter()
+                                    .map(|statement| {
+                                        type_annotated_statement_from_semantic_statement(
+                                            statement,
+                                            resolved_type_by_expression_id,
+                                            call_target_by_expression_id,
+                                            resolved_type_argument_types_by_expression_id,
+                                            struct_reference_by_expression_id,
+                                            enum_variant_reference_by_expression_id,
+                                            constant_reference_by_expression_id,
+                                        )
+                                    })
+                                    .collect(),
+                            }
                         })
                         .collect(),
                     span: type_declaration.span.clone(),
@@ -399,11 +467,22 @@ fn build_struct_declaration_annotations(
 fn build_interface_declaration_annotations(
     package_path: &str,
     type_declarations: &[SemanticTypeDeclaration],
+    resolved_declarations: &ResolvedDeclarations,
 ) -> Vec<TypeAnnotatedInterfaceDeclaration> {
     type_declarations
         .iter()
         .filter_map(|type_declaration| match &type_declaration.kind {
             compiler__semantic_program::SemanticTypeDeclarationKind::Interface { methods } => {
+                let type_info = resolved_declarations
+                    .types_by_name
+                    .get(&type_declaration.name)
+                    .expect("interface declaration must have resolved type info");
+                let TypeKind::Interface {
+                    methods: interface_methods,
+                } = &type_info.kind
+                else {
+                    panic!("resolved interface declaration must have interface kind");
+                };
                 Some(TypeAnnotatedInterfaceDeclaration {
                     name: type_declaration.name.clone(),
                     interface_reference: TypeAnnotatedInterfaceReference {
@@ -412,24 +491,30 @@ fn build_interface_declaration_annotations(
                     },
                     methods: methods
                         .iter()
-                        .map(|method| TypeAnnotatedInterfaceMethodDeclaration {
+                        .zip(interface_methods.iter())
+                        .map(|(method, resolved_method)| TypeAnnotatedInterfaceMethodDeclaration {
                             name: method.name.clone(),
-                            self_mutable: method.self_mutable,
+                            self_mutable: resolved_method.self_mutable,
                             parameters: method
                                 .parameters
                                 .iter()
-                                .map(|parameter| TypeAnnotatedParameterDeclaration {
-                                    name: parameter.name.clone(),
-                                    mutable: parameter.mutable,
-                                    type_name: type_annotated_type_name_from_semantic_type_name(
-                                        &parameter.type_name,
-                                    ),
-                                    span: parameter.span.clone(),
+                                .zip(resolved_method.parameter_types.iter())
+                                .map(|(parameter, resolved_parameter_type)| {
+                                    TypeAnnotatedParameterDeclaration {
+                                        name: parameter.name.clone(),
+                                        mutable: parameter.mutable,
+                                        type_reference: type_annotated_resolved_type_argument_from_type(
+                                            resolved_parameter_type,
+                                        )
+                                        .expect("interface method parameter types must be fully resolved"),
+                                        span: parameter.span.clone(),
+                                    }
                                 })
                                 .collect(),
-                            return_type: type_annotated_type_name_from_semantic_type_name(
-                                &method.return_type,
-                            ),
+                            return_type_reference: type_annotated_resolved_type_argument_from_type(
+                                &resolved_method.return_type,
+                            )
+                            .expect("interface method return type must be fully resolved"),
                             span: method.span.clone(),
                         })
                         .collect(),
@@ -441,6 +526,27 @@ fn build_interface_declaration_annotations(
             | compiler__semantic_program::SemanticTypeDeclarationKind::Union { .. } => None,
         })
         .collect()
+}
+
+fn type_annotated_interface_reference_from_type(
+    types_by_name: &HashMap<String, TypeInfo>,
+    value_type: &Type,
+) -> Option<TypeAnnotatedInterfaceReference> {
+    let nominal_type_id = match value_type {
+        Type::Named(named) => Some(named.id.clone()),
+        Type::Applied { base, .. } => Some(base.id.clone()),
+        _ => None,
+    }?;
+    let type_info = types_by_name
+        .values()
+        .find(|info| info.nominal_type_id == nominal_type_id)?;
+    if !matches!(type_info.kind, TypeKind::Interface { .. }) {
+        return None;
+    }
+    Some(TypeAnnotatedInterfaceReference {
+        package_path: type_info.package_path.clone(),
+        symbol_name: nominal_type_id.symbol_name,
+    })
 }
 
 fn type_annotated_statement_from_semantic_statement(
@@ -744,7 +850,7 @@ fn type_annotated_expression_from_semantic_expression(
                         }
                         _ => None,
                     })
-                    .unwrap_or(TypeAnnotatedResolvedTypeArgument::Never),
+                    .expect("list literal element types must be fully resolved"),
                 span: span.clone(),
             }
         }
@@ -769,6 +875,10 @@ fn type_annotated_expression_from_semantic_expression(
                     }
                     TypeAnnotatedCallTarget::BuiltinFunction { .. } => None,
                 }),
+            type_reference: resolved_type_by_expression_id
+                .get(&semantic_expression_id(expression))
+                .and_then(type_annotated_resolved_type_argument_from_type)
+                .expect("name reference types must be fully resolved"),
             span: span.clone(),
         },
         SemanticExpression::FieldAccess { span, .. }
@@ -1363,12 +1473,12 @@ fn type_annotated_type_name_from_semantic_type_name(
 }
 
 fn annotate_nominal_type_references(
-    type_annotated_file: &mut TypeAnnotatedFile,
+    resolved_declarations: &mut TypeResolvedDeclarations,
     nominal_type_reference_by_local_name: &HashMap<String, TypeAnnotatedNominalTypeReference>,
 ) {
-    for constant_declaration in &mut type_annotated_file.constant_declarations {
-        annotate_type_name_nominal_references(
-            &mut constant_declaration.type_name,
+    for constant_declaration in &mut resolved_declarations.constant_declarations {
+        annotate_resolved_type_argument_nominal_references(
+            &mut constant_declaration.type_reference,
             nominal_type_reference_by_local_name,
         );
         annotate_expression_nominal_references(
@@ -1377,37 +1487,37 @@ fn annotate_nominal_type_references(
         );
     }
 
-    for interface_declaration in &mut type_annotated_file.interface_declarations {
+    for interface_declaration in &mut resolved_declarations.interface_declarations {
         for method in &mut interface_declaration.methods {
             for parameter in &mut method.parameters {
-                annotate_type_name_nominal_references(
-                    &mut parameter.type_name,
+                annotate_resolved_type_argument_nominal_references(
+                    &mut parameter.type_reference,
                     nominal_type_reference_by_local_name,
                 );
             }
-            annotate_type_name_nominal_references(
-                &mut method.return_type,
+            annotate_resolved_type_argument_nominal_references(
+                &mut method.return_type_reference,
                 nominal_type_reference_by_local_name,
             );
         }
     }
 
-    for struct_declaration in &mut type_annotated_file.struct_declarations {
+    for struct_declaration in &mut resolved_declarations.struct_declarations {
         for field in &mut struct_declaration.fields {
-            annotate_type_name_nominal_references(
-                &mut field.type_name,
+            annotate_resolved_type_argument_nominal_references(
+                &mut field.type_reference,
                 nominal_type_reference_by_local_name,
             );
         }
         for method in &mut struct_declaration.methods {
             for parameter in &mut method.parameters {
-                annotate_type_name_nominal_references(
-                    &mut parameter.type_name,
+                annotate_resolved_type_argument_nominal_references(
+                    &mut parameter.type_reference,
                     nominal_type_reference_by_local_name,
                 );
             }
-            annotate_type_name_nominal_references(
-                &mut method.return_type,
+            annotate_resolved_type_argument_nominal_references(
+                &mut method.return_type_reference,
                 nominal_type_reference_by_local_name,
             );
             for statement in &mut method.statements {
@@ -1419,23 +1529,15 @@ fn annotate_nominal_type_references(
         }
     }
 
-    for function_declaration in &mut type_annotated_file.function_declarations {
-        for type_parameter in &mut function_declaration.type_parameters {
-            if let Some(constraint) = &mut type_parameter.constraint {
-                annotate_type_name_nominal_references(
-                    constraint,
-                    nominal_type_reference_by_local_name,
-                );
-            }
-        }
+    for function_declaration in &mut resolved_declarations.function_declarations {
         for parameter in &mut function_declaration.parameters {
-            annotate_type_name_nominal_references(
-                &mut parameter.type_name,
+            annotate_resolved_type_argument_nominal_references(
+                &mut parameter.type_reference,
                 nominal_type_reference_by_local_name,
             );
         }
-        annotate_type_name_nominal_references(
-            &mut function_declaration.return_type,
+        annotate_resolved_type_argument_nominal_references(
+            &mut function_declaration.return_type_reference,
             nominal_type_reference_by_local_name,
         );
         for statement in &mut function_declaration.statements {
@@ -1528,8 +1630,13 @@ fn annotate_expression_nominal_references(
         | TypeAnnotatedExpression::BooleanLiteral { .. }
         | TypeAnnotatedExpression::NilLiteral { .. }
         | TypeAnnotatedExpression::StringLiteral { .. }
-        | TypeAnnotatedExpression::NameReference { .. }
         | TypeAnnotatedExpression::EnumVariantLiteral { .. } => {}
+        TypeAnnotatedExpression::NameReference { type_reference, .. } => {
+            annotate_resolved_type_argument_nominal_references(
+                type_reference,
+                nominal_type_reference_by_local_name,
+            );
+        }
         TypeAnnotatedExpression::ListLiteral { elements, .. } => {
             for element in elements {
                 annotate_expression_nominal_references(
@@ -2014,57 +2121,34 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn build_summary(
-        &self,
+        self,
         type_declarations: &[SemanticTypeDeclaration],
-        function_declarations: &[SemanticFunctionDeclaration],
-        constant_declarations: &[SemanticConstantDeclaration],
+        _function_declarations: &[SemanticFunctionDeclaration],
+        _constant_declarations: &[SemanticConstantDeclaration],
     ) -> TypeAnalysisSummary {
-        let mut typed_symbol_by_name = HashMap::new();
-
-        for type_declaration in type_declarations {
-            typed_symbol_by_name.insert(type_declaration.name.clone(), TypedSymbol::Type);
-        }
-        for function_declaration in function_declarations {
-            if let Some(info) = self.functions.get(&function_declaration.name) {
-                typed_symbol_by_name.insert(
-                    function_declaration.name.clone(),
-                    TypedSymbol::Function(TypedFunctionSignature {
-                        type_parameters: info.type_parameters.clone(),
-                        parameter_types: info.parameter_types.clone(),
-                        return_type: info.return_type.clone(),
-                    }),
-                );
-            }
-        }
-        for constant_declaration in constant_declarations {
-            if let Some(info) = self.constants.get(&constant_declaration.name) {
-                typed_symbol_by_name.insert(
-                    constant_declaration.name.clone(),
-                    TypedSymbol::Constant(info.value_type.clone()),
-                );
-            }
-        }
+        let nominal_type_reference_by_local_name = self.nominal_type_reference_by_local_name();
+        let implemented_interface_references_by_struct_name =
+            self.implemented_interface_references_by_struct_name(type_declarations);
 
         TypeAnalysisSummary {
-            file_typecheck_summary: FileTypecheckSummary {
-                typed_symbol_by_name,
-            },
-            resolved_type_by_expression_id: self.resolved_type_by_expression_id.clone(),
-            call_target_by_expression_id: self.call_target_by_expression_id.clone(),
-            constant_reference_by_expression_id: self.constant_reference_by_expression_id.clone(),
+            resolved_type_by_expression_id: self.resolved_type_by_expression_id,
+            call_target_by_expression_id: self.call_target_by_expression_id,
+            constant_reference_by_expression_id: self.constant_reference_by_expression_id,
             resolved_type_argument_types_by_expression_id: self
-                .resolved_type_argument_types_by_expression_id
-                .clone(),
-            struct_reference_by_expression_id: self.struct_reference_by_expression_id.clone(),
-            enum_variant_reference_by_expression_id: self
-                .enum_variant_reference_by_expression_id
-                .clone(),
-            nominal_type_reference_by_local_name: self.nominal_type_reference_by_local_name(),
-            implemented_interface_references_by_struct_name: self
-                .implemented_interface_references_by_struct_name(type_declarations),
+                .resolved_type_argument_types_by_expression_id,
+            struct_reference_by_expression_id: self.struct_reference_by_expression_id,
+            enum_variant_reference_by_expression_id: self.enum_variant_reference_by_expression_id,
+            nominal_type_reference_by_local_name,
+            implemented_interface_references_by_struct_name,
             type_declarations_for_annotations: Vec::new(),
             constant_declarations_for_annotations: Vec::new(),
             function_declarations_for_annotations: Vec::new(),
+            resolved_declarations: ResolvedDeclarations {
+                constants_by_name: self.constants,
+                functions_by_name: self.functions,
+                types_by_name: self.types,
+                methods_by_key: self.methods,
+            },
         }
     }
 

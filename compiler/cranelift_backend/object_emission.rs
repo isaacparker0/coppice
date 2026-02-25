@@ -1121,11 +1121,20 @@ fn compile_expression(
             name,
             constant_reference,
             callable_reference,
+            type_reference: resolved_type_reference,
         } => {
             if let Some(local_value) = compilation_context.local_value_by_name.get(name).cloned() {
+                let local_runtime_value = Some(function_builder.use_var(local_value.variable));
+                let lowered_value = runtime_value_for_expected_type(
+                    state,
+                    function_builder,
+                    local_runtime_value,
+                    &local_value.type_reference,
+                    resolved_type_reference,
+                )?;
                 return Ok(TypedValue {
-                    value: Some(function_builder.use_var(local_value.variable)),
-                    type_reference: local_value.type_reference,
+                    value: lowered_value,
+                    type_reference: resolved_type_reference.clone(),
                     terminates: false,
                 });
             }
@@ -1167,8 +1176,14 @@ fn compile_expression(
                     ));
                 }
                 return Ok(TypedValue {
-                    value: constant_value.value,
-                    type_reference: constant_declaration.type_reference,
+                    value: runtime_value_for_expected_type(
+                        state,
+                        function_builder,
+                        constant_value.value,
+                        &constant_declaration.type_reference,
+                        resolved_type_reference,
+                    )?,
+                    type_reference: resolved_type_reference.clone(),
                     terminates: false,
                 });
             }
@@ -1211,8 +1226,14 @@ fn compile_expression(
                     return_type: Box::new(function_record.declaration.return_type.clone()),
                 };
                 return Ok(TypedValue {
-                    value: Some(function_pointer),
-                    type_reference: function_type_reference,
+                    value: runtime_value_for_expected_type(
+                        state,
+                        function_builder,
+                        Some(function_pointer),
+                        &function_type_reference,
+                        resolved_type_reference,
+                    )?,
+                    type_reference: resolved_type_reference.clone(),
                     terminates: false,
                 });
             }
@@ -1574,11 +1595,14 @@ fn compile_binary_expression(
                     function_builder
                         .ins()
                         .icmp(IntCC::Equal, left_payload, right_payload);
+                let equal_condition = function_builder.ins().band(tags_equal, payloads_equal);
                 if matches!(operator, ExecutableBinaryOperator::EqualEqual) {
-                    function_builder.ins().band(tags_equal, payloads_equal)
+                    equal_condition
                 } else {
-                    let equal_condition = function_builder.ins().band(tags_equal, payloads_equal);
-                    function_builder.ins().bnot(equal_condition)
+                    let one = function_builder.ins().iconst(types::I8, 1);
+                    let zero = function_builder.ins().iconst(types::I8, 0);
+                    let equal_as_i8 = function_builder.ins().select(equal_condition, one, zero);
+                    function_builder.ins().icmp(IntCC::Equal, equal_as_i8, zero)
                 }
             } else {
                 function_builder
@@ -3324,6 +3348,22 @@ fn runtime_value_for_expected_type(
     actual_type: &ExecutableTypeReference,
     expected_type: &ExecutableTypeReference,
 ) -> Result<Option<Value>, CompilerFailure> {
+    if matches!(actual_type, ExecutableTypeReference::Union { .. })
+        && !matches!(expected_type, ExecutableTypeReference::Union { .. })
+    {
+        let union_box_pointer = value.ok_or_else(|| {
+            build_failed(
+                "union value expected for union-to-member conversion".to_string(),
+                None,
+            )
+        })?;
+        return Ok(extract_union_payload_for_type(
+            function_builder,
+            union_box_pointer,
+            expected_type,
+        ));
+    }
+
     if matches!(expected_type, ExecutableTypeReference::Union { .. })
         && !matches!(actual_type, ExecutableTypeReference::Union { .. })
     {
