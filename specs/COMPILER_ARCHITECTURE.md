@@ -38,7 +38,7 @@ Design goals:
 4. Package/import/export/visibility resolution (`compiler/resolution`)
 5. Semantic lowering (`compiler/semantic_lowering`)
 6. Type analysis (`compiler/type_analysis`)
-7. Driver orchestration and rendering (`compiler/driver`)
+7. Shared check orchestration and rendering (`compiler/check_pipeline`)
 
 The pipeline is linear. Per-file downstream skipping is controlled by explicit
 phase status, not by ad-hoc heuristics.
@@ -75,8 +75,8 @@ Contract semantics:
 
 1. `diagnostics` are emitted by the owning phase.
 2. `status` (or `status_by_file`) is the only downstream gating signal.
-3. Driver consumes statuses explicitly; it does not infer gating from incidental
-   behavior.
+3. Orchestration consumes statuses explicitly; it does not infer gating from
+   incidental behavior.
 
 ## Parser Error Model
 
@@ -160,7 +160,7 @@ When introduced, this phase also owns:
 
 Output: `PhaseOutput<type_annotated_program::TypeAnnotatedFile>`.
 
-### `compiler/driver`
+### `compiler/check_pipeline`
 
 Owns orchestration only:
 
@@ -168,6 +168,36 @@ Owns orchestration only:
 2. workspace/package scoping
 3. diagnostics aggregation/sorting/rendering
 4. status-driven downstream gating
+
+### `compiler/check_session`
+
+Owns stateful interactive check orchestration for long-lived clients.
+
+Responsibilities:
+
+1. in-memory source overlay state
+2. check invalidation/re-execution via `check_pipeline`
+3. session lifecycle/state boundaries for tooling clients
+
+### `compiler/lsp`
+
+Owns LSP protocol transport/serving only.
+
+Responsibilities:
+
+1. stdio JSON-RPC framing and message handling
+2. request/notification mapping to `check_session`
+3. LSP-specific result publishing (for example diagnostics notifications)
+
+### `compiler/driver`
+
+Owns build/run orchestration only.
+
+Responsibilities:
+
+1. build/run command policy and target validation
+2. consumption of analyzed check artifacts from `check_pipeline`
+3. backend lowering/codegen execution flow
 
 ## Gating Policy
 
@@ -188,7 +218,8 @@ Phase-owned language diagnostics:
 3. file_role_rules: file-role policy diagnostics
 4. resolution: package/import/export/visibility/binding/cycle diagnostics
 5. type_analysis: type/flow/usage diagnostics
-6. driver: rendering/sorting only
+6. orchestration layers (`check_pipeline`, `check_session`, `lsp`, `driver`):
+   consume/aggregate/render only
 
 Hard failures:
 
@@ -209,13 +240,17 @@ High-level direction:
 6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
 7. `executable_lowering -> {type_annotated_program,executable_program}`
 8. `cranelift_backend -> {executable_program,runtime_interface}`
-9. `driver` depends on phase crates for orchestration
+9. `check_pipeline -> {parsing,syntax_rules,file_role_rules,resolution,semantic_lowering,type_analysis}`
+10. `check_session -> check_pipeline`
+11. `lsp -> check_session`
+12. `driver -> {check_pipeline,executable_lowering,cranelift_backend}`
+13. `cli -> {check_pipeline,driver,lsp}`
 
 Key prohibitions:
 
 1. `type_analysis` must not depend on `syntax`
 2. `package_symbols` must not depend on `syntax`
-3. semantic phase crates must not depend on `driver`
+3. semantic phase crates must not depend on orchestration crates
 4. frontend phase crates must not depend on backend/runtime interface crates
 
 These are enforced by Bazel dependency-enforcement tests.
@@ -245,6 +280,9 @@ This architecture is required for shared CLI/tooling behavior:
 1. parser returns syntax + diagnostics under recoverable parse errors
 2. phase outputs are machine-readable and stable
 3. gating behavior is deterministic and shared across consumers
+4. `check_pipeline` is the single shared check implementation for CLI and LSP
+5. `check_session` encapsulates stateful overlays/incremental behavior for
+   long-lived tooling clients
 
 ## Acceptance Criteria
 

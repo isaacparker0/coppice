@@ -1,0 +1,24 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "lsp",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/check_session",
+        "//compiler/reports",
+        "//compiler/source",
+        "@crates//:serde_json",
+    ],
+)
+
+dependency_enforcement_test(
+    name = "lsp_forbidden_dependencies",
+    forbidden = [
+        "//compiler/cranelift_backend",
+        "//compiler/executable_lowering",
+        "//compiler/runtime_interface",
+    ],
+    target = ":lsp",
+)

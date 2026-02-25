@@ -2,10 +2,9 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__driver::{
-    build_target_with_workspace_root, check_target_with_workspace_root,
-    run_target_with_workspace_root,
-};
+use compiler__check_pipeline::check_target_with_workspace_root;
+use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
+use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
     CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
 };
@@ -36,6 +35,10 @@ enum Command {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+    },
+    Lsp {
+        #[arg(long)]
+        stdio: bool,
     },
 }
 
@@ -68,6 +71,9 @@ fn main() {
                     process::exit(1);
                 }
             }
+        }
+        Command::Lsp { stdio } => {
+            run_lsp(workspace_root, stdio);
         }
     }
 }
@@ -114,6 +120,17 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
             }
             process::exit(1);
         }
+    }
+}
+
+fn run_lsp(workspace_root: Option<&str>, stdio: bool) {
+    if !stdio {
+        eprintln!("lsp transport mode not specified; pass --stdio");
+        process::exit(1);
+    }
+    if let Err(error) = run_lsp_stdio(workspace_root) {
+        render_compiler_failure_text(".", &error);
+        process::exit(1);
     }
 }
 

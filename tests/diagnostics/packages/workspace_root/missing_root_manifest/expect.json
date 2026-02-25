@@ -2,8 +2,8 @@
     "ok": false,
     "diagnostics": [],
     "error": {
-        "kind": "workspace_root_missing_manifest",
-        "message": "not a Coppice workspace root (missing PACKAGE.copp)",
+        "kind": "package_not_found",
+        "message": "workspace contains no packages (missing PACKAGE.copp)",
         "path": "."
     }
 }

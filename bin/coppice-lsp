@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec bazel run --run_in_cwd //compiler/cli:main -- "$@"

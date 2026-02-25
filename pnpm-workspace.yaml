@@ -1,5 +1,7 @@
 packages:
-    - .
+    - "."
+    - "editor/vscode"
 
 autoInstallPeers: false
 strictPeerDependencies: true
+confirmModulesPurge: false
