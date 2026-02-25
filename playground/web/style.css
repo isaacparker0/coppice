@@ -1,4 +1,7 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "./index.html";
+@source "./*.ts";
+@source "./*.tsx";
 
 @theme {
     --color-brand-50: #e8f4f0;
