@@ -48,6 +48,6 @@ fn resolve_web_root_from_runfiles() -> PathBuf {
         panic!("failed to initialize runfiles for playground web: {error}")
     });
     runfiles
-        .rlocation("_main/playground/web/web_assets")
-        .unwrap_or_else(|| panic!("failed to resolve runfiles path for playground/web/web_assets"))
+        .rlocation("_main/playground/web/dist")
+        .unwrap_or_else(|| panic!("failed to resolve runfiles path for playground/web/dist"))
 }

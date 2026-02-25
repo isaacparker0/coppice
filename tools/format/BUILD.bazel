@@ -50,6 +50,7 @@ rust_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "@crates//:clap",
+        "@crates//:globset",
         "@rules_rust//tools/runfiles",
     ],
 )

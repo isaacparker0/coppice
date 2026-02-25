@@ -2,15 +2,23 @@ use compiler__reports::{CompilerFailure, RenderedDiagnostic};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
+pub struct WorkspaceFileRequest {
+    pub path: String,
+    pub source: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CheckRequest {
     pub session_id: String,
-    pub source: String,
+    pub entrypoint_path: String,
+    pub files: Vec<WorkspaceFileRequest>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RunRequest {
     pub session_id: String,
-    pub source: String,
+    pub entrypoint_path: String,
+    pub files: Vec<WorkspaceFileRequest>,
 }
 
 #[derive(Debug, Serialize)]

@@ -8,6 +8,7 @@ use std::thread;
 use std::time::Instant;
 
 use clap::Subcommand;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use runfiles::Runfiles;
 
 mod built_in_tools;
@@ -91,11 +92,13 @@ const TOOL_CONFIGS: [ToolConfig; 10] = [
     ToolConfig {
         display_name: "deno fmt",
         scope: Scope::Selectors(&[
+            Selector::Extension("css"),
+            Selector::Extension("html"),
+            Selector::Extension("js"),
             Selector::Extension("json"),
             Selector::Extension("md"),
-            Selector::Extension("html"),
-            Selector::Extension("css"),
-            Selector::Extension("js"),
+            Selector::Extension("ts"),
+            Selector::Extension("tsx"),
             Selector::Extension("yaml"),
         ]),
         backend: ToolBackend::ExternalBinary(ExternalBinaryToolConfig {
@@ -308,6 +311,12 @@ pub fn run_workspace_formatter(format_mode: FormatMode) -> ExitCode {
         workspace_files.push(line.to_string());
     }
 
+    let format_ignore_glob_set = load_format_ignore_glob_set(&workspace_directory);
+    let workspace_files: Vec<String> = workspace_files
+        .into_iter()
+        .filter(|path| !format_ignore_glob_set.is_match(path))
+        .collect();
+
     // Partition files into per-tool file lists.
     let mut files_by_tool_index: Vec<Vec<String>> = vec![Vec::new(); runtime_tool_configs.len()];
     let mut first_line_by_file: HashMap<String, Option<String>> = HashMap::new();
@@ -464,4 +473,49 @@ fn first_line_from_file(
     });
     first_line_by_file.insert(relative_path.to_string(), first_line.clone());
     first_line
+}
+
+fn load_format_ignore_glob_set(workspace_directory: &str) -> GlobSet {
+    let format_ignore_path = Path::new(workspace_directory).join(".formatignore");
+    let file = match File::open(&format_ignore_path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return GlobSetBuilder::new()
+                .build()
+                .expect("empty glob set must compile");
+        }
+        Err(error) => {
+            panic!("failed to read {}: {error}", format_ignore_path.display(),);
+        }
+    };
+
+    let mut glob_set_builder = GlobSetBuilder::new();
+    for (line_number_zero_based, line_result) in BufReader::new(file).lines().enumerate() {
+        let line = line_result.unwrap_or_else(|error| {
+            panic!(
+                "failed to read {} at line {}: {error}",
+                format_ignore_path.display(),
+                line_number_zero_based + 1,
+            )
+        });
+        let trimmed_line = line.trim();
+        if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
+            continue;
+        }
+        let glob = Glob::new(trimmed_line).unwrap_or_else(|error| {
+            panic!(
+                "invalid glob pattern in {} at line {}: {error}",
+                format_ignore_path.display(),
+                line_number_zero_based + 1,
+            )
+        });
+        glob_set_builder.add(glob);
+    }
+
+    glob_set_builder.build().unwrap_or_else(|error| {
+        panic!(
+            "failed to compile glob patterns from {}: {error}",
+            format_ignore_path.display(),
+        )
+    })
 }

@@ -12,17 +12,18 @@ use axum::{Json, Router};
 use tokio::fs;
 
 use crate::compiler_adapter::{
-    check_workspace_via_cli, run_workspace_via_cli, write_workspace_source,
+    check_workspace_via_cli, run_workspace_via_cli, write_workspace_files,
 };
 use crate::models::{
     CheckRequest, CheckResponse, ErrorResponse, HealthResponse, RunRequest, RunResponse,
-    SessionResponse, failure_response,
+    SessionResponse, WorkspaceFileRequest, failure_response,
 };
 use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::SessionStore;
 use compiler__reports::{CompilerCheckJsonOutput, CompilerFailure};
 
-const MAX_SOURCE_BYTES: usize = 128 * 1024;
+const MAX_WORKSPACE_BYTES: usize = 512 * 1024;
+const MAX_WORKSPACE_FILES: usize = 128;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 const BASIC_AUTH_HEADER_VALUE: &str = "Basic cGxheWdyb3VuZDpiYXplbC1pcy1jb29s";
 const BASIC_AUTH_CHALLENGE: &str = "Basic realm=\"coppice-playground\"";
@@ -48,7 +49,7 @@ pub fn build_router(session_store: Arc<SessionStore>, web_root: PathBuf) -> Rout
         .route("/{*path}", get(serve_asset))
         .layer(middleware::from_fn(require_basic_auth))
         .layer(axum::extract::DefaultBodyLimit::max(
-            MAX_SOURCE_BYTES + 1024,
+            MAX_WORKSPACE_BYTES + 16 * 1024,
         ))
         .with_state(app_state)
 }
@@ -148,17 +149,13 @@ async fn check(
     State(state): State<AppState>,
     Json(request): Json<CheckRequest>,
 ) -> (StatusCode, Json<CheckResponse>) {
-    if request.source.len() > MAX_SOURCE_BYTES {
+    if let Some(error) = workspace_request_error(&request.entrypoint_path, &request.files) {
         return (
-            StatusCode::PAYLOAD_TOO_LARGE,
+            StatusCode::BAD_REQUEST,
             Json(CheckResponse {
                 ok: false,
                 diagnostics: Vec::new(),
-                error: Some(ErrorResponse {
-                    kind: "payload_too_large".to_string(),
-                    message: "source exceeds maximum payload size".to_string(),
-                    details: vec![format!("max bytes: {MAX_SOURCE_BYTES}")],
-                }),
+                error: Some(error),
             }),
         );
     }
@@ -178,9 +175,10 @@ async fn check(
         );
     };
 
-    let source = request.source;
+    let entrypoint_path = request.entrypoint_path;
+    let files = request.files;
     let result = tokio::task::spawn_blocking(move || {
-        write_workspace_source(&session_directory, &source)?;
+        write_workspace_files(&session_directory, &files)?;
         Ok::<PathBuf, CompilerFailure>(session_directory)
     })
     .await;
@@ -221,8 +219,13 @@ async fn check(
         }
     };
 
-    match check_workspace_via_cli(&session_directory, Duration::from_secs(5), MAX_OUTPUT_BYTES)
-        .await
+    match check_workspace_via_cli(
+        &session_directory,
+        &entrypoint_path,
+        Duration::from_secs(5),
+        MAX_OUTPUT_BYTES,
+    )
+    .await
     {
         Ok(execution) => {
             if execution.timed_out {
@@ -327,9 +330,9 @@ async fn run(
     State(state): State<AppState>,
     Json(request): Json<RunRequest>,
 ) -> (StatusCode, Json<RunResponse>) {
-    if request.source.len() > MAX_SOURCE_BYTES {
+    if let Some(error) = workspace_request_error(&request.entrypoint_path, &request.files) {
         return (
-            StatusCode::PAYLOAD_TOO_LARGE,
+            StatusCode::BAD_REQUEST,
             Json(RunResponse {
                 ok: false,
                 exit_code: 1,
@@ -337,11 +340,7 @@ async fn run(
                 stderr: String::new(),
                 diagnostics: Vec::new(),
                 timed_out: false,
-                error: Some(ErrorResponse {
-                    kind: "payload_too_large".to_string(),
-                    message: "source exceeds maximum payload size".to_string(),
-                    details: vec![format!("max bytes: {MAX_SOURCE_BYTES}")],
-                }),
+                error: Some(error),
             }),
         );
     }
@@ -365,9 +364,10 @@ async fn run(
         );
     };
 
-    let source = request.source;
+    let entrypoint_path = request.entrypoint_path;
+    let files = request.files;
     let result = tokio::task::spawn_blocking(move || {
-        write_workspace_source(&session_directory, &source)?;
+        write_workspace_files(&session_directory, &files)?;
         Ok::<PathBuf, CompilerFailure>(session_directory)
     })
     .await;
@@ -416,7 +416,13 @@ async fn run(
         }
     };
 
-    match run_workspace_via_cli(&session_directory, Duration::from_secs(5), MAX_OUTPUT_BYTES).await
+    match run_workspace_via_cli(
+        &session_directory,
+        &entrypoint_path,
+        Duration::from_secs(5),
+        MAX_OUTPUT_BYTES,
+    )
+    .await
     {
         Ok(execution) => (
             StatusCode::OK,
@@ -451,4 +457,62 @@ async fn run(
             }),
         ),
     }
+}
+
+fn workspace_request_error(
+    entrypoint_path: &str,
+    files: &[WorkspaceFileRequest],
+) -> Option<ErrorResponse> {
+    if files.is_empty() {
+        return Some(ErrorResponse {
+            kind: "invalid_workspace".to_string(),
+            message: "workspace must include at least one file".to_string(),
+            details: Vec::new(),
+        });
+    }
+
+    if files.len() > MAX_WORKSPACE_FILES {
+        return Some(ErrorResponse {
+            kind: "invalid_workspace".to_string(),
+            message: "workspace has too many files".to_string(),
+            details: vec![format!("max files: {MAX_WORKSPACE_FILES}")],
+        });
+    }
+
+    let total_source_bytes: usize = files.iter().map(|file| file.source.len()).sum();
+    if total_source_bytes > MAX_WORKSPACE_BYTES {
+        return Some(ErrorResponse {
+            kind: "payload_too_large".to_string(),
+            message: "workspace source exceeds maximum payload size".to_string(),
+            details: vec![format!("max bytes: {MAX_WORKSPACE_BYTES}")],
+        });
+    }
+
+    if !entrypoint_path.ends_with(".bin.copp") {
+        return Some(ErrorResponse {
+            kind: "invalid_workspace".to_string(),
+            message: "entrypoint must be a .bin.copp file".to_string(),
+            details: Vec::new(),
+        });
+    }
+
+    let has_manifest = files.iter().any(|file| file.path == "PACKAGE.copp");
+    if !has_manifest {
+        return Some(ErrorResponse {
+            kind: "invalid_workspace".to_string(),
+            message: "workspace root must include PACKAGE.copp".to_string(),
+            details: Vec::new(),
+        });
+    }
+
+    let has_entrypoint = files.iter().any(|file| file.path == entrypoint_path);
+    if !has_entrypoint {
+        return Some(ErrorResponse {
+            kind: "invalid_workspace".to_string(),
+            message: "entrypoint file not found in workspace".to_string(),
+            details: vec![entrypoint_path.to_string()],
+        });
+    }
+
+    None
 }

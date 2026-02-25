@@ -1,0 +1,177 @@
+:root {
+    --bg: #f5f5ef;
+    --panel: #ffffff;
+    --ink: #1c2321;
+    --accent: #1e6f5c;
+    --warn: #b85042;
+    --border: #d8ddd9;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+    background: radial-gradient(circle at top left, #fefbe9, var(--bg));
+}
+
+.layout {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-areas:
+        "topbar topbar"
+        "workspace editor"
+        "diagnostics output"
+        "status status";
+}
+
+.topbar {
+    grid-area: topbar;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+button,
+select {
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font: inherit;
+}
+
+button {
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+}
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+select {
+    width: 100%;
+    background: #fff;
+    color: var(--ink);
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.workspace-pane {
+    grid-area: workspace;
+}
+
+.editor-pane {
+    grid-area: editor;
+}
+
+.diagnostics-pane {
+    grid-area: diagnostics;
+}
+
+.output-pane {
+    grid-area: output;
+}
+
+.editor-header {
+    margin-bottom: 8px;
+}
+
+#editor {
+    width: 100%;
+    min-height: 420px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#editor .monaco-editor {
+    min-height: 420px;
+}
+
+#file-list,
+#diagnostics {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+#file-list li,
+#diagnostics li {
+    border-bottom: 1px solid var(--border);
+    padding: 6px 0;
+}
+
+.file-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: var(--ink);
+    border-color: transparent;
+    padding: 6px 4px;
+}
+
+.file-item.active {
+    background: #e8f4f0;
+    border-color: var(--accent);
+}
+
+.diagnostic-link {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: var(--warn);
+    border-color: transparent;
+    padding: 4px;
+}
+
+pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: "JetBrains Mono", "SFMono-Regular", monospace;
+}
+
+.status {
+    grid-area: status;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+@media (max-width: 960px) {
+    .layout {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "topbar"
+            "workspace"
+            "editor"
+            "diagnostics"
+            "output"
+            "status";
+    }
+
+    #editor,
+    #editor .monaco-editor {
+        min-height: 320px;
+    }
+}

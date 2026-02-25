@@ -2,8 +2,10 @@
 .DS_Store
 .coppice
 .env.local
+.pnpm-store
 .terraform
 bazel-*
+node_modules
 target
 terraform.tfstate
 terraform.tfstate.backup
