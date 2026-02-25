@@ -23,13 +23,14 @@ When you change extension code, run `Developer: Reload Window` in VS Code.
 1. Install extension dependencies:
 
 ```bash
-cd tools/vscode/coppice-lsp
+cd tools/vscode/coppice_lsp
 pnpm install
 ```
 
-2. Open this folder (`tools/vscode/coppice-lsp`) in VS Code.
+2. Open this folder (`tools/vscode/coppice_lsp`) in VS Code.
 3. Press `F5` to launch an Extension Development Host.
-4. In the Extension Development Host, open a Coppice workspace and edit `*.copp` files.
+4. In the Extension Development Host, open a Coppice workspace and edit `*.copp`
+   files.
 
 The extension starts `bin/coppice-lsp`, which runs:
 

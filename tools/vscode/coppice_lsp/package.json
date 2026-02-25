@@ -1,0 +1,38 @@
+{
+    "name": "coppice-lsp-dev",
+    "displayName": "Coppice LSP (Dev)",
+    "description": "Development VS Code client for the Coppice language server.",
+    "version": "0.0.1",
+    "publisher": "coppice",
+    "private": true,
+    "engines": {
+        "vscode": "^1.90.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:coppice"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "languages": [
+            {
+                "id": "coppice",
+                "aliases": [
+                    "Coppice",
+                    "coppice"
+                ],
+                "extensions": [
+                    ".copp"
+                ]
+            }
+        ]
+    },
+    "scripts": {
+        "check": "node -e \"require('./extension.js')\""
+    },
+    "dependencies": {
+        "vscode-languageclient": "^9.0.1"
+    }
+}

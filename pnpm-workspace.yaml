@@ -1,6 +1,6 @@
 packages:
     - "."
-    - "tools/vscode/coppice-lsp"
+    - "tools/vscode/coppice_lsp"
 
 autoInstallPeers: false
 strictPeerDependencies: true
