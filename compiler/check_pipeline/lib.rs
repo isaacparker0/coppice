@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
 use compiler__file_role_rules as file_role_rules;
+use compiler__fix_edits::{TextEdit, apply_text_edits, merge_text_edits};
 use compiler__package_symbols::{
     PackageSymbolFileInput, ResolvedImportBindingSummary, ResolvedImportSummary,
     build_typed_public_symbol_table,
@@ -19,6 +20,7 @@ use compiler__resolution as resolution;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__semantic_program::SemanticFile;
 use compiler__source::{FileRole, compare_paths, path_to_key};
+use compiler__source_formatting::formatting_text_edits;
 use compiler__syntax_rules as syntax_rules;
 use compiler__type_analysis as type_analysis;
 use compiler__type_annotated_program::TypeResolvedDeclarations;
@@ -30,12 +32,16 @@ const WORKSPACE_MARKER_FILENAME: &str = "COPPICE_WORKSPACE";
 pub struct CheckedTarget {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub source_by_path: BTreeMap<String, String>,
+    pub safe_autofix_edits_by_workspace_relative_path: BTreeMap<String, Vec<TextEdit>>,
 }
 
 pub struct AnalyzedTarget {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub all_diagnostics_by_file: BTreeMap<PathBuf, Vec<RenderedDiagnostic>>,
     pub source_by_path: BTreeMap<String, String>,
+    pub source_by_workspace_relative_path_in_scope: BTreeMap<String, String>,
+    pub safe_autofix_edits_by_workspace_relative_path: BTreeMap<String, Vec<TextEdit>>,
+    pub canonical_source_override_by_workspace_relative_path: BTreeMap<String, String>,
     pub workspace_root: PathBuf,
     pub workspace: Workspace,
     pub absolute_target_path: PathBuf,
@@ -99,6 +105,8 @@ pub fn check_target_with_workspace_root(
     Ok(CheckedTarget {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
+        safe_autofix_edits_by_workspace_relative_path: analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path,
     })
 }
 
@@ -127,6 +135,8 @@ pub fn check_target_with_workspace_root_and_overrides(
     Ok(CheckedTarget {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
+        safe_autofix_edits_by_workspace_relative_path: analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path,
     })
 }
 
@@ -221,6 +231,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let mut rendered_diagnostics = Vec::new();
     let mut all_diagnostics_by_file = BTreeMap::<PathBuf, Vec<RenderedDiagnostic>>::new();
     let mut source_by_path = BTreeMap::new();
+    let mut source_by_workspace_relative_path_in_scope = BTreeMap::new();
     let mut parsed_units = Vec::new();
     let mut package_path_by_file = BTreeMap::new();
     let mut file_role_by_path = BTreeMap::new();
@@ -262,6 +273,10 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             };
             let rendered_path = display_path(&absolute_path);
             source_by_path.insert(rendered_path.clone(), source.clone());
+            if package_in_scope {
+                source_by_workspace_relative_path_in_scope
+                    .insert(workspace_relative_key.clone(), source.clone());
+            }
             let parse_result = parse_file(&source, role);
             for diagnostic in &parse_result.diagnostics {
                 let rendered_diagnostic = render_diagnostic(
@@ -480,11 +495,18 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     for diagnostics in all_diagnostics_by_file.values_mut() {
         sort_rendered_diagnostics(diagnostics);
     }
+    let (
+        safe_autofix_edits_by_workspace_relative_path,
+        canonical_source_override_by_workspace_relative_path,
+    ) = compute_safe_autofix_outputs(&source_by_workspace_relative_path_in_scope);
 
     Ok(AnalyzedTarget {
         diagnostics: rendered_diagnostics,
         all_diagnostics_by_file,
         source_by_path,
+        source_by_workspace_relative_path_in_scope,
+        safe_autofix_edits_by_workspace_relative_path,
+        canonical_source_override_by_workspace_relative_path,
         workspace_root,
         workspace,
         absolute_target_path,
@@ -494,6 +516,43 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         resolved_imports,
         resolved_declarations_by_path,
     })
+}
+
+fn compute_safe_autofix_outputs(
+    source_by_workspace_relative_path: &BTreeMap<String, String>,
+) -> (BTreeMap<String, Vec<TextEdit>>, BTreeMap<String, String>) {
+    let mut safe_autofix_edits_by_workspace_relative_path = BTreeMap::new();
+    let mut canonical_source_override_by_workspace_relative_path = BTreeMap::new();
+
+    for (workspace_relative_path, source_text) in source_by_workspace_relative_path {
+        if !workspace_relative_path.ends_with(".copp") {
+            continue;
+        }
+        let candidate_text_edits = formatting_text_edits(source_text);
+        if candidate_text_edits.is_empty() {
+            continue;
+        }
+        let merged_text_edits = merge_text_edits(&candidate_text_edits);
+        if merged_text_edits.accepted_text_edits.is_empty() {
+            continue;
+        }
+        let Ok(canonical_source_text) =
+            apply_text_edits(source_text, &merged_text_edits.accepted_text_edits)
+        else {
+            continue;
+        };
+        safe_autofix_edits_by_workspace_relative_path.insert(
+            workspace_relative_path.clone(),
+            merged_text_edits.accepted_text_edits,
+        );
+        canonical_source_override_by_workspace_relative_path
+            .insert(workspace_relative_path.clone(), canonical_source_text);
+    }
+
+    (
+        safe_autofix_edits_by_workspace_relative_path,
+        canonical_source_override_by_workspace_relative_path,
+    )
 }
 
 fn resolve_workspace_root(

@@ -71,6 +71,7 @@ pub struct CompilerFailure {
 #[serde(rename_all = "snake_case")]
 pub enum CompilerFailureKind {
     ReadSource,
+    WriteSource,
     InvalidWorkspaceRoot,
     WorkspaceRootNotDirectory,
     WorkspaceRootMissingManifest,

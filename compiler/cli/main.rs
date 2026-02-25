@@ -1,8 +1,10 @@
-use std::process;
+use std::{fs, process};
 
 use clap::{Parser, Subcommand};
 
-use compiler__check_pipeline::check_target_with_workspace_root;
+use compiler__check_pipeline::{
+    analyze_target_with_workspace_root, check_target_with_workspace_root,
+};
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
@@ -30,6 +32,9 @@ enum Command {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+    },
+    Fix {
+        path: Option<String>,
     },
     Run {
         path: String,
@@ -59,6 +64,10 @@ fn main() {
                 }
             }
         }
+        Command::Fix { path } => {
+            let path = path.unwrap_or_else(|| ".".to_string());
+            run_fix(&path, workspace_root);
+        }
         Command::Run { path, output_dir } => {
             match run_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
                 Ok(exit_code) => {
@@ -75,6 +84,40 @@ fn main() {
         Command::Lsp { stdio } => {
             run_lsp(workspace_root, stdio);
         }
+    }
+}
+
+fn run_fix(path: &str, workspace_root: Option<&str>) {
+    let analyzed_target = match analyze_target_with_workspace_root(path, workspace_root) {
+        Ok(value) => value,
+        Err(error) => {
+            render_compiler_failure_text(path, &error);
+            process::exit(1);
+        }
+    };
+
+    let mut updated_file_count = 0usize;
+    for (workspace_relative_path, canonical_source_text) in
+        &analyzed_target.canonical_source_override_by_workspace_relative_path
+    {
+        let absolute_path = analyzed_target.workspace_root.join(workspace_relative_path);
+        if let Err(error) = fs::write(&absolute_path, canonical_source_text) {
+            let compiler_failure = CompilerFailure {
+                kind: CompilerFailureKind::WriteSource,
+                message: error.to_string(),
+                path: Some(absolute_path.display().to_string()),
+                details: Vec::new(),
+            };
+            render_compiler_failure_text(path, &compiler_failure);
+            process::exit(1);
+        }
+        updated_file_count += 1;
+    }
+
+    if updated_file_count == 0 {
+        println!("no fixes applied");
+    } else {
+        println!("applied fixes to {updated_file_count} files");
     }
 }
 

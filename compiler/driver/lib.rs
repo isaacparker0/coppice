@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use compiler__check_pipeline::analyze_target_with_workspace_root;
+use compiler__check_pipeline::{
+    analyze_target_with_workspace_root, analyze_target_with_workspace_root_and_overrides,
+};
 use compiler__cranelift_backend::{BuildArtifactIdentity, build_program, run_program};
 use compiler__executable_lowering::lower_resolved_declarations_build_unit;
 use compiler__phase_results::PhaseStatus;
@@ -21,7 +23,17 @@ pub fn build_target_with_workspace_root(
     workspace_root_override: Option<&str>,
     output_directory_override: Option<&str>,
 ) -> Result<BuiltTarget, CompilerFailure> {
-    let analyzed_target = analyze_target_with_workspace_root(path, workspace_root_override)?;
+    let mut analyzed_target = analyze_target_with_workspace_root(path, workspace_root_override)?;
+    if !analyzed_target
+        .canonical_source_override_by_workspace_relative_path
+        .is_empty()
+    {
+        analyzed_target = analyze_target_with_workspace_root_and_overrides(
+            path,
+            workspace_root_override,
+            &analyzed_target.canonical_source_override_by_workspace_relative_path,
+        )?;
+    }
     if !analyzed_target.diagnostics.is_empty() {
         return Err(build_failed_from_rendered_diagnostics(
             &analyzed_target.diagnostics,
