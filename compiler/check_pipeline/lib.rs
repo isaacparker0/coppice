@@ -88,7 +88,12 @@ pub fn check_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
 ) -> Result<CheckedTarget, CompilerFailure> {
-    let analyzed_target = analyze_target_with_workspace_root(path, workspace_root_override)?;
+    let source_override_by_workspace_relative_path = BTreeMap::new();
+    let analyzed_target = analyze_target_with_workspace_root_and_overrides(
+        path,
+        workspace_root_override,
+        &source_override_by_workspace_relative_path,
+    )?;
     Ok(CheckedTarget {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
@@ -98,6 +103,35 @@ pub fn check_target_with_workspace_root(
 pub fn analyze_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
+) -> Result<AnalyzedTarget, CompilerFailure> {
+    let source_override_by_workspace_relative_path = BTreeMap::new();
+    analyze_target_with_workspace_root_and_overrides(
+        path,
+        workspace_root_override,
+        &source_override_by_workspace_relative_path,
+    )
+}
+
+pub fn check_target_with_workspace_root_and_overrides(
+    path: &str,
+    workspace_root_override: Option<&str>,
+    source_override_by_workspace_relative_path: &BTreeMap<String, String>,
+) -> Result<CheckedTarget, CompilerFailure> {
+    let analyzed_target = analyze_target_with_workspace_root_and_overrides(
+        path,
+        workspace_root_override,
+        source_override_by_workspace_relative_path,
+    )?;
+    Ok(CheckedTarget {
+        diagnostics: analyzed_target.diagnostics,
+        source_by_path: analyzed_target.source_by_path,
+    })
+}
+
+pub fn analyze_target_with_workspace_root_and_overrides(
+    path: &str,
+    workspace_root_override: Option<&str>,
+    source_override_by_workspace_relative_path: &BTreeMap<String, String>,
 ) -> Result<AnalyzedTarget, CompilerFailure> {
     let current_directory = std::env::current_dir().map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::ReadSource,
@@ -228,12 +262,19 @@ pub fn analyze_target_with_workspace_root(
             let absolute_path = workspace_root.join(&relative_path);
             package_path_by_file.insert(relative_path.clone(), package.package_path.clone());
             file_role_by_path.insert(relative_path.clone(), role);
-            let source = fs::read_to_string(&absolute_path).map_err(|error| CompilerFailure {
-                kind: CompilerFailureKind::ReadSource,
-                message: error.to_string(),
-                path: Some(display_path(&absolute_path)),
-                details: Vec::new(),
-            })?;
+            let workspace_relative_key = path_to_key(&relative_path);
+            let source = if let Some(override_source) =
+                source_override_by_workspace_relative_path.get(&workspace_relative_key)
+            {
+                override_source.clone()
+            } else {
+                fs::read_to_string(&absolute_path).map_err(|error| CompilerFailure {
+                    kind: CompilerFailureKind::ReadSource,
+                    message: error.to_string(),
+                    path: Some(display_path(&absolute_path)),
+                    details: Vec::new(),
+                })?
+            };
             let rendered_path = display_path(&absolute_path);
             source_by_path.insert(rendered_path.clone(), source.clone());
             let parse_result = parse_file(&source, role);

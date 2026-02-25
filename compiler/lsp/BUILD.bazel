@@ -8,6 +8,8 @@ rust_library(
     deps = [
         "//compiler/check_session",
         "//compiler/reports",
+        "//compiler/source",
+        "@crates//:serde_json",
     ],
 )
 

@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 use compiler__check_pipeline::check_target_with_workspace_root;
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
-use compiler__lsp::run_lsp_validation;
+use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
     CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
 };
@@ -121,17 +121,9 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
 }
 
 fn run_lsp(workspace_root: Option<&str>) {
-    match run_lsp_validation(workspace_root) {
-        Ok(result) => {
-            println!(
-                "lsp validation mode: check session initialized; diagnostics={}",
-                result.diagnostic_count
-            );
-        }
-        Err(error) => {
-            render_compiler_failure_text(".", &error);
-            process::exit(1);
-        }
+    if let Err(error) = run_lsp_stdio(workspace_root) {
+        render_compiler_failure_text(".", &error);
+        process::exit(1);
     }
 }
 
