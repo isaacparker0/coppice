@@ -11,9 +11,6 @@
     "categories": [
         "Programming Languages"
     ],
-    "activationEvents": [
-        "onLanguage:coppice"
-    ],
     "main": "./extension.js",
     "contributes": {
         "languages": [
@@ -25,7 +22,15 @@
                 ],
                 "extensions": [
                     ".copp"
-                ]
+                ],
+                "configuration": "./language_configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "coppice",
+                "scopeName": "source.coppice",
+                "path": "./textmate_grammar.json"
             }
         ]
     },

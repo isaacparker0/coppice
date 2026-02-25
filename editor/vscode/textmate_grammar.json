@@ -1,0 +1,174 @@
+{
+    "name": "Coppice",
+    "scopeName": "source.coppice",
+    "fileTypes": [
+        "copp"
+    ],
+    "patterns": [
+        {
+            "include": "#doc-comments"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#booleans-and-nil"
+        },
+        {
+            "include": "#function-declarations"
+        },
+        {
+            "include": "#type-declarations"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#logical-keywords"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#punctuation"
+        }
+    ],
+    "repository": {
+        "doc-comments": {
+            "patterns": [
+                {
+                    "name": "comment.line.documentation.coppice",
+                    "match": "///.*$"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.coppice",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "invalid.illegal.newline.coppice",
+                            "match": "\\n"
+                        }
+                    ]
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.integer.coppice",
+                    "match": "\\b\\d+\\b"
+                }
+            ]
+        },
+        "booleans-and-nil": {
+            "patterns": [
+                {
+                    "name": "constant.language.coppice",
+                    "match": "\\b(?:true|false|nil)\\b"
+                }
+            ]
+        },
+        "function-declarations": {
+            "patterns": [
+                {
+                    "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.function.coppice"
+                        },
+                        "2": {
+                            "name": "entity.name.function.coppice"
+                        }
+                    }
+                }
+            ]
+        },
+        "type-declarations": {
+            "patterns": [
+                {
+                    "match": "\\b(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.type.coppice"
+                        },
+                        "2": {
+                            "name": "entity.name.type.coppice"
+                        }
+                    }
+                },
+                {
+                    "match": "\\b(?:type\\s+[A-Za-z_][A-Za-z0-9_]*\\s+)?(struct|enum|interface)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "storage.type.coppice"
+                        }
+                    }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.coppice",
+                    "match": "\\b(?:abort|as|break|continue|else|exports|for|if|implements|import|match|matches|mut|print|public|return|type|visible)\\b"
+                }
+            ]
+        },
+        "logical-keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.logical.coppice",
+                    "match": "\\b(?:and|or|not)\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.coppice",
+                    "match": "::|:=|==|!=|<=|>=|->|=>|=|\\+|-|\\*|/|%|<|>|\\|"
+                }
+            ]
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "name": "punctuation.separator.coppice",
+                    "match": ",|\\.|:"
+                },
+                {
+                    "name": "punctuation.section.braces.begin.coppice",
+                    "match": "\\{"
+                },
+                {
+                    "name": "punctuation.section.braces.end.coppice",
+                    "match": "\\}"
+                },
+                {
+                    "name": "punctuation.section.brackets.begin.coppice",
+                    "match": "\\["
+                },
+                {
+                    "name": "punctuation.section.brackets.end.coppice",
+                    "match": "\\]"
+                },
+                {
+                    "name": "punctuation.section.parens.begin.coppice",
+                    "match": "\\("
+                },
+                {
+                    "name": "punctuation.section.parens.end.coppice",
+                    "match": "\\)"
+                }
+            ]
+        }
+    }
+}
