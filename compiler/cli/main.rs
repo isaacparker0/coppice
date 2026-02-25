@@ -2,10 +2,9 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use compiler__driver::{
-    build_target_with_workspace_root, check_target_with_workspace_root,
-    run_target_with_workspace_root,
-};
+use compiler__check_pipeline::check_target_with_workspace_root;
+use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
+use compiler__lsp::run_lsp_validation;
 use compiler__reports::{
     CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
 };
@@ -37,6 +36,7 @@ enum Command {
         #[arg(long)]
         output_dir: Option<String>,
     },
+    Lsp,
 }
 
 fn main() {
@@ -68,6 +68,9 @@ fn main() {
                     process::exit(1);
                 }
             }
+        }
+        Command::Lsp => {
+            run_lsp(workspace_root);
         }
     }
 }
@@ -112,6 +115,21 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
                 }
             }
+            process::exit(1);
+        }
+    }
+}
+
+fn run_lsp(workspace_root: Option<&str>) {
+    match run_lsp_validation(workspace_root) {
+        Ok(result) => {
+            println!(
+                "lsp validation mode: check session initialized; diagnostics={}",
+                result.diagnostic_count
+            );
+        }
+        Err(error) => {
+            render_compiler_failure_text(".", &error);
             process::exit(1);
         }
     }

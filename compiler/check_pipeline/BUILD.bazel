@@ -1,0 +1,37 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "check_pipeline",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/file_role_rules",
+        "//compiler/package_symbols",
+        "//compiler/packages",
+        "//compiler/parsing",
+        "//compiler/phase_results",
+        "//compiler/reports",
+        "//compiler/resolution",
+        "//compiler/semantic_lowering",
+        "//compiler/semantic_program",
+        "//compiler/source",
+        "//compiler/syntax",
+        "//compiler/syntax_rules",
+        "//compiler/type_analysis",
+        "//compiler/type_annotated_program",
+        "//compiler/visibility",
+        "//compiler/workspace",
+    ],
+)
+
+dependency_enforcement_test(
+    name = "check_pipeline_forbidden_dependencies",
+    forbidden = [
+        "//compiler/cranelift_backend",
+        "//compiler/executable_lowering",
+        "//compiler/runtime_interface",
+    ],
+    target = ":check_pipeline",
+)
