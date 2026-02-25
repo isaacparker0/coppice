@@ -1,0 +1,38 @@
+@import "tailwindcss" source(none);
+@source "./index.html";
+@source "./*.ts";
+@source "./*.tsx";
+
+@theme {
+    --color-brand-50: #e8f4f0;
+    --color-brand-700: #1e6f5c;
+    --color-brand-800: #165547;
+
+    --color-surface-0: #ffffff;
+    --color-surface-50: #f8faf9;
+    --color-surface-100: #eef2f0;
+    --color-surface-200: #d8ddd9;
+    --color-surface-700: #43514d;
+    --color-surface-900: #1c2321;
+
+    --color-danger-50: #fdf1ee;
+    --color-danger-700: #b85042;
+
+    --color-canvas-50: #fefbe9;
+    --color-canvas-100: #f5f5ef;
+    --color-canvas-200: #eef6f3;
+}
+
+body {
+    margin: 0;
+}
+
+#editor .monaco-editor {
+    min-height: 420px;
+}
+
+@media (max-width: 767px) {
+    #editor .monaco-editor {
+        min-height: 320px;
+    }
+}

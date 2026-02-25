@@ -1,5 +1,6 @@
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -7,8 +8,8 @@ use compiler__reports::{CompilerFailure, CompilerFailureKind};
 use runfiles::Runfiles;
 use tokio::process::Command;
 
+use crate::models::WorkspaceFileRequest;
 use crate::path_sanitizer::sanitize_workspace_path;
-use crate::session_store::ensure_workspace_manifest;
 
 pub struct RunExecution {
     pub exit_code: i32,
@@ -24,28 +25,49 @@ pub struct CheckExecution {
     pub timed_out: bool,
 }
 
-pub fn write_workspace_source(
+pub fn write_workspace_files(
     session_directory: &Path,
-    source: &str,
+    files: &[WorkspaceFileRequest],
 ) -> Result<(), CompilerFailure> {
-    ensure_workspace_manifest(session_directory).map_err(|error| CompilerFailure {
-        kind: CompilerFailureKind::ReadSource,
-        message: format!("failed to write PACKAGE.copp: {error}"),
-        path: Some(session_directory.join("PACKAGE.copp").display().to_string()),
-        details: Vec::new(),
-    })?;
+    reset_session_directory(session_directory)?;
 
-    let source_path = session_directory.join("main.bin.copp");
-    fs::write(&source_path, source).map_err(|error| CompilerFailure {
-        kind: CompilerFailureKind::ReadSource,
-        message: format!("failed to write main.bin.copp: {error}"),
-        path: Some(source_path.display().to_string()),
-        details: Vec::new(),
-    })
+    let mut written_paths = HashSet::<String>::new();
+    for file in files {
+        let relative_path = normalize_workspace_relative_path(&file.path)?;
+        let relative_path_key = relative_path.to_string_lossy().to_string();
+        if !written_paths.insert(relative_path_key.clone()) {
+            return Err(CompilerFailure {
+                kind: CompilerFailureKind::ReadSource,
+                message: format!("duplicate file path: {relative_path_key}"),
+                path: Some(relative_path_key),
+                details: Vec::new(),
+            });
+        }
+
+        let absolute_path = session_directory.join(&relative_path);
+        if let Some(parent_directory) = absolute_path.parent() {
+            fs::create_dir_all(parent_directory).map_err(|error| CompilerFailure {
+                kind: CompilerFailureKind::ReadSource,
+                message: format!("failed to create directory for {}: {error}", file.path),
+                path: Some(file.path.clone()),
+                details: Vec::new(),
+            })?;
+        }
+
+        fs::write(&absolute_path, &file.source).map_err(|error| CompilerFailure {
+            kind: CompilerFailureKind::ReadSource,
+            message: format!("failed to write {}: {error}", file.path),
+            path: Some(file.path.clone()),
+            details: Vec::new(),
+        })?;
+    }
+
+    Ok(())
 }
 
 pub async fn check_workspace_via_cli(
     session_directory: &Path,
+    entrypoint_path: &str,
     timeout_duration: Duration,
     max_output_bytes: usize,
 ) -> Result<CheckExecution, CompilerFailure> {
@@ -58,7 +80,7 @@ pub async fn check_workspace_via_cli(
         .arg("check")
         .arg("--format")
         .arg("json")
-        .arg("main.bin.copp")
+        .arg(entrypoint_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -94,6 +116,7 @@ pub async fn check_workspace_via_cli(
 
 pub async fn run_workspace_via_cli(
     session_directory: &Path,
+    entrypoint_path: &str,
     timeout_duration: Duration,
     max_output_bytes: usize,
 ) -> Result<RunExecution, CompilerFailure> {
@@ -104,7 +127,7 @@ pub async fn run_workspace_via_cli(
         .arg("--workspace-root")
         .arg(session_directory)
         .arg("run")
-        .arg("main.bin.copp")
+        .arg(entrypoint_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -138,7 +161,7 @@ pub async fn run_workspace_via_cli(
     })
 }
 
-fn resolve_compiler_cli_path() -> Result<std::path::PathBuf, CompilerFailure> {
+fn resolve_compiler_cli_path() -> Result<PathBuf, CompilerFailure> {
     let runfiles = Runfiles::create().map_err(|error| CompilerFailure {
         kind: CompilerFailureKind::RunFailed,
         message: format!("failed to initialize runfiles for compiler cli: {error}"),
@@ -153,6 +176,68 @@ fn resolve_compiler_cli_path() -> Result<std::path::PathBuf, CompilerFailure> {
             path: None,
             details: Vec::new(),
         })
+}
+
+fn reset_session_directory(session_directory: &Path) -> Result<(), CompilerFailure> {
+    if session_directory.exists() {
+        fs::remove_dir_all(session_directory).map_err(|error| CompilerFailure {
+            kind: CompilerFailureKind::ReadSource,
+            message: format!("failed to reset session directory: {error}"),
+            path: Some(session_directory.display().to_string()),
+            details: Vec::new(),
+        })?;
+    }
+
+    fs::create_dir_all(session_directory).map_err(|error| CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: format!("failed to initialize session directory: {error}"),
+        path: Some(session_directory.display().to_string()),
+        details: Vec::new(),
+    })
+}
+
+fn normalize_workspace_relative_path(path: &str) -> Result<PathBuf, CompilerFailure> {
+    let trimmed_path = path.trim();
+    if trimmed_path.is_empty() {
+        return Err(invalid_workspace_path("file path cannot be empty", path));
+    }
+    if !trimmed_path.ends_with(".copp") {
+        return Err(invalid_workspace_path(
+            "file path must end with .copp",
+            trimmed_path,
+        ));
+    }
+
+    let relative_path = Path::new(trimmed_path);
+    if relative_path.is_absolute() {
+        return Err(invalid_workspace_path(
+            "file path must be relative to workspace root",
+            trimmed_path,
+        ));
+    }
+
+    if relative_path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
+        return Err(invalid_workspace_path(
+            "file path cannot contain parent traversal",
+            trimmed_path,
+        ));
+    }
+
+    Ok(relative_path.to_path_buf())
+}
+
+fn invalid_workspace_path(message: &str, path: &str) -> CompilerFailure {
+    CompilerFailure {
+        kind: CompilerFailureKind::ReadSource,
+        message: message.to_string(),
+        path: Some(path.to_string()),
+        details: Vec::new(),
+    }
 }
 
 fn truncate_utf8_lossy(bytes: &[u8], max_output_bytes: usize) -> String {

@@ -26,7 +26,8 @@ rust_binary(
     srcs = ["main.rs"],
     data = [
         "//compiler/cli:main",
-        "//playground/web:web_assets",
+        "//examples:workspace_files",
+        "//playground/web:build",
     ],
     visibility = ["//visibility:public"],
     deps = [

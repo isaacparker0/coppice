@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        // Type Checking
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false,
+        "exactOptionalPropertyTypes": false,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitAny": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noUncheckedIndexedAccess": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": false,
+        "strict": true,
+        "useUnknownInCatchVariables": false,
+
+        // Modules
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+
+        // Emit
+        "noEmit": true,
+
+        // Language and Environment
+        "jsx": "react-jsx",
+        "target": "ESNext"
+    },
+    "include": ["*.d.ts", "*.ts", "*.tsx"]
+}

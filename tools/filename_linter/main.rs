@@ -61,6 +61,8 @@ const RULES: &[Rule] = &[
             "Cargo.lock",
             "Cargo.toml",
             "bin/**",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
             // keep-sorted end
         ]),
     },
