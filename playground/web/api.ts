@@ -40,6 +40,22 @@ export type RunResponse = CheckResponse & {
     exit_code?: number;
 };
 
+export type ExampleSummary = {
+    id: string;
+    name: string;
+};
+
+export type ExamplesListResponse = {
+    examples: ExampleSummary[];
+};
+
+export type ExampleWorkspaceResponse = {
+    id: string;
+    name: string;
+    entrypoint_path: string;
+    files: WorkspaceFile[];
+};
+
 async function postJson<TResponse>(
     path: string,
     body: unknown,
@@ -51,6 +67,14 @@ async function postJson<TResponse>(
         body: JSON.stringify(body),
         signal,
     });
+    const data = (await response.json()) as TResponse;
+    return { status: response.status, data };
+}
+
+async function getJson<TResponse>(
+    path: string,
+): Promise<{ status: number; data: TResponse }> {
+    const response = await fetch(path);
     const data = (await response.json()) as TResponse;
     return { status: response.status, data };
 }
@@ -88,4 +112,24 @@ export function runWorkspace(
         entrypoint_path: workspaceRequest.entrypoint_path,
         files: workspaceRequest.files,
     });
+}
+
+export async function listExamples(): Promise<ExamplesListResponse> {
+    const response = await getJson<ExamplesListResponse>("/examples");
+    if (response.status < 200 || response.status >= 300) {
+        throw new Error(`examples request failed: ${response.status}`);
+    }
+    return response.data;
+}
+
+export async function loadExample(
+    exampleId: string,
+): Promise<ExampleWorkspaceResponse> {
+    const response = await getJson<ExampleWorkspaceResponse>(
+        `/examples/${encodeURIComponent(exampleId)}`,
+    );
+    if (response.status < 200 || response.status >= 300) {
+        throw new Error(`example request failed: ${response.status}`);
+    }
+    return response.data;
 }

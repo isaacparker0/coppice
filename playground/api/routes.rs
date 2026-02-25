@@ -15,8 +15,9 @@ use crate::compiler_adapter::{
     check_workspace_via_cli, run_workspace_via_cli, write_workspace_files,
 };
 use crate::models::{
-    CheckRequest, CheckResponse, ErrorResponse, HealthResponse, RunRequest, RunResponse,
-    SessionResponse, WorkspaceFileRequest, failure_response,
+    CheckRequest, CheckResponse, ErrorResponse, ExampleSummaryResponse, ExampleWorkspaceResponse,
+    ExamplesListResponse, HealthResponse, RunRequest, RunResponse, SessionResponse,
+    WorkspaceFileRequest, failure_response,
 };
 use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::SessionStore;
@@ -32,17 +33,25 @@ const BASIC_AUTH_CHALLENGE: &str = "Basic realm=\"coppice-playground\"";
 pub struct AppState {
     session_store: Arc<SessionStore>,
     web_root: PathBuf,
+    examples_root: PathBuf,
 }
 
-pub fn build_router(session_store: Arc<SessionStore>, web_root: PathBuf) -> Router {
+pub fn build_router(
+    session_store: Arc<SessionStore>,
+    web_root: PathBuf,
+    examples_root: PathBuf,
+) -> Router {
     let app_state = AppState {
         session_store,
         web_root,
+        examples_root,
     };
 
     Router::new()
         .route("/", get(serve_index))
         .route("/health", get(health))
+        .route("/examples", get(list_examples))
+        .route("/examples/{example_id}", get(load_example))
         .route("/session", post(create_session))
         .route("/check", post(check))
         .route("/run", post(run))
@@ -84,6 +93,29 @@ async fn health() -> Json<HealthResponse> {
 async fn create_session(State(state): State<AppState>) -> Json<SessionResponse> {
     let session_id = state.session_store.create_session();
     Json(SessionResponse { session_id })
+}
+
+async fn list_examples(State(state): State<AppState>) -> (StatusCode, Json<ExamplesListResponse>) {
+    let examples = read_example_summaries(&state.examples_root).unwrap_or_default();
+    (StatusCode::OK, Json(ExamplesListResponse { examples }))
+}
+
+async fn load_example(
+    State(state): State<AppState>,
+    RoutePath(example_id): RoutePath<String>,
+) -> (StatusCode, Json<ExampleWorkspaceResponse>) {
+    let Some(example_workspace) = read_example_workspace(&state.examples_root, &example_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ExampleWorkspaceResponse {
+                id: example_id,
+                name: "not found".to_string(),
+                entrypoint_path: "main.bin.copp".to_string(),
+                files: Vec::new(),
+            }),
+        );
+    };
+    (StatusCode::OK, Json(example_workspace))
 }
 
 async fn serve_index(State(state): State<AppState>) -> Response {
@@ -143,6 +175,105 @@ fn not_found_response() -> Response {
     let mut response = Response::new(Body::from("not found"));
     *response.status_mut() = StatusCode::NOT_FOUND;
     response
+}
+
+fn read_example_summaries(examples_root: &Path) -> std::io::Result<Vec<ExampleSummaryResponse>> {
+    let mut examples = Vec::new();
+    for entry_result in std::fs::read_dir(examples_root)? {
+        let entry = entry_result?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let Some(example_id) = entry.file_name().to_str().map(ToString::to_string) else {
+            continue;
+        };
+        if !is_valid_example_id(&example_id) {
+            continue;
+        }
+        examples.push(ExampleSummaryResponse {
+            name: example_name_for_id(&example_id),
+            id: example_id,
+        });
+    }
+    examples.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(examples)
+}
+
+fn read_example_workspace(
+    examples_root: &Path,
+    example_id: &str,
+) -> Option<ExampleWorkspaceResponse> {
+    if !is_valid_example_id(example_id) {
+        return None;
+    }
+
+    let example_directory = examples_root.join(example_id);
+    if !example_directory.is_dir() {
+        return None;
+    }
+
+    let mut files = collect_workspace_files(&example_directory, &example_directory).ok()?;
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+
+    let entrypoint_path = files
+        .iter()
+        .find(|file| file.path == "main.bin.copp")
+        .or_else(|| files.iter().find(|file| file.path.ends_with(".bin.copp")))
+        .map(|file| file.path.clone())?;
+
+    Some(ExampleWorkspaceResponse {
+        id: example_id.to_string(),
+        name: example_name_for_id(example_id),
+        entrypoint_path,
+        files,
+    })
+}
+
+fn collect_workspace_files(
+    root_directory: &Path,
+    current_directory: &Path,
+) -> std::io::Result<Vec<WorkspaceFileRequest>> {
+    let mut workspace_files = Vec::new();
+    for entry_result in std::fs::read_dir(current_directory)? {
+        let entry = entry_result?;
+        let entry_path = entry.path();
+        if entry.file_type()?.is_dir() {
+            let child_files = collect_workspace_files(root_directory, &entry_path)?;
+            workspace_files.extend(child_files);
+            continue;
+        }
+        let is_workspace_source = entry_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension == "copp");
+        if !is_workspace_source {
+            continue;
+        }
+
+        let Ok(relative_path) = entry_path.strip_prefix(root_directory) else {
+            continue;
+        };
+        let Some(relative_path_string) = relative_path.to_str() else {
+            continue;
+        };
+        let source = std::fs::read_to_string(&entry_path)?;
+        workspace_files.push(WorkspaceFileRequest {
+            path: relative_path_string.replace('\\', "/"),
+            source,
+        });
+    }
+    Ok(workspace_files)
+}
+
+fn is_valid_example_id(example_id: &str) -> bool {
+    !example_id.is_empty()
+        && example_id.chars().all(|character| {
+            character.is_ascii_alphanumeric() || character == '_' || character == '-'
+        })
+}
+
+fn example_name_for_id(example_id: &str) -> String {
+    example_id.replace('_', " ")
 }
 
 async fn check(

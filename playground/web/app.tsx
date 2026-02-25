@@ -5,6 +5,9 @@ import {
     checkWorkspace,
     createSession,
     type Diagnostic,
+    type ExampleSummary,
+    listExamples,
+    loadExample,
     runWorkspace,
     type WorkspaceFile,
     type WorkspaceRequest,
@@ -12,6 +15,7 @@ import {
 
 const CHECK_DEBOUNCE_MS = 220;
 const MARKER_OWNER = "playground-check";
+const DEFAULT_EXAMPLE_ID = "hello_world";
 
 type WorkspaceState = {
     filesByPath: Map<string, string>;
@@ -21,19 +25,6 @@ type WorkspaceState = {
 };
 
 type BottomPanelTab = "problems" | "output" | "errors";
-
-function defaultWorkspaceFiles(): WorkspaceFile[] {
-    return [
-        { path: "PACKAGE.copp", source: "" },
-        {
-            path: "main.bin.copp",
-            source: `function main() -> nil {
-    print("hello, world")
-    return nil
-}`,
-        },
-    ];
-}
 
 function createModelUri(path: string): monaco.Uri {
     return monaco.Uri.parse(`inmemory://workspace/${encodeURI(path)}`);
@@ -84,9 +75,9 @@ export function App() {
     const initialWorkspace = useMemo(
         () =>
             initializeWorkspaceState(
-                defaultWorkspaceFiles(),
-                "main.bin.copp",
-                "main.bin.copp",
+                [],
+                null,
+                null,
             ),
         [],
     );
@@ -97,8 +88,10 @@ export function App() {
     const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
     const [stdout, setStdout] = useState("");
     const [stderr, setStderr] = useState("");
-    const [statusText, setStatusText] = useState("idle");
     const [isRunDisabled, setIsRunDisabled] = useState(false);
+    const [examples, setExamples] = useState<ExampleSummary[]>([]);
+    const [selectedExampleId, setSelectedExampleId] = useState("");
+    const [isExampleLoading, setIsExampleLoading] = useState(false);
     const [activeBottomPanelTab, setActiveBottomPanelTab] = useState<
         BottomPanelTab
     >("problems");
@@ -194,7 +187,6 @@ export function App() {
         if (!state.entrypointPath) {
             setDiagnostics([]);
             applyDiagnosticMarkers(state, []);
-            setStatusText("add a .bin.copp entrypoint");
             return;
         }
 
@@ -204,7 +196,6 @@ export function App() {
         const checkController = new AbortController();
         activeCheckControllerRef.current = checkController;
 
-        setStatusText("checking...");
         const result = await checkWorkspace(
             sessionId,
             workspaceRequestPayload(state),
@@ -227,10 +218,8 @@ export function App() {
             setActiveBottomPanelTab("problems");
         }
         if (result.data.error) {
-            setStatusText(`check failed: ${result.data.error.message}`);
             return;
         }
-        setStatusText(result.data.ok ? "ok" : "diagnostics");
     }, [applyDiagnosticMarkers, ensureSession]);
 
     const scheduleCheck = useCallback(() => {
@@ -247,11 +236,9 @@ export function App() {
         const sessionId = await ensureSession();
 
         if (!state.entrypointPath) {
-            setStatusText("add a .bin.copp entrypoint");
             return;
         }
 
-        setStatusText("running...");
         setIsRunDisabled(true);
         try {
             const result = await runWorkspace(
@@ -267,12 +254,10 @@ export function App() {
 
             if (result.data.error) {
                 setActiveBottomPanelTab("errors");
-                setStatusText(`run error: ${result.data.error.message}`);
                 return;
             }
             if (result.data.timed_out) {
                 setActiveBottomPanelTab("errors");
-                setStatusText("run timed out");
                 return;
             }
             if ((result.data.stderr ?? "").trim().length > 0) {
@@ -280,13 +265,42 @@ export function App() {
             } else {
                 setActiveBottomPanelTab("output");
             }
-            setStatusText(`exit code ${result.data.exit_code ?? 0}`);
         } finally {
             if (isMountedRef.current) {
                 setIsRunDisabled(false);
             }
         }
     }, [applyDiagnosticMarkers, ensureSession]);
+
+    const loadExampleById = useCallback(async (exampleId: string) => {
+        if (!exampleId) {
+            return;
+        }
+
+        setIsExampleLoading(true);
+        try {
+            const exampleWorkspace = await loadExample(exampleId);
+            const nextWorkspace = initializeWorkspaceState(
+                exampleWorkspace.files,
+                exampleWorkspace.entrypoint_path,
+                exampleWorkspace.entrypoint_path,
+            );
+
+            updateWorkspace(() => nextWorkspace);
+            setSelectedExampleId(exampleId);
+            setStdout("");
+            setStderr("");
+            setDiagnostics([]);
+            setActiveBottomPanelTab("problems");
+            applyDiagnosticMarkers(nextWorkspace, []);
+            await runCheck();
+        } catch (error: unknown) {
+        } finally {
+            if (isMountedRef.current) {
+                setIsExampleLoading(false);
+            }
+        }
+    }, [applyDiagnosticMarkers, runCheck, updateWorkspace]);
 
     const syncEditorWorkspace = useCallback((state: WorkspaceState) => {
         const editor = editorRef.current;
@@ -389,37 +403,10 @@ export function App() {
         applyDiagnosticMarkers(workspace, diagnostics);
     }, [applyDiagnosticMarkers, diagnostics, workspace]);
 
-    const resetSession = useCallback(async () => {
-        if (activeCheckControllerRef.current) {
-            activeCheckControllerRef.current.abort();
-            activeCheckControllerRef.current = null;
-        }
-        sessionIdRef.current = null;
-        await ensureSession();
-
-        const nextWorkspace = initializeWorkspaceState(
-            defaultWorkspaceFiles(),
-            "main.bin.copp",
-            "main.bin.copp",
-        );
-        updateWorkspace(() => nextWorkspace);
-        setStdout("");
-        setStderr("");
-        setDiagnostics([]);
-        setActiveBottomPanelTab("problems");
-        applyDiagnosticMarkers(nextWorkspace, []);
-        setStatusText("new session");
-        await runCheck();
-    }, [applyDiagnosticMarkers, ensureSession, runCheck, updateWorkspace]);
-
     useEffect(() => {
         void ensureSession()
             .then(() => runCheck())
             .catch((error: unknown) => {
-                const message = error instanceof Error
-                    ? error.message
-                    : String(error);
-                setStatusText(`startup error: ${message}`);
             });
 
         return () => {
@@ -432,6 +419,27 @@ export function App() {
             }
         };
     }, [ensureSession, runCheck]);
+
+    useEffect(() => {
+        void listExamples()
+            .then((response) => {
+                setExamples(response.examples);
+                const defaultExampleId = response.examples.some((example) =>
+                        example.id === DEFAULT_EXAMPLE_ID
+                    )
+                    ? DEFAULT_EXAMPLE_ID
+                    : (response.examples[0]?.id ?? "");
+                if (!defaultExampleId) {
+                    setSelectedExampleId("");
+                    return;
+                }
+                void loadExampleById(defaultExampleId);
+            })
+            .catch(() => {
+                setExamples([]);
+                setSelectedExampleId("");
+            });
+    }, [loadExampleById]);
 
     const entrypointPaths = workspace.fileOrder.filter((path) =>
         path.endsWith(".bin.copp")
@@ -460,13 +468,22 @@ export function App() {
                 </h1>
                 <div className="flex flex-col gap-1 md:items-end">
                     <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            className={actionButtonClassName}
-                            onClick={() => void resetSession()}
+                        <select
+                            aria-label="Select example"
+                            className="w-52 rounded-md border border-surface-300 bg-surface-0 px-3 py-2 text-sm text-surface-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={selectedExampleId}
+                            onChange={(event) =>
+                                void loadExampleById(event.currentTarget.value)}
+                            disabled={examples.length === 0 || isExampleLoading}
                         >
-                            New session
-                        </button>
+                            {examples.length === 0
+                                ? <option value="">no examples</option>
+                                : examples.map((example) => (
+                                    <option key={example.id} value={example.id}>
+                                        {example.name}
+                                    </option>
+                                ))}
+                        </select>
                         <button
                             type="button"
                             className={actionButtonClassName}
@@ -476,12 +493,13 @@ export function App() {
                             Run
                         </button>
                     </div>
-                    <span className="text-xs text-surface-700">{statusText}</span>
                 </div>
             </header>
 
             <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-12">
-                <section className={`${panelClassName} md:col-span-3 md:row-span-2`}>
+                <section
+                    className={`${panelClassName} md:col-span-3 md:row-span-2`}
+                >
                     <h2 className="text-lg font-semibold">Workspace</h2>
                     <label
                         htmlFor="entrypoint"
@@ -536,17 +554,19 @@ export function App() {
                                         return;
                                     }
                                     if (!path.endsWith(".copp")) {
-                                        setStatusText("file path must end with .copp");
                                         return;
                                     }
-                                    if (path.startsWith("/") || path.includes("..")) {
-                                        setStatusText(
-                                            "file path must be workspace-relative",
-                                        );
+                                    if (
+                                        path.startsWith("/") ||
+                                        path.includes("..")
+                                    ) {
                                         return;
                                     }
-                                    if (workspaceRef.current.filesByPath.has(path)) {
-                                        setStatusText("file already exists");
+                                    if (
+                                        workspaceRef.current.filesByPath.has(
+                                            path,
+                                        )
+                                    ) {
                                         return;
                                     }
 
@@ -563,11 +583,11 @@ export function App() {
                                             filesByPath,
                                             fileOrder,
                                             activeFilePath: path,
-                                            entrypointPath:
-                                                previousWorkspace.entrypointPath ??
-                                                    (path.endsWith(".bin.copp")
-                                                        ? path
-                                                        : null),
+                                            entrypointPath: previousWorkspace
+                                                .entrypointPath ??
+                                                (path.endsWith(".bin.copp")
+                                                    ? path
+                                                    : null),
                                         };
                                     });
                                     scheduleCheck();
@@ -596,27 +616,29 @@ export function App() {
                                         filesByPath.delete(
                                             previousWorkspace.activeFilePath,
                                         );
-                                        const fileOrder = previousWorkspace.fileOrder
+                                        const fileOrder = previousWorkspace
+                                            .fileOrder
                                             .filter(
                                                 (path) =>
                                                     path !==
                                                         previousWorkspace
                                                             .activeFilePath,
                                             );
-                                        const binPaths = fileOrder.filter((path) =>
-                                            path.endsWith(".bin.copp")
-                                        );
+                                        const binPaths = fileOrder.filter((
+                                            path,
+                                        ) => path.endsWith(".bin.copp"));
                                         return {
                                             filesByPath,
                                             fileOrder,
-                                            activeFilePath: fileOrder[0] ?? null,
-                                            entrypointPath:
-                                                previousWorkspace.entrypointPath ===
-                                                        previousWorkspace
-                                                            .activeFilePath
-                                                    ? (binPaths[0] ?? null)
-                                                    : previousWorkspace
-                                                        .entrypointPath,
+                                            activeFilePath: fileOrder[0] ??
+                                                null,
+                                            entrypointPath: previousWorkspace
+                                                    .entrypointPath ===
+                                                    previousWorkspace
+                                                        .activeFilePath
+                                                ? (binPaths[0] ?? null)
+                                                : previousWorkspace
+                                                    .entrypointPath,
                                         };
                                     });
                                     scheduleCheck();
@@ -638,7 +660,9 @@ export function App() {
                                         ? "w-full border-l-2 border-l-brand-700 bg-brand-50 px-3 py-2.5 text-left text-sm font-medium text-brand-800"
                                         : "w-full border-l-2 border-l-transparent bg-transparent px-3 py-2.5 text-left text-sm text-surface-700 transition hover:bg-surface-100 hover:text-surface-900"}
                                     onClick={() => {
-                                        updateWorkspace((previousWorkspace) => ({
+                                        updateWorkspace((
+                                            previousWorkspace,
+                                        ) => ({
                                             ...previousWorkspace,
                                             activeFilePath: path,
                                         }));
@@ -647,7 +671,8 @@ export function App() {
                                     <span className="inline-flex items-center gap-2">
                                         <span
                                             aria-hidden="true"
-                                            className={path === workspace.activeFilePath
+                                            className={path ===
+                                                    workspace.activeFilePath
                                                 ? "h-3 w-3 rounded-sm border border-brand-700 bg-brand-100"
                                                 : "h-3 w-3 rounded-sm border border-surface-400 bg-transparent"}
                                         />
@@ -659,7 +684,9 @@ export function App() {
                     </ul>
                 </section>
 
-                <section className={`${panelClassName} flex min-h-0 flex-col md:col-span-9`}>
+                <section
+                    className={`${panelClassName} flex min-h-0 flex-col md:col-span-9`}
+                >
                     <h2 className="mb-2 text-lg font-semibold">
                         {workspace.activeFilePath ?? "(no file selected)"}
                     </h2>
@@ -670,7 +697,9 @@ export function App() {
                     />
                 </section>
 
-                <section className={`${panelClassName} flex h-56 min-h-0 flex-col md:col-span-9`}>
+                <section
+                    className={`${panelClassName} flex h-56 min-h-0 flex-col md:col-span-9`}
+                >
                     <div className="mb-3 flex items-center gap-2 border-b border-surface-200 pb-2">
                         <button
                             type="button"
@@ -711,7 +740,10 @@ export function App() {
                                             </li>
                                         )
                                         : (
-                                            diagnostics.map((diagnostic, index) => (
+                                            diagnostics.map((
+                                                diagnostic,
+                                                index,
+                                            ) => (
                                                 <li
                                                     key={`${diagnostic.path}-${index}`}
                                                     className="border-b border-surface-200 py-1 last:border-b-0"
@@ -736,7 +768,8 @@ export function App() {
                                                             ) => ({
                                                                 ...previousWorkspace,
                                                                 activeFilePath:
-                                                                    diagnostic.path,
+                                                                    diagnostic
+                                                                        .path,
                                                             }));
                                                         }}
                                                     >

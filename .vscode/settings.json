@@ -1,4 +1,5 @@
 {
+    "css.validate": false,
     "editor.rulers": [80],
     "go.toolsEnvVars": {
         "GOPACKAGESDRIVER": "${workspaceFolder}/bin/gopackagesdriver"

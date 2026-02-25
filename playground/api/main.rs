@@ -15,9 +15,10 @@ async fn main() {
     let bind_address = "0.0.0.0:8080";
     let session_root = std::env::temp_dir().join("coppice-playground");
     let web_root = resolve_web_root_from_runfiles();
+    let examples_root = resolve_examples_root_from_runfiles();
 
     let session_store = Arc::new(SessionStore::new(session_root));
-    let app = build_router(session_store.clone(), web_root);
+    let app = build_router(session_store.clone(), web_root, examples_root);
 
     let cleanup_store = session_store.clone();
     tokio::spawn(async move {
@@ -50,4 +51,17 @@ fn resolve_web_root_from_runfiles() -> PathBuf {
     runfiles
         .rlocation("_main/playground/web/dist")
         .unwrap_or_else(|| panic!("failed to resolve runfiles path for playground/web/dist"))
+}
+
+fn resolve_examples_root_from_runfiles() -> PathBuf {
+    let runfiles = Runfiles::create().unwrap_or_else(|error| {
+        panic!("failed to initialize runfiles for playground examples: {error}")
+    });
+    let examples_readme_path = runfiles
+        .rlocation("_main/examples/README.md")
+        .unwrap_or_else(|| panic!("failed to resolve runfiles path for examples/README.md"));
+    examples_readme_path.parent().map_or_else(
+        || panic!("failed to resolve examples root directory"),
+        PathBuf::from,
+    )
 }
