@@ -540,7 +540,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "g0+Y0xpCtTbaPQnqk4YR+G2KZVCewz3OhP/XyC6U99M=",
-        "usagesDigest": "aosB6KeiohDOQXlAqWhKVTW0D95ghkcvp7x1RZ8u46I=",
+        "usagesDigest": "XfJ1MunkWlVKzoimi1LXra5OsMdRciAc0Vf+ZoI+YLI=",
         "recordedInputs": [
           "REPO_MAPPING:aspect_bazel_lib+,bazel_tools bazel_tools",
           "REPO_MAPPING:bazel_features+,bazel_tools bazel_tools",
@@ -556,7 +556,7 @@
               "scheme": "https",
               "registry": "index.docker.io",
               "repository": "library/debian",
-              "identifier": "sha256:2c91e484d93f0830a7e05a2b9d92a7b102be7cab562198b984a84fdbc7806d91",
+              "identifier": "sha256:3615a749858a1cba49b408fb49c37093db813321355a9ab7c1f9f4836341e9db",
               "platform": "linux/amd64",
               "target_name": "debian_bookworm_slim_linux_amd64",
               "bazel_tags": []
@@ -570,7 +570,7 @@
               "scheme": "https",
               "registry": "index.docker.io",
               "repository": "library/debian",
-              "identifier": "sha256:2c91e484d93f0830a7e05a2b9d92a7b102be7cab562198b984a84fdbc7806d91",
+              "identifier": "sha256:3615a749858a1cba49b408fb49c37093db813321355a9ab7c1f9f4836341e9db",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@debian_bookworm_slim_linux_amd64"
               },
@@ -903,7 +903,7 @@
     },
     "@@rules_rust+//crate_universe/private:internal_extensions.bzl%cu_nr": {
       "general": {
-        "bzlTransitiveDigest": "MeOk4n6O94uBjhwYKsqiRRllxVETZ6lCI6YF73kY29M=",
+        "bzlTransitiveDigest": "YsUUMWWCpgC966veDjKen9j2twtY7N15iz1OVHeViNk=",
         "usagesDigest": "v4We18mWSPeKV4GPp9Gne78W+jZOgP2pC1i4UN9br1g=",
         "recordedInputs": [
           "REPO_MAPPING:bazel_features+,bazel_features_globals bazel_features++version_extension+bazel_features_globals",
