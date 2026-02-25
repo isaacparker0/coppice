@@ -1824,20 +1824,22 @@ fn compile_call_expression(
                     .iter()
                     .map(|parameter| parameter.type_reference.clone())
                     .collect::<Vec<_>>();
-                let (parameter_types, return_type) = instantiate_generic_signature(
-                    &function_record.declaration.type_parameter_names,
-                    &declared_parameter_types,
-                    &function_record.declaration.return_type,
-                    type_arguments,
-                )?;
+                let declared_return_type = function_record.declaration.return_type.clone();
+                let (instantiated_parameter_types, instantiated_return_type) =
+                    instantiate_generic_signature(
+                        &function_record.declaration.type_parameter_names,
+                        &declared_parameter_types,
+                        &declared_return_type,
+                        type_arguments,
+                    )?;
 
-                if parameter_types.len() != arguments.len() {
+                if instantiated_parameter_types.len() != arguments.len() {
                     return Err(build_failed(
                         format!(
                             "function '{}::{}' expected {} argument(s), got {}",
                             callable_reference.package_path,
                             callable_reference.symbol_name,
-                            parameter_types.len(),
+                            instantiated_parameter_types.len(),
                             arguments.len()
                         ),
                         None,
@@ -1845,7 +1847,12 @@ fn compile_call_expression(
                 }
 
                 let mut argument_values = Vec::new();
-                for (expected_type, argument_expression) in parameter_types.iter().zip(arguments) {
+                for ((instantiated_parameter_type, declared_parameter_type), argument_expression) in
+                    instantiated_parameter_types
+                        .iter()
+                        .zip(declared_parameter_types.iter())
+                        .zip(arguments)
+                {
                     let argument = compile_expression(
                         state,
                         function_builder,
@@ -1855,7 +1862,11 @@ fn compile_call_expression(
                     if argument.terminates {
                         return Ok(argument);
                     }
-                    if !is_type_assignable(state, &argument.type_reference, expected_type) {
+                    if !is_type_assignable(
+                        state,
+                        &argument.type_reference,
+                        instantiated_parameter_type,
+                    ) {
                         return Err(build_failed(
                             format!(
                                 "call argument type mismatch for function '{}::{}'",
@@ -1864,17 +1875,15 @@ fn compile_call_expression(
                             None,
                         ));
                     }
-                    let lowered_argument = runtime_value_for_expected_type(
+                    let lowered_argument = runtime_call_argument_for_declared_parameter_type(
                         state,
                         function_builder,
                         argument.value,
                         &argument.type_reference,
-                        expected_type,
+                        instantiated_parameter_type,
+                        declared_parameter_type,
                     )?;
-                    let value = lowered_argument.ok_or_else(|| {
-                        build_failed("call argument produced no runtime value".to_string(), None)
-                    })?;
-                    argument_values.push(value);
+                    argument_values.push(lowered_argument);
                 }
                 for (type_parameter_index, type_parameter_name) in function_record
                     .declaration
@@ -1915,19 +1924,28 @@ fn compile_call_expression(
                 let call = function_builder.ins().call(callee, &argument_values);
 
                 if matches!(
-                    return_type,
+                    instantiated_return_type,
                     ExecutableTypeReference::Nil | ExecutableTypeReference::Never
                 ) {
                     Ok(TypedValue {
                         value: None,
-                        type_reference: return_type.clone(),
-                        terminates: matches!(return_type, ExecutableTypeReference::Never),
+                        type_reference: instantiated_return_type.clone(),
+                        terminates: matches!(
+                            instantiated_return_type,
+                            ExecutableTypeReference::Never
+                        ),
                     })
                 } else {
                     let results = function_builder.inst_results(call);
+                    let lowered_result = runtime_call_result_for_instantiated_return_type(
+                        function_builder,
+                        results[0],
+                        &declared_return_type,
+                        &instantiated_return_type,
+                    );
                     Ok(TypedValue {
-                        value: Some(results[0]),
-                        type_reference: return_type,
+                        value: Some(lowered_result),
+                        type_reference: instantiated_return_type,
                         terminates: false,
                     })
                 }
@@ -1951,6 +1969,61 @@ fn compile_call_expression(
             arguments,
         ),
     }
+}
+
+fn runtime_call_argument_for_declared_parameter_type(
+    state: &mut CompilationState,
+    function_builder: &mut FunctionBuilder<'_>,
+    argument_value: Option<Value>,
+    argument_type: &ExecutableTypeReference,
+    instantiated_parameter_type: &ExecutableTypeReference,
+    declared_parameter_type: &ExecutableTypeReference,
+) -> Result<Value, CompilerFailure> {
+    if matches!(
+        declared_parameter_type,
+        ExecutableTypeReference::TypeParameter { .. }
+    ) {
+        if matches!(argument_type, ExecutableTypeReference::Nil) {
+            return Ok(function_builder.ins().iconst(types::I64, 0));
+        }
+        let runtime_value = argument_value.ok_or_else(|| {
+            build_failed("call argument produced no runtime value".to_string(), None)
+        })?;
+        return Ok(i64_storage_value_for_type(
+            function_builder,
+            runtime_value,
+            instantiated_parameter_type,
+        ));
+    }
+
+    let lowered_argument = runtime_value_for_expected_type(
+        state,
+        function_builder,
+        argument_value,
+        argument_type,
+        declared_parameter_type,
+    )?;
+    lowered_argument
+        .ok_or_else(|| build_failed("call argument produced no runtime value".to_string(), None))
+}
+
+fn runtime_call_result_for_instantiated_return_type(
+    function_builder: &mut FunctionBuilder<'_>,
+    raw_result: Value,
+    declared_return_type: &ExecutableTypeReference,
+    instantiated_return_type: &ExecutableTypeReference,
+) -> Value {
+    if matches!(
+        declared_return_type,
+        ExecutableTypeReference::TypeParameter { .. }
+    ) {
+        return runtime_value_from_i64_storage(
+            function_builder,
+            raw_result,
+            instantiated_return_type,
+        );
+    }
+    raw_result
 }
 
 fn compile_function_value_call_expression(
