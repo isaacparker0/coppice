@@ -20,6 +20,7 @@ struct LspServer {
     check_session: CheckSession,
     shutdown_requested: bool,
     published_diagnostic_uri_set: BTreeSet<String>,
+    source_override_by_path: BTreeMap<String, String>,
 }
 
 impl LspServer {
@@ -28,6 +29,7 @@ impl LspServer {
             check_session: CheckSession::new(workspace_root_override.map(ToString::to_string)),
             shutdown_requested: false,
             published_diagnostic_uri_set: BTreeSet::new(),
+            source_override_by_path: BTreeMap::new(),
         }
     }
 
@@ -201,7 +203,9 @@ impl LspServer {
         };
         let target_path = path_to_key(&absolute_path);
         self.check_session
-            .open_or_update_document(&target_path, text);
+            .open_or_update_document(&target_path, text.clone());
+        self.source_override_by_path
+            .insert(target_path.clone(), text);
         self.recheck_target_and_publish(writer, &target_path)
     }
 
@@ -215,6 +219,7 @@ impl LspServer {
         };
         let target_path = path_to_key(&absolute_path);
         self.check_session.close_document(&target_path);
+        self.source_override_by_path.remove(&target_path);
         self.recheck_target_and_publish(writer, &target_path)
     }
 
@@ -245,14 +250,21 @@ impl LspServer {
         target_path: &str,
     ) -> Result<(), CompilerFailure> {
         let mut diagnostics_by_uri = BTreeMap::<String, Vec<Value>>::new();
+        let mut source_by_diagnostic_path = BTreeMap::<String, Option<String>>::new();
         for diagnostic in diagnostics {
             let Some(uri) = Self::diagnostic_path_to_uri(&diagnostic.path) else {
                 continue;
             };
+            let source = source_by_diagnostic_path
+                .entry(diagnostic.path.clone())
+                .or_insert_with(|| self.load_source_for_diagnostic_path(&diagnostic.path));
             diagnostics_by_uri
                 .entry(uri)
                 .or_default()
-                .push(rendered_diagnostic_to_lsp_diagnostic(&diagnostic));
+                .push(rendered_diagnostic_to_lsp_diagnostic(
+                    &diagnostic,
+                    source.as_deref(),
+                ));
         }
 
         if let Some(target_uri) = Self::path_to_uri(target_path) {
@@ -332,26 +344,98 @@ impl LspServer {
         };
         Some(file_path_to_uri(&absolute_path))
     }
+
+    fn load_source_for_diagnostic_path(&self, diagnostic_path: &str) -> Option<String> {
+        let diagnostic_file_path = Path::new(diagnostic_path);
+        let absolute_path = if diagnostic_file_path.is_absolute() {
+            diagnostic_file_path.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .ok()
+                .map(|current_directory| current_directory.join(diagnostic_file_path))?
+        };
+        let path_key = path_to_key(&absolute_path);
+        if let Some(source_override) = self.source_override_by_path.get(&path_key) {
+            return Some(source_override.clone());
+        }
+        std::fs::read_to_string(absolute_path).ok()
+    }
 }
 
-fn rendered_diagnostic_to_lsp_diagnostic(diagnostic: &RenderedDiagnostic) -> Value {
-    let line = diagnostic.span.line.saturating_sub(1);
-    let character = diagnostic.span.column.saturating_sub(1);
+fn rendered_diagnostic_to_lsp_diagnostic(
+    diagnostic: &RenderedDiagnostic,
+    source: Option<&str>,
+) -> Value {
+    let ((start_line, start_character), (end_line, end_character)) =
+        if let Some(source_text) = source {
+            span_to_lsp_range(source_text, diagnostic.span.start, diagnostic.span.end)
+        } else {
+            let line = diagnostic.span.line.saturating_sub(1);
+            let character = diagnostic.span.column.saturating_sub(1);
+            ((line, character), (line, character + 1))
+        };
     json!({
         "range": {
             "start": {
-                "line": line,
-                "character": character,
+                "line": start_line,
+                "character": start_character,
             },
             "end": {
-                "line": line,
-                "character": character + 1,
+                "line": end_line,
+                "character": end_character,
             },
         },
         "severity": 1,
         "source": "coppice",
         "message": diagnostic.message,
     })
+}
+
+fn span_to_lsp_range(
+    source: &str,
+    raw_start_byte_offset: usize,
+    raw_end_byte_offset: usize,
+) -> ((usize, usize), (usize, usize)) {
+    let start_byte_offset = clamp_to_char_boundary(source, raw_start_byte_offset);
+    let mut end_byte_offset = clamp_to_char_boundary(source, raw_end_byte_offset);
+    if end_byte_offset < start_byte_offset {
+        end_byte_offset = start_byte_offset;
+    }
+    if end_byte_offset == start_byte_offset {
+        end_byte_offset =
+            next_char_boundary(source, start_byte_offset).unwrap_or(start_byte_offset);
+    }
+    (
+        byte_offset_to_lsp_position(source, start_byte_offset),
+        byte_offset_to_lsp_position(source, end_byte_offset),
+    )
+}
+
+fn byte_offset_to_lsp_position(source: &str, raw_byte_offset: usize) -> (usize, usize) {
+    let byte_offset = clamp_to_char_boundary(source, raw_byte_offset);
+    let prefix = &source[..byte_offset];
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count();
+    let line_start_byte_offset = prefix.rfind('\n').map_or(0, |index| index + 1);
+    let utf16_character = prefix[line_start_byte_offset..].encode_utf16().count();
+    (line, utf16_character)
+}
+
+fn clamp_to_char_boundary(source: &str, raw_byte_offset: usize) -> usize {
+    let mut byte_offset = raw_byte_offset.min(source.len());
+    while byte_offset > 0 && !source.is_char_boundary(byte_offset) {
+        byte_offset -= 1;
+    }
+    byte_offset
+}
+
+fn next_char_boundary(source: &str, byte_offset: usize) -> Option<usize> {
+    if byte_offset >= source.len() {
+        return None;
+    }
+    source[byte_offset..]
+        .chars()
+        .next()
+        .map(|character| byte_offset + character.len_utf8())
 }
 
 fn read_lsp_message<R: BufRead>(reader: &mut R) -> Result<Option<Vec<u8>>, CompilerFailure> {
