@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-extension_source_dir="${repo_root}/tools/vscode/coppice_lsp"
+extension_source_dir="${repo_root}/editor/vscode"
 extensions_dir="${VSCODE_EXTENSIONS_DIR:-${HOME}/.vscode/extensions}"
 installed_link_path="${extensions_dir}/coppice.coppice-lsp-dev"
 

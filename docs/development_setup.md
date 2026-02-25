@@ -33,3 +33,11 @@ brew install prek
 ```bash
 prek install
 ```
+
+### VSCode
+
+```bash
+bin/install-coppice-vscode-dev-extension
+```
+
+Then: `Developer: Reload Window`.

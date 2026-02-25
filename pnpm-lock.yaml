@@ -39,7 +39,7 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
 
-  tools/vscode/coppice_lsp:
+  editor/vscode:
     dependencies:
       vscode-languageclient:
         specifier: ^9.0.1
