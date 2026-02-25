@@ -28,15 +28,10 @@ function activate(context) {
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    const configuredWorkspaceRoot = vscode.workspace
-        .getConfiguration("coppice")
-        .get("workspaceRoot");
     // TODO: if we were to publish the extension, we would need to make server
     // command configurable via extension settings.
     const serverCommand = path.join(workspaceRoot, "bin", "coppice");
-    const serverArgs = configuredWorkspaceRoot
-        ? ["--workspace-root", configuredWorkspaceRoot, "lsp"]
-        : ["lsp"];
+    const serverArgs = ["lsp"];
     outputChannel.appendLine(`[activate] workspaceFolder=${workspaceRoot}`);
     outputChannel.appendLine(`[activate] serverCommand=${serverCommand}`);
     outputChannel.appendLine(

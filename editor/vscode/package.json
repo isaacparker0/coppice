@@ -32,18 +32,7 @@
                 "scopeName": "source.coppice",
                 "path": "./textmate_grammar.json"
             }
-        ],
-        "configuration": {
-            "title": "Coppice",
-            "properties": {
-                "coppice.workspaceRoot": {
-                    "type": "string",
-                    "default": "",
-                    "markdownDescription": "Optional explicit workspace root passed to coppice-lsp as --workspace-root. Leave empty to use COPPICE_WORKSPACE marker discovery.",
-                    "scope": "window"
-                }
-            }
-        }
+        ]
     },
     "scripts": {
         "check": "node -e \"require('./extension.js')\""
