@@ -75,12 +75,11 @@ pub async fn check_workspace_via_cli(
 
     let mut command = Command::new(cli_path);
     command
-        .arg("--workspace-root")
-        .arg(session_directory)
         .arg("check")
         .arg("--format")
         .arg("json")
         .arg(entrypoint_path)
+        .current_dir(session_directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -124,10 +123,9 @@ pub async fn run_workspace_via_cli(
 
     let mut command = Command::new(cli_path);
     command
-        .arg("--workspace-root")
-        .arg(session_directory)
         .arg("run")
         .arg(entrypoint_path)
+        .current_dir(session_directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -201,13 +199,6 @@ fn normalize_workspace_relative_path(path: &str) -> Result<PathBuf, CompilerFail
     if trimmed_path.is_empty() {
         return Err(invalid_workspace_path("file path cannot be empty", path));
     }
-    if !trimmed_path.ends_with(".copp") {
-        return Err(invalid_workspace_path(
-            "file path must end with .copp",
-            trimmed_path,
-        ));
-    }
-
     let relative_path = Path::new(trimmed_path);
     if relative_path.is_absolute() {
         return Err(invalid_workspace_path(

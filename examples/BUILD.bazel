@@ -2,6 +2,7 @@ filegroup(
     name = "workspace_files",
     srcs = ["README.md"] + glob([
         "**/*.copp",
+        "**/COPPICE_WORKSPACE",
     ]),
     visibility = ["//visibility:public"],
 )

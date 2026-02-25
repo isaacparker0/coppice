@@ -242,13 +242,6 @@ fn collect_workspace_files(
             workspace_files.extend(child_files);
             continue;
         }
-        let is_workspace_source = entry_path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension == "copp");
-        if !is_workspace_source {
-            continue;
-        }
 
         let Ok(relative_path) = entry_path.strip_prefix(root_directory) else {
             continue;
