@@ -122,7 +122,7 @@ resource "github_repository_deploy_key" "buildkite_checkout" {
 resource "digitalocean_droplet" "buildkite_runner" {
   name   = "coppice-ci-runner-01"
   region = "nyc3"
-  size   = "s-2vcpu-8gb"
+  size   = "s-4vcpu-8gb"
   image  = "ubuntu-24-04-x64"
 
   user_data = templatefile("${path.module}/buildkite_runner_setup.sh.tftpl", {
