@@ -5,8 +5,10 @@ rust_binary(
     srcs = ["main.rs"],
     visibility = ["//visibility:public"],
     deps = [
+        "//compiler/autofix_policy",
         "//compiler/check_pipeline",
         "//compiler/driver",
+        "//compiler/fix_edits",
         "//compiler/lsp",
         "//compiler/reports",
         "@crates//:clap",

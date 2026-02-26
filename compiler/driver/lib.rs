@@ -1,7 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use compiler__check_pipeline::analyze_target_with_workspace_root;
+use compiler__autofix_policy::{
+    AutofixPolicyMode, AutofixPolicyOutcome, evaluate_autofix_policy,
+    summarize_pending_safe_autofixes,
+};
+use compiler__check_pipeline::{
+    analyze_target_with_workspace_root, analyze_target_with_workspace_root_and_overrides,
+};
 use compiler__cranelift_backend::{BuildArtifactIdentity, build_program, run_program};
 use compiler__executable_lowering::lower_resolved_declarations_build_unit;
 use compiler__phase_results::PhaseStatus;
@@ -16,40 +22,117 @@ pub struct BuiltTarget {
     pub executable_path: String,
 }
 
+pub struct BuildTargetResult {
+    pub autofix_policy_outcome: Option<AutofixPolicyOutcome>,
+    pub build: Result<BuiltTarget, CompilerFailure>,
+}
+
+#[must_use]
 pub fn build_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
     output_directory_override: Option<&str>,
-) -> Result<BuiltTarget, CompilerFailure> {
-    let analyzed_target = analyze_target_with_workspace_root(path, workspace_root_override)?;
-    if !analyzed_target.diagnostics.is_empty() {
-        return Err(build_failed_from_rendered_diagnostics(
-            &analyzed_target.diagnostics,
-        ));
+    strict: bool,
+) -> BuildTargetResult {
+    let mut analyzed_target =
+        match analyze_target_with_workspace_root(path, workspace_root_override) {
+            Ok(value) => value,
+            Err(error) => {
+                return BuildTargetResult {
+                    autofix_policy_outcome: None,
+                    build: Err(error),
+                };
+            }
+        };
+
+    let safe_autofix_edit_count_by_workspace_relative_path = analyzed_target
+        .safe_autofix_edits_by_workspace_relative_path
+        .iter()
+        .map(|(workspace_relative_path, text_edits)| {
+            (workspace_relative_path.clone(), text_edits.len())
+        })
+        .collect::<BTreeMap<_, _>>();
+    let autofix_policy_outcome =
+        evaluate_safe_autofix_policy(strict, &safe_autofix_edit_count_by_workspace_relative_path);
+
+    if matches!(
+        autofix_policy_outcome,
+        AutofixPolicyOutcome::FailInStrictMode { .. }
+    ) {
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(build_failed_from_pending_safe_autofixes(
+                &safe_autofix_edit_count_by_workspace_relative_path,
+            )),
+        };
     }
-    let binary_entrypoint = find_single_binary_entrypoint(
+
+    if !analyzed_target
+        .canonical_source_override_by_workspace_relative_path
+        .is_empty()
+    {
+        analyzed_target = match analyze_target_with_workspace_root_and_overrides(
+            path,
+            workspace_root_override,
+            &analyzed_target.canonical_source_override_by_workspace_relative_path,
+        ) {
+            Ok(value) => value,
+            Err(error) => {
+                return BuildTargetResult {
+                    autofix_policy_outcome: Some(autofix_policy_outcome),
+                    build: Err(error),
+                };
+            }
+        };
+    }
+    if !analyzed_target.diagnostics.is_empty() {
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(build_failed_from_rendered_diagnostics(
+                &analyzed_target.diagnostics,
+            )),
+        };
+    }
+    let binary_entrypoint = match find_single_binary_entrypoint(
         &analyzed_target.workspace,
         &analyzed_target.absolute_target_path,
         analyzed_target.target_is_file,
-    )?;
-    let binary_entrypoint_resolved_declarations = analyzed_target
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            return BuildTargetResult {
+                autofix_policy_outcome: Some(autofix_policy_outcome),
+                build: Err(error),
+            };
+        }
+    };
+    let Some(binary_entrypoint_resolved_declarations) = analyzed_target
         .resolved_declarations_by_path
         .get(&binary_entrypoint)
-        .ok_or_else(|| CompilerFailure {
-            kind: CompilerFailureKind::BuildFailed,
-            message: "missing resolved declarations for binary entrypoint".to_string(),
-            path: Some(path_to_key(&binary_entrypoint)),
-            details: Vec::new(),
-        })?;
-    let binary_entrypoint_package_path = analyzed_target
-        .package_path_by_file
-        .get(&binary_entrypoint)
-        .ok_or_else(|| CompilerFailure {
-            kind: CompilerFailureKind::BuildFailed,
-            message: "missing package ownership for binary entrypoint".to_string(),
-            path: Some(path_to_key(&binary_entrypoint)),
-            details: Vec::new(),
-        })?;
+    else {
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(CompilerFailure {
+                kind: CompilerFailureKind::BuildFailed,
+                message: "missing resolved declarations for binary entrypoint".to_string(),
+                path: Some(path_to_key(&binary_entrypoint)),
+                details: Vec::new(),
+            }),
+        };
+    };
+    let Some(binary_entrypoint_package_path) =
+        analyzed_target.package_path_by_file.get(&binary_entrypoint)
+    else {
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(CompilerFailure {
+                kind: CompilerFailureKind::BuildFailed,
+                message: "missing package ownership for binary entrypoint".to_string(),
+                path: Some(path_to_key(&binary_entrypoint)),
+                details: Vec::new(),
+            }),
+        };
+    };
     let reachable_package_paths = package_dependency_closure(
         binary_entrypoint_package_path,
         &analyzed_target.resolved_imports,
@@ -66,9 +149,12 @@ pub fn build_target_with_workspace_root(
     }
     sort_rendered_diagnostics(&mut reachable_diagnostics);
     if !reachable_diagnostics.is_empty() {
-        return Err(build_failed_from_rendered_diagnostics(
-            &reachable_diagnostics,
-        ));
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(build_failed_from_rendered_diagnostics(
+                &reachable_diagnostics,
+            )),
+        };
     }
     let dependency_library_resolved_declarations = analyzed_target
         .resolved_declarations_by_path
@@ -92,22 +178,25 @@ pub fn build_target_with_workspace_root(
         &dependency_library_resolved_declarations,
     );
     if !matches!(executable_lowering_result.status, PhaseStatus::Ok) {
-        return Err(CompilerFailure {
-            kind: CompilerFailureKind::BuildFailed,
-            message: "build mode does not support this program yet".to_string(),
-            path: Some(path_to_key(&binary_entrypoint)),
-            details: executable_lowering_result
-                .diagnostics
-                .into_iter()
-                .map(|diagnostic| CompilerFailureDetail {
-                    message: format!(
-                        "{} (line {}, column {})",
-                        diagnostic.message, diagnostic.span.line, diagnostic.span.column
-                    ),
-                    path: Some(path_to_key(&binary_entrypoint)),
-                })
-                .collect(),
-        });
+        return BuildTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            build: Err(CompilerFailure {
+                kind: CompilerFailureKind::BuildFailed,
+                message: "build mode does not support this program yet".to_string(),
+                path: Some(path_to_key(&binary_entrypoint)),
+                details: executable_lowering_result
+                    .diagnostics
+                    .into_iter()
+                    .map(|diagnostic| CompilerFailureDetail {
+                        message: format!(
+                            "{} (line {}, column {})",
+                            diagnostic.message, diagnostic.span.line, diagnostic.span.column
+                        ),
+                        path: Some(path_to_key(&binary_entrypoint)),
+                    })
+                    .collect(),
+            }),
+        };
     }
 
     let build_directory = if let Some(output_directory) = output_directory_override {
@@ -123,26 +212,89 @@ pub fn build_target_with_workspace_root(
             .join(".coppice")
             .join("build")
     };
-    let executable_stem = executable_stem_for_binary_entrypoint(&binary_entrypoint)?;
-    let built_program = build_program(
+    let executable_stem = match executable_stem_for_binary_entrypoint(&binary_entrypoint) {
+        Ok(value) => value,
+        Err(error) => {
+            return BuildTargetResult {
+                autofix_policy_outcome: Some(autofix_policy_outcome),
+                build: Err(error),
+            };
+        }
+    };
+    let built_program = match build_program(
         &executable_lowering_result.value,
         &build_directory,
         &BuildArtifactIdentity { executable_stem },
-    )?;
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            return BuildTargetResult {
+                autofix_policy_outcome: Some(autofix_policy_outcome),
+                build: Err(error),
+            };
+        }
+    };
 
-    Ok(BuiltTarget {
-        executable_path: display_path(&built_program.binary_path),
-    })
+    BuildTargetResult {
+        autofix_policy_outcome: Some(autofix_policy_outcome),
+        build: Ok(BuiltTarget {
+            executable_path: display_path(&built_program.binary_path),
+        }),
+    }
 }
 
+pub struct RunTargetResult {
+    pub autofix_policy_outcome: Option<AutofixPolicyOutcome>,
+    pub run: Result<i32, CompilerFailure>,
+}
+
+#[must_use]
 pub fn run_target_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
     output_directory_override: Option<&str>,
-) -> Result<i32, CompilerFailure> {
-    let built =
-        build_target_with_workspace_root(path, workspace_root_override, output_directory_override)?;
-    run_program(Path::new(&built.executable_path))
+    strict: bool,
+) -> RunTargetResult {
+    let built = build_target_with_workspace_root(
+        path,
+        workspace_root_override,
+        output_directory_override,
+        strict,
+    );
+
+    match (built.autofix_policy_outcome, built.build) {
+        (None, Err(error)) => RunTargetResult {
+            autofix_policy_outcome: None,
+            run: Err(error),
+        },
+        (Some(autofix_policy_outcome), Err(error)) => RunTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            run: Err(error),
+        },
+        (Some(autofix_policy_outcome), Ok(built_target)) => RunTargetResult {
+            autofix_policy_outcome: Some(autofix_policy_outcome),
+            run: run_program(Path::new(&built_target.executable_path)),
+        },
+        (None, Ok(_)) => panic!("autofix policy outcome missing for successful build"),
+    }
+}
+
+fn evaluate_safe_autofix_policy(
+    strict: bool,
+    safe_autofix_edit_count_by_workspace_relative_path: &BTreeMap<String, usize>,
+) -> AutofixPolicyOutcome {
+    evaluate_autofix_policy(
+        if strict {
+            AutofixPolicyMode::Strict
+        } else {
+            AutofixPolicyMode::NonStrict
+        },
+        summarize_pending_safe_autofixes(
+            safe_autofix_edit_count_by_workspace_relative_path
+                .values()
+                .copied(),
+        ),
+    )
 }
 
 fn package_dependency_closure(
@@ -231,6 +383,25 @@ fn build_failed_from_rendered_diagnostics(diagnostics: &[RenderedDiagnostic]) ->
                 ),
                 path: Some(diagnostic.path.clone()),
             })
+            .collect(),
+    }
+}
+
+fn build_failed_from_pending_safe_autofixes(
+    safe_autofix_edit_count_by_workspace_relative_path: &BTreeMap<String, usize>,
+) -> CompilerFailure {
+    CompilerFailure {
+        kind: CompilerFailureKind::BuildFailed,
+        message: "build failed due to pending safe autofixes".to_string(),
+        path: None,
+        details: safe_autofix_edit_count_by_workspace_relative_path
+            .iter()
+            .map(
+                |(workspace_relative_path, text_edit_count)| CompilerFailureDetail {
+                    message: format!("{text_edit_count} pending safe autofix edits"),
+                    path: Some(workspace_relative_path.clone()),
+                },
+            )
             .collect(),
     }
 }

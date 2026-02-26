@@ -1,12 +1,19 @@
-use std::process;
+use std::{fs, process};
 
 use clap::{Parser, Subcommand};
 
-use compiler__check_pipeline::check_target_with_workspace_root;
+use compiler__autofix_policy::{
+    AutofixPolicyMode, AutofixPolicyOutcome, evaluate_autofix_policy,
+    summarize_pending_safe_autofixes,
+};
+use compiler__check_pipeline::{
+    analyze_target_with_workspace_root, check_target_with_workspace_root,
+};
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
-    CompilerCheckJsonOutput, CompilerFailure, CompilerFailureKind, RenderedDiagnostic, ReportFormat,
+    CompilerCheckJsonOutput, CompilerCheckSafeFix, CompilerFailure, CompilerFailureKind,
+    RenderedDiagnostic, ReportFormat,
 };
 
 #[derive(Parser)]
@@ -25,16 +32,25 @@ enum Command {
         path: Option<String>,
         #[arg(long, default_value_t = ReportFormat::Text)]
         format: ReportFormat,
+        #[arg(long)]
+        strict: bool,
     },
     Build {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+        #[arg(long)]
+        strict: bool,
+    },
+    Fix {
+        path: Option<String>,
     },
     Run {
         path: String,
         #[arg(long)]
         output_dir: Option<String>,
+        #[arg(long)]
+        strict: bool,
     },
     Lsp {
         #[arg(long)]
@@ -46,21 +62,61 @@ fn main() {
     let command_line = CommandLine::parse();
     let workspace_root = command_line.workspace_root.as_deref();
     match command_line.command {
-        Command::Check { path, format } => {
+        Command::Check {
+            path,
+            format,
+            strict,
+        } => {
             let path = path.unwrap_or_else(|| ".".to_string());
-            run_check(&path, workspace_root, format);
+            run_check(&path, workspace_root, format, strict);
         }
-        Command::Build { path, output_dir } => {
-            match build_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
-                Ok(built) => println!("{}", built.executable_path),
+        Command::Build {
+            path,
+            output_dir,
+            strict,
+        } => {
+            let build_result = build_target_with_workspace_root(
+                &path,
+                workspace_root,
+                output_dir.as_deref(),
+                strict,
+            );
+            if matches!(
+                build_result.autofix_policy_outcome,
+                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
+            ) {
+                render_safe_fix_warning();
+            }
+            match build_result.build {
+                Ok(built_target) => println!("{}", built_target.executable_path),
                 Err(error) => {
                     render_compiler_failure_text(&path, &error);
                     process::exit(1);
                 }
             }
         }
-        Command::Run { path, output_dir } => {
-            match run_target_with_workspace_root(&path, workspace_root, output_dir.as_deref()) {
+        Command::Fix { path } => {
+            let path = path.unwrap_or_else(|| ".".to_string());
+            run_fix(&path, workspace_root);
+        }
+        Command::Run {
+            path,
+            output_dir,
+            strict,
+        } => {
+            let run_result = run_target_with_workspace_root(
+                &path,
+                workspace_root,
+                output_dir.as_deref(),
+                strict,
+            );
+            if matches!(
+                run_result.autofix_policy_outcome,
+                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
+            ) {
+                render_safe_fix_warning();
+            }
+            match run_result.run {
                 Ok(exit_code) => {
                     if exit_code != 0 {
                         process::exit(exit_code);
@@ -78,32 +134,102 @@ fn main() {
     }
 }
 
-fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportFormat) {
+fn run_fix(path: &str, workspace_root: Option<&str>) {
+    let analyzed_target = match analyze_target_with_workspace_root(path, workspace_root) {
+        Ok(value) => value,
+        Err(error) => {
+            render_compiler_failure_text(path, &error);
+            process::exit(1);
+        }
+    };
+
+    let mut updated_file_count = 0usize;
+    for (workspace_relative_path, canonical_source_text) in
+        &analyzed_target.canonical_source_override_by_workspace_relative_path
+    {
+        let absolute_path = analyzed_target.workspace_root.join(workspace_relative_path);
+        if let Err(error) = fs::write(&absolute_path, canonical_source_text) {
+            let compiler_failure = CompilerFailure {
+                kind: CompilerFailureKind::WriteSource,
+                message: error.to_string(),
+                path: Some(absolute_path.display().to_string()),
+                details: Vec::new(),
+            };
+            render_compiler_failure_text(path, &compiler_failure);
+            process::exit(1);
+        }
+        updated_file_count += 1;
+    }
+
+    if updated_file_count == 0 {
+        println!("no fixes applied");
+    } else {
+        println!("applied fixes to {updated_file_count} files");
+    }
+}
+
+fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportFormat, strict: bool) {
     match check_target_with_workspace_root(path, workspace_root) {
-        Ok(checked_target) => match report_format {
-            ReportFormat::Text => {
-                if checked_target.diagnostics.is_empty() {
-                    println!("ok");
-                } else {
-                    render_diagnostics_text(
-                        &checked_target.diagnostics,
-                        &checked_target.source_by_path,
-                    );
-                    process::exit(1);
+        Ok(checked_target) => {
+            let safe_fixes =
+                safe_fix_summaries(&checked_target.safe_autofix_edits_by_workspace_relative_path);
+            let autofix_policy_outcome = evaluate_autofix_policy_for_target(
+                strict,
+                &checked_target.safe_autofix_edits_by_workspace_relative_path,
+            );
+            let strict_policy_failure = matches!(
+                autofix_policy_outcome,
+                AutofixPolicyOutcome::FailInStrictMode { .. }
+            ) && checked_target.diagnostics.is_empty();
+            let strict_policy_error = strict_policy_failure.then(|| CompilerFailure {
+                kind: CompilerFailureKind::CheckFailed,
+                message: "check failed due to pending safe autofixes".to_string(),
+                path: Some(path.to_string()),
+                details: safe_fixes
+                    .iter()
+                    .map(|safe_fix| compiler__reports::CompilerFailureDetail {
+                        message: format!("{} pending safe autofix edits", safe_fix.edit_count),
+                        path: Some(safe_fix.path.clone()),
+                    })
+                    .collect(),
+            });
+
+            match report_format {
+                ReportFormat::Text => {
+                    if !checked_target.diagnostics.is_empty() {
+                        render_diagnostics_text(
+                            &checked_target.diagnostics,
+                            &checked_target.source_by_path,
+                        );
+                    } else if let Some(error) = &strict_policy_error {
+                        render_compiler_failure_text(path, error);
+                    } else {
+                        println!("ok");
+                    }
+                    if matches!(
+                        autofix_policy_outcome,
+                        AutofixPolicyOutcome::WarnInNonStrictMode { .. }
+                    ) {
+                        render_safe_fix_warning();
+                    }
+                    if !checked_target.diagnostics.is_empty() || strict_policy_failure {
+                        process::exit(1);
+                    }
+                }
+                ReportFormat::Json => {
+                    let output = CompilerCheckJsonOutput {
+                        ok: checked_target.diagnostics.is_empty() && !strict_policy_failure,
+                        diagnostics: checked_target.diagnostics.clone(),
+                        safe_fixes: safe_fixes.clone(),
+                        error: strict_policy_error,
+                    };
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    if !checked_target.diagnostics.is_empty() || strict_policy_failure {
+                        process::exit(1);
+                    }
                 }
             }
-            ReportFormat::Json => {
-                let output = CompilerCheckJsonOutput {
-                    ok: checked_target.diagnostics.is_empty(),
-                    diagnostics: checked_target.diagnostics.clone(),
-                    error: None,
-                };
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
-                if !checked_target.diagnostics.is_empty() {
-                    process::exit(1);
-                }
-            }
-        },
+        }
         Err(error) => {
             match report_format {
                 ReportFormat::Text => {
@@ -113,6 +239,7 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     let output = CompilerCheckJsonOutput {
                         ok: false,
                         diagnostics: Vec::new(),
+                        safe_fixes: Vec::new(),
                         error: Some(error),
                     };
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
@@ -121,6 +248,47 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
             process::exit(1);
         }
     }
+}
+
+fn safe_fix_summaries(
+    safe_autofix_edits_by_workspace_relative_path: &std::collections::BTreeMap<
+        String,
+        Vec<compiler__fix_edits::TextEdit>,
+    >,
+) -> Vec<CompilerCheckSafeFix> {
+    safe_autofix_edits_by_workspace_relative_path
+        .iter()
+        .map(|(path, text_edits)| CompilerCheckSafeFix {
+            path: path.clone(),
+            edit_count: text_edits.len(),
+        })
+        .collect()
+}
+
+fn render_safe_fix_warning() {
+    eprintln!("warning: safe autofixes available; will fail in strict mode");
+    eprintln!("run 'coppice fix' to apply");
+}
+
+fn evaluate_autofix_policy_for_target(
+    strict: bool,
+    safe_autofix_edits_by_workspace_relative_path: &std::collections::BTreeMap<
+        String,
+        Vec<compiler__fix_edits::TextEdit>,
+    >,
+) -> AutofixPolicyOutcome {
+    evaluate_autofix_policy(
+        if strict {
+            AutofixPolicyMode::Strict
+        } else {
+            AutofixPolicyMode::NonStrict
+        },
+        summarize_pending_safe_autofixes(
+            safe_autofix_edits_by_workspace_relative_path
+                .values()
+                .map(Vec::len),
+        ),
+    )
 }
 
 fn run_lsp(workspace_root: Option<&str>, stdio: bool) {

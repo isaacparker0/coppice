@@ -1,0 +1,34 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library", "rust_test")
+
+rust_library(
+    name = "fix_edits",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+)
+
+dependency_enforcement_test(
+    name = "fix_edits_forbidden_dependencies",
+    forbidden = [
+        "//compiler/check_pipeline",
+        "//compiler/cli:main",
+        "//compiler/cranelift_backend",
+        "//compiler/driver",
+        "//compiler/file_role_rules",
+        "//compiler/lsp",
+        "//compiler/parsing",
+        "//compiler/resolution",
+        "//compiler/semantic_lowering",
+        "//compiler/syntax",
+        "//compiler/syntax_rules",
+        "//compiler/type_analysis",
+        "//compiler/workspace",
+    ],
+    target = ":fix_edits",
+)
+
+rust_test(
+    name = "fix_edits_test",
+    srcs = ["lib_test.rs"],
+    deps = [":fix_edits"],
+)

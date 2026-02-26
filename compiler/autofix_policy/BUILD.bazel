@@ -1,0 +1,28 @@
+load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement_test")
+load("//tools/bazel/macros:rust.bzl", "rust_library")
+
+rust_library(
+    name = "autofix_policy",
+    srcs = ["lib.rs"],
+    visibility = ["//:__subpackages__"],
+)
+
+dependency_enforcement_test(
+    name = "autofix_policy_forbidden_dependencies",
+    forbidden = [
+        "//compiler/check_pipeline",
+        "//compiler/cli:main",
+        "//compiler/cranelift_backend",
+        "//compiler/driver",
+        "//compiler/file_role_rules",
+        "//compiler/lsp",
+        "//compiler/parsing",
+        "//compiler/resolution",
+        "//compiler/semantic_lowering",
+        "//compiler/syntax",
+        "//compiler/syntax_rules",
+        "//compiler/type_analysis",
+        "//compiler/workspace",
+    ],
+    target = ":autofix_policy",
+)
