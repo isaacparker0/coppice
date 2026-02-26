@@ -18,7 +18,7 @@ bazel_dep(name = "aspect_rules_js", version = "3.0.0-rc5")
 
 register_toolchains("@llvm//toolchain:all")
 
-bazel_dep(name = "rules_rust", version = "0.68.1")
+bazel_dep(name = "rules_rust", version = "0.69.0")
 single_version_override(
     module_name = "rules_rust",
     patch_strip = 0,
