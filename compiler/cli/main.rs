@@ -2,6 +2,10 @@ use std::{fs, process};
 
 use clap::{Parser, Subcommand};
 
+use compiler__autofix_policy::{
+    AutofixPolicyMode, AutofixPolicyOutcome, evaluate_autofix_policy,
+    summarize_pending_safe_autofixes,
+};
 use compiler__check_pipeline::{
     analyze_target_with_workspace_root, check_target_with_workspace_root,
 };
@@ -71,13 +75,20 @@ fn main() {
             output_dir,
             strict,
         } => {
-            match build_target_with_workspace_root(
+            let build_result = build_target_with_workspace_root(
                 &path,
                 workspace_root,
                 output_dir.as_deref(),
                 strict,
+            );
+            if matches!(
+                build_result.autofix_policy_outcome,
+                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
             ) {
-                Ok(built) => println!("{}", built.executable_path),
+                render_safe_fix_warning();
+            }
+            match build_result.build {
+                Ok(built_target) => println!("{}", built_target.executable_path),
                 Err(error) => {
                     render_compiler_failure_text(&path, &error);
                     process::exit(1);
@@ -93,12 +104,19 @@ fn main() {
             output_dir,
             strict,
         } => {
-            match run_target_with_workspace_root(
+            let run_result = run_target_with_workspace_root(
                 &path,
                 workspace_root,
                 output_dir.as_deref(),
                 strict,
+            );
+            if matches!(
+                run_result.autofix_policy_outcome,
+                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
             ) {
+                render_safe_fix_warning();
+            }
+            match run_result.run {
                 Ok(exit_code) => {
                     if exit_code != 0 {
                         process::exit(exit_code);
@@ -155,9 +173,14 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
         Ok(checked_target) => {
             let safe_fixes =
                 safe_fix_summaries(&checked_target.safe_autofix_edits_by_workspace_relative_path);
-            let has_pending_safe_fixes = !safe_fixes.is_empty();
-            let strict_policy_failure =
-                strict && has_pending_safe_fixes && checked_target.diagnostics.is_empty();
+            let autofix_policy_outcome = evaluate_autofix_policy_for_target(
+                strict,
+                &checked_target.safe_autofix_edits_by_workspace_relative_path,
+            );
+            let strict_policy_failure = matches!(
+                autofix_policy_outcome,
+                AutofixPolicyOutcome::FailInStrictMode { .. }
+            ) && checked_target.diagnostics.is_empty();
             let strict_policy_error = strict_policy_failure.then(|| CompilerFailure {
                 kind: CompilerFailureKind::CheckFailed,
                 message: "check failed due to pending safe autofixes".to_string(),
@@ -183,8 +206,11 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     } else {
                         println!("ok");
                     }
-                    if has_pending_safe_fixes {
-                        render_safe_fixes_text(&safe_fixes);
+                    if matches!(
+                        autofix_policy_outcome,
+                        AutofixPolicyOutcome::WarnInNonStrictMode { .. }
+                    ) {
+                        render_safe_fix_warning();
                     }
                     if !checked_target.diagnostics.is_empty() || strict_policy_failure {
                         process::exit(1);
@@ -239,22 +265,30 @@ fn safe_fix_summaries(
         .collect()
 }
 
-fn render_safe_fixes_text(safe_fixes: &[CompilerCheckSafeFix]) {
-    if safe_fixes.is_empty() {
-        return;
-    }
-    let total_edit_count: usize = safe_fixes.iter().map(|safe_fix| safe_fix.edit_count).sum();
-    eprintln!(
-        "safe autofixes available in {} files ({} edits total)",
-        safe_fixes.len(),
-        total_edit_count
-    );
-    for safe_fix in safe_fixes {
-        eprintln!(
-            "{}: {} pending safe autofix edits",
-            safe_fix.path, safe_fix.edit_count
-        );
-    }
+fn render_safe_fix_warning() {
+    eprintln!("warning: safe autofixes available; will fail in strict mode");
+    eprintln!("run 'coppice fix' to apply");
+}
+
+fn evaluate_autofix_policy_for_target(
+    strict: bool,
+    safe_autofix_edits_by_workspace_relative_path: &std::collections::BTreeMap<
+        String,
+        Vec<compiler__fix_edits::TextEdit>,
+    >,
+) -> AutofixPolicyOutcome {
+    evaluate_autofix_policy(
+        if strict {
+            AutofixPolicyMode::Strict
+        } else {
+            AutofixPolicyMode::NonStrict
+        },
+        summarize_pending_safe_autofixes(
+            safe_autofix_edits_by_workspace_relative_path
+                .values()
+                .map(Vec::len),
+        ),
+    )
 }
 
 fn run_lsp(workspace_root: Option<&str>, stdio: bool) {

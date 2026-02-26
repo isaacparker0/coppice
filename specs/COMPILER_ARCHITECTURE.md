@@ -111,6 +111,21 @@ Ownership and behavior:
    preserving diagnostic spans and deriving semantic doc attachments from
    ordered syntax doc-comment items.
 
+## Shared Non-Phase Packages
+
+These packages are shared utilities/contracts and are not additional compiler
+phases:
+
+1. `compiler/fix_edits`:
+   - source edit model + deterministic merge/apply behavior.
+   - owns edit mechanics, not language-rule ownership.
+2. `compiler/source_formatting`:
+   - canonical source-formatting engine used by orchestration.
+   - owns formatting implementation, not command policy.
+3. `compiler/autofix_policy`:
+   - shared strict/non-strict policy evaluation for pending safe autofixes.
+   - owns policy decision logic, not rendering and not language-rule ownership.
+
 ## Phase Ownership
 
 ### `compiler/parsing`
@@ -168,6 +183,7 @@ Owns orchestration only:
 2. workspace/package scoping
 3. diagnostics aggregation/sorting/rendering
 4. status-driven downstream gating
+5. aggregation of phase-emitted safe-autofix artifacts
 
 ### `compiler/check_session`
 
@@ -198,6 +214,17 @@ Responsibilities:
 1. build/run command policy and target validation
 2. consumption of analyzed check artifacts from `check_pipeline`
 3. backend lowering/codegen execution flow
+4. application of strict/non-strict autofix policy outcome for build/run
+
+### `compiler/cli`
+
+Owns CLI UX only.
+
+Responsibilities:
+
+1. command parsing/dispatch
+2. rendering diagnostics/failures/policy messages
+3. explicit source-write command behavior (`fix`)
 
 ## Gating Policy
 
@@ -218,8 +245,9 @@ Phase-owned language diagnostics:
 3. file_role_rules: file-role policy diagnostics
 4. resolution: package/import/export/visibility/binding/cycle diagnostics
 5. type_analysis: type/flow/usage diagnostics
-6. orchestration layers (`check_pipeline`, `check_session`, `lsp`, `driver`):
-   consume/aggregate/render only
+6. phase crates may emit safe-autofix artifacts for their own diagnostics
+7. orchestration layers (`check_pipeline`, `check_session`, `lsp`, `driver`,
+   `cli`): consume/aggregate/policy-evaluate/render only
 
 Hard failures:
 
@@ -240,11 +268,11 @@ High-level direction:
 6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
 7. `executable_lowering -> {type_annotated_program,executable_program}`
 8. `cranelift_backend -> {executable_program,runtime_interface}`
-9. `check_pipeline -> {parsing,syntax_rules,file_role_rules,resolution,semantic_lowering,type_analysis}`
+9. `check_pipeline -> {parsing,syntax_rules,file_role_rules,resolution,semantic_lowering,type_analysis,source_formatting,fix_edits}`
 10. `check_session -> check_pipeline`
 11. `lsp -> check_session`
-12. `driver -> {check_pipeline,executable_lowering,cranelift_backend}`
-13. `cli -> {check_pipeline,driver,lsp}`
+12. `driver -> {check_pipeline,executable_lowering,cranelift_backend,autofix_policy}`
+13. `cli -> {check_pipeline,driver,lsp,autofix_policy}`
 
 Key prohibitions:
 
@@ -252,6 +280,8 @@ Key prohibitions:
 2. `package_symbols` must not depend on `syntax`
 3. semantic phase crates must not depend on orchestration crates
 4. frontend phase crates must not depend on backend/runtime interface crates
+5. shared non-phase packages (`fix_edits`, `source_formatting`,
+   `autofix_policy`) must not own language rule evaluation
 
 These are enforced by Bazel dependency-enforcement tests.
 
