@@ -25,7 +25,7 @@ single_version_override(
     patches = ["//patches:rules_rust.patch"],
 )
 
-bazel_dep(name = "rules_rust_prost", version = "0.68.1")
+bazel_dep(name = "rules_rust_prost", version = "0.69.0")
 bazel_dep(name = "rules_rs", version = "0.0.30")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
