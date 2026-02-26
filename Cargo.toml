@@ -12,11 +12,11 @@ path = "placeholder.rs"
 # keep-sorted start
 axum = { version = "^0.8.8" }
 clap = { version = "^4.5.60", features = ["derive"] }
-cranelift-codegen = { version = "^0.129.0" }
-cranelift-frontend = { version = "^0.129.0" }
-cranelift-module = { version = "^0.129.0" }
-cranelift-native = { version = "^0.129.0" }
-cranelift-object = { version = "^0.129.0" }
+cranelift-codegen = { version = "^0.129.1" }
+cranelift-frontend = { version = "^0.129.1" }
+cranelift-module = { version = "^0.129.1" }
+cranelift-native = { version = "^0.129.1" }
+cranelift-object = { version = "^0.129.1" }
 globset = { version = "^0.4.18" }
 serde = { version = "^1.0.228", features = ["derive"] }
 serde_json = { version = "^1.0.149" }
