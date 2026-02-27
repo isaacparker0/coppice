@@ -1,12 +1,17 @@
-# Unified Tests (Pilot)
+# Unified Tests
 
-Pilot suite for a unified fixture model rooted at:
+Unified fixture suite for CLI contract coverage across `build`, `run`, and
+`fix`.
+
+Use this README as the authoritative fixture policy for adding new tests.
+
+## Layout
+
+Each case lives at:
 
 `unified_tests/<area>/<feature>/<case>/`
 
-Each case uses a script-style `case.test` file with literal CLI commands.
-
-## Case shape
+Required case files:
 
 ```
 unified_tests/<area>/<feature>/<case>/
@@ -16,38 +21,124 @@ unified_tests/<area>/<feature>/<case>/
   expect/...
 ```
 
-## `case.test` format
+Path ownership is scenario-first:
 
-- Each non-empty non-comment line is one run command.
-- Use either:
-  - `<command args...>`
-  - `[label] <command args...>`
-- Labels use `[A-Za-z0-9_]`.
-- If a command appears once in a case, a label is not allowed.
-- If a command appears multiple times in a case, each occurrence must have a
-  unique label.
+- Place each case under the feature family that primarily owns the behavior.
 
-Expectation files are convention-based under `expect/`, inferred from either the
-command name (single occurrence) or label (multiple occurrences):
+## Naming And Intent
 
-- `build`:
-  - `<stem>.text.stdout`
-  - `<stem>.json.stdout`
-  - `<stem>.stderr`
-  - `<stem>.artifacts`
-  - required `<stem>.exit`
-  - optional `<stem>.text.exit` / `<stem>.json.exit` to override `<stem>.exit`
-- `run` / `fix`:
-  - `<stem>.stdout`
-  - `<stem>.stderr`
-  - required `<stem>.exit`
-- `run` also requires:
-  - `<stem>.artifacts`
+- Case names must describe input scenario facts, not outcomes.
+- Do not encode outcome words in names (`valid`, `fails`, `blocks`).
+- `minimal_valid` may be used if there is a truly minimal case for the feature.
 
-Placeholders supported in commands and expected files:
+Each case directory must include `README.md` with one plain contract sentence.
 
-- `${TMP_OUTPUT_DIR}`: per-run temporary output directory.
-- `${INPUT_DIR}`: temporary copied `input/` working directory.
+Required format:
 
-Artifact files are newline-delimited expected paths, with optional blank lines
-and `#` comments.
+- exactly one non-empty line
+- plain prose only (no heading/list/code formatting)
+- must end with `.`
+
+Required content:
+
+- states the contract being locked
+- adds meaning beyond the case slug
+- describes what is being validated
+
+Preferred verbiage:
+
+- use direct contract language in present tense
+- use behavior-first wording (`X can...`, `X must...`, `X cannot...`)
+
+Examples:
+
+- `Function declarations accept typed parameters.`
+- `Generic functions cannot be used as values without instantiation.`
+
+## `case.test` Commands
+
+Each non-empty non-comment line is one literal CLI invocation.
+
+Allowed forms:
+
+- `<command args...>`
+- `[label] <command args...>`
+
+Rules:
+
+- supported commands are `build`, `run`, and `fix`
+- labels may only use `[A-Za-z0-9_]`
+- if a command appears once in a case, label is not allowed
+- if a command appears multiple times, each occurrence must have a unique label
+
+Expectation stems:
+
+- single occurrence uses command name (`build`, `run`, `fix`)
+- repeated occurrence uses explicit label
+
+## Expected Files
+
+Expectation files are convention-based under `expect/`.
+
+For `build` runs:
+
+- required: `<stem>.text.stdout`
+- required: `<stem>.json.stdout`
+- required: `<stem>.stderr`
+- required: `<stem>.artifacts`
+- required: `<stem>.exit`
+- optional: `<stem>.text.exit`
+- optional: `<stem>.json.exit`
+
+If format-specific exit files are absent, both formats use `<stem>.exit`.
+
+For `run` runs:
+
+- required: `<stem>.stdout`
+- required: `<stem>.stderr`
+- required: `<stem>.artifacts`
+- required: `<stem>.exit`
+
+For `fix` runs:
+
+- required: `<stem>.stdout`
+- required: `<stem>.stderr`
+- required: `<stem>.exit`
+
+General file policy:
+
+- keep required files even when output is empty
+- do not represent "no output" by omitting required files
+
+Artifact files are newline-delimited expected paths. Blank lines and `#`
+comments are allowed.
+
+## Placeholders
+
+The runner supports these placeholders in command args and expected files:
+
+- `${TMP_OUTPUT_DIR}`: per-run temporary output directory
+- `${INPUT_DIR}`: temporary copied case `input/` working directory
+
+`build` and `run` output-directory plumbing is runner-owned. Do not pass per-run
+output-directory flags in `case.test`.
+
+## Command Ownership
+
+- `build` runs own diagnostics/reporting and build-path contracts.
+- `run` runs own runtime/stdout/stderr/exit behavior and run-path gating.
+- `fix` runs own `fix` command exit/stdout/stderr contract. Source rewrite
+  assertions should be added under the same unified case model as `fix` coverage
+  expands.
+
+If a case intentionally overlaps behavior owned elsewhere, state that ownership
+in the case `README.md`.
+
+## Run Selection Guidance
+
+- Use `run` for runnable happy-path runtime behavior.
+- Use `build` for non-runnable analysis/build scenarios.
+- Include both `build` and `run` in one case only when the case explicitly
+  asserts both contracts.
+- Use strict/default mode differences only when mode behavior is the contract
+  being tested.
