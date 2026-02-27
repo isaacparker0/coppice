@@ -1,0 +1,12 @@
+function describe(ready: boolean) -> string {
+    if ready {
+        return "ready"
+    }
+    return "not ready"
+}
+
+function main() -> nil {
+    print(describe(true))
+    print(describe(false))
+    return nil
+}
