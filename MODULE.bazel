@@ -14,7 +14,7 @@ bazel_dep(name = "gazelle", version = "0.47.0")
 bazel_dep(name = "rules_pkg", version = "1.2.0")
 bazel_dep(name = "rules_oci", version = "2.2.7")
 bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
-bazel_dep(name = "aspect_rules_js", version = "3.0.0-rc5")
+bazel_dep(name = "aspect_rules_js", version = "3.0.0-rc6")
 
 register_toolchains("@llvm//toolchain:all")
 
