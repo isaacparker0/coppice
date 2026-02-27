@@ -133,33 +133,44 @@ One runner executes all cases and all declared runs.
 
 ## Fixture Format Decision
 
-Use script-style case files with literal CLI commands and adjacent assertions.
+Use script-style case files with one literal CLI command per non-comment line.
 
 Per case:
 
 1. `input/`
 2. `case.test`
-3. `expect/` payload files referenced from `case.test`
+3. `expect/` payload files discovered by naming convention
 
 `case.test` format:
 
-1. `$ <command args...>` starts a run block
-2. `> <assertion>` lines attach expectations to that run block
-3. Large outputs live in files referenced as `@expect/...`
-4. No synthetic run IDs and no manual labels
+1. `<command args...>` for unlabeled runs.
+2. `[label] <command args...>` for labeled runs.
+3. Labels may use `[A-Za-z0-9_]`.
+4. If a command appears once in a case, label is not allowed.
+5. If a command appears multiple times in a case, each occurrence must have a
+   unique label.
+6. No synthetic run IDs and no numeric indexing.
+
+Expectation stem policy:
+
+1. Single occurrence of a command uses command name as stem (`build`, `run`,
+   `fix`).
+2. Repeated occurrences of the same command use the explicit label as stem.
 
 Expected file policy:
 
-1. Keep a fixed expectation shape per asserted channel/field.
+1. Keep a fixed expectation shape per channel/field.
 2. If expected output is empty, keep the expectation file and leave it empty.
-3. Do not encode "no output" by omitting expected files.
+3. Do not encode "no output" by omitting required expected files.
 
 Rationale:
 
 1. Literal command runs avoid redundant command encoding and keep fixture files
    directly aligned with actual CLI invocations.
-2. Script blocks avoid brittle run-id mapping logic for repeated command types.
-3. Referenced payload files keep large snapshots diff-friendly.
+2. Explicit labels for repeated commands keep intent obvious without brittle
+   positional mapping.
+3. Convention-based payload discovery removes boilerplate mapping while keeping
+   snapshots diff-friendly.
 
 Why this is needed:
 
@@ -171,22 +182,34 @@ Why this is needed:
 ## Assertion Policy by Run Command
 
 1. `build` run:
-   - runner executes both `--format text` and `--format json` for the same run
-     block.
-   - must assert text and json channels separately (`stdout`/`stderr`/`exit`).
-   - verifies build-path contract (artifacts/failure summary).
-   - concrete assertion keys:
-     - `text.stdout`, `text.stderr`, `text.exit`
-     - `json.stdout`, `json.stderr`, `json.exit`
-     - `artifacts` (shared once per build run)
-   - if text/json values are identical, both keys may reference the same payload
-     file/value.
+   - runner executes both `--format text` and `--format json` for the same run.
+   - verifies build-path contract (artifacts/failure summary) plus dual-format
+     reporting output.
+   - required files:
+     - `expect/<stem>.text.stdout`
+     - `expect/<stem>.json.stdout`
+     - `expect/<stem>.stderr`
+     - `expect/<stem>.artifacts`
+     - `expect/<stem>.exit`
+   - optional format-specific exit overrides:
+     - `expect/<stem>.text.exit`
+     - `expect/<stem>.json.exit`
+   - if format-specific exits are absent, both formats use `expect/<stem>.exit`.
 2. `run` run:
    - verifies runtime/output/exit contract.
    - for build-phase failure paths, verifies human-readable diagnostic output.
+   - required files:
+     - `expect/<stem>.stdout`
+     - `expect/<stem>.stderr`
+     - `expect/<stem>.artifacts`
+     - `expect/<stem>.exit`
 3. `fix` run:
    - verifies fix command exit/output contract.
    - verifies expected rewritten source tree contract (where asserted).
+   - required files:
+     - `expect/<stem>.stdout`
+     - `expect/<stem>.stderr`
+     - `expect/<stem>.exit`
 
 Runner-owned execution details:
 
@@ -210,7 +233,8 @@ Tradeoffs accepted:
 
 1. More expectation payload files than inline-manifest approaches.
 2. Build coverage includes explicit dual-format assertions by design.
-3. Script parser complexity is higher than line-only command files.
+3. Parser complexity is still non-trivial due to label/stem and command-count
+   rules.
 
 Alternatives considered:
 
