@@ -170,7 +170,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let target_is_file = metadata.is_file();
     if !metadata.is_file() && !metadata.is_dir() {
         return Err(CompilerFailure {
-            kind: CompilerFailureKind::InvalidCheckTarget,
+            kind: CompilerFailureKind::InvalidAnalysisTarget,
             message: "expected a file or directory path".to_string(),
             path: Some(path.to_string()),
             details: Vec::new(),

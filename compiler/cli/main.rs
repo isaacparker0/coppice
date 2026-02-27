@@ -6,7 +6,7 @@ use compiler__analysis_pipeline::analyze_target_with_workspace_root;
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{
-    CompilerCheckJsonOutput, CompilerCheckSafeFix, CompilerFailure, CompilerFailureKind,
+    CompilerAnalysisJsonOutput, CompilerAnalysisSafeFix, CompilerFailure, CompilerFailureKind,
     RenderedDiagnostic, ReportFormat,
 };
 
@@ -186,7 +186,7 @@ fn run_build(
                         }
                     }
                     ReportFormat::Json => {
-                        let output = CompilerCheckJsonOutput {
+                        let output = CompilerAnalysisJsonOutput {
                             ok: !has_diagnostics && !strict_policy_failure,
                             diagnostics: analysis_result.diagnostics,
                             safe_fixes: safe_autofixes_by_path,
@@ -204,7 +204,7 @@ fn run_build(
             match report_format {
                 ReportFormat::Text => {}
                 ReportFormat::Json => {
-                    let output = CompilerCheckJsonOutput {
+                    let output = CompilerAnalysisJsonOutput {
                         ok: true,
                         diagnostics: Vec::new(),
                         safe_fixes: safe_autofixes_by_path,
@@ -220,7 +220,7 @@ fn run_build(
                     render_compiler_failure_text(path, &error);
                 }
                 ReportFormat::Json => {
-                    let output = CompilerCheckJsonOutput {
+                    let output = CompilerAnalysisJsonOutput {
                         ok: false,
                         diagnostics: Vec::new(),
                         safe_fixes: safe_autofixes_by_path,
@@ -241,10 +241,10 @@ fn render_safe_fix_warning() {
 
 fn safe_fix_summaries_from_edit_counts(
     safe_autofix_edit_count_by_workspace_relative_path: &std::collections::BTreeMap<String, usize>,
-) -> Vec<CompilerCheckSafeFix> {
+) -> Vec<CompilerAnalysisSafeFix> {
     safe_autofix_edit_count_by_workspace_relative_path
         .iter()
-        .map(|(path, edit_count)| CompilerCheckSafeFix {
+        .map(|(path, edit_count)| CompilerAnalysisSafeFix {
             path: path.clone(),
             edit_count: *edit_count,
         })
