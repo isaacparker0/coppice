@@ -11,7 +11,7 @@ use tests__snapshot_fixture_helpers::{
 };
 
 #[test]
-fn unified_cases() {
+fn fixture_cases() {
     let runfiles = Runfiles::create().unwrap();
     let compiler = rlocation!(runfiles, "_main/compiler/cli/main").unwrap();
     let runfiles_directory = runfiles::find_runfiles_dir().unwrap().join("_main");
@@ -25,7 +25,7 @@ fn unified_cases() {
         &mut case_paths,
     );
     case_paths.sort();
-    assert!(!case_paths.is_empty(), "no unified fixture cases found");
+    assert!(!case_paths.is_empty(), "no fixture cases found");
 
     for case_path in &case_paths {
         run_case(&compiler, &runfiles_directory, case_path, &mode);
@@ -58,7 +58,7 @@ fn run_case(
     );
 
     let temp_case_directory = env::temp_dir().join(format!(
-        "coppice_unified_case_{}_{}",
+        "coppice_fixture_case_{}_{}",
         sanitize_case_name(case_path),
         std::process::id()
     ));
@@ -1177,12 +1177,12 @@ fn assert_valid_case_contract_readme(case_directory: &Path, case_path: &Path) {
     let readme_path = case_directory.join("README.md");
     assert!(
         readme_path.is_file(),
-        "missing README.md for unified case {}",
+        "missing README.md for fixture case {}",
         case_path.display()
     );
     let readme_contents = fs::read_to_string(&readme_path).unwrap_or_else(|error| {
         panic!(
-            "failed to read README.md for unified case {}: {error}",
+            "failed to read README.md for fixture case {}: {error}",
             case_path.display()
         )
     });
@@ -1193,12 +1193,12 @@ fn assert_valid_case_contract_readme(case_directory: &Path, case_path: &Path) {
         .collect::<Vec<_>>();
     assert!(
         !readme_lines.is_empty(),
-        "README.md must contain exactly one sentence for unified case {}",
+        "README.md must contain exactly one sentence for fixture case {}",
         case_path.display()
     );
     assert!(
         readme_lines.len() == 1,
-        "README.md must contain exactly one non-empty line for unified case {}",
+        "README.md must contain exactly one non-empty line for fixture case {}",
         case_path.display()
     );
     let sentence = readme_lines[0];
@@ -1212,18 +1212,18 @@ fn assert_valid_case_contract_readme(case_directory: &Path, case_path: &Path) {
                 .next()
                 .is_some_and(|character| character.is_ascii_digit())
             && !sentence.contains('`'),
-        "README.md must contain a plain one-sentence contract (no headings/lists/code) for unified case {}",
+        "README.md must contain a plain one-sentence contract (no headings/lists/code) for fixture case {}",
         case_path.display()
     );
     assert!(
         sentence.ends_with('.'),
-        "README.md contract sentence must end with '.' for unified case {}",
+        "README.md contract sentence must end with '.' for fixture case {}",
         case_path.display()
     );
     let sentence_without_period = sentence.strip_suffix('.').unwrap();
     assert!(
         !sentence_without_period.contains('.'),
-        "README.md must contain exactly one sentence for unified case {}",
+        "README.md must contain exactly one sentence for fixture case {}",
         case_path.display()
     );
 }
