@@ -2,7 +2,6 @@ use std::{fs, process};
 
 use clap::{Parser, Subcommand};
 
-use compiler__autofix_policy::AutofixPolicyOutcome;
 use compiler__check_pipeline::analyze_target_with_workspace_root;
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
@@ -76,10 +75,10 @@ fn main() {
                 output_dir.as_deref(),
                 strict,
             );
-            if matches!(
-                run_result.autofix_policy_outcome,
-                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
-            ) {
+            let has_pending_safe_autofixes = !run_result
+                .safe_autofix_edit_count_by_workspace_relative_path
+                .is_empty();
+            if !strict && has_pending_safe_autofixes {
                 render_safe_fix_warning();
             }
             match run_result.run {
