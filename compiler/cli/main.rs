@@ -273,15 +273,15 @@ fn render_diagnostics_text(
         let line = diagnostic.span.line;
         let column = diagnostic.span.column;
         let line_text = source.lines().nth(line - 1).unwrap_or("");
-        eprintln!(
+        println!(
             "{path}:{line}:{column}: error: {message}",
             path = diagnostic.path,
             message = diagnostic.message
         );
-        eprintln!("  {line_text}");
+        println!("  {line_text}");
         if !line_text.is_empty() {
             let caret = " ".repeat(column.saturating_sub(1));
-            eprintln!("  {caret}^");
+            println!("  {caret}^");
         }
     }
 }

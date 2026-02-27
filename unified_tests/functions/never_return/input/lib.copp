@@ -1,0 +1,10 @@
+function failFast() -> never {
+    abort("boom")
+}
+
+function run(flag: boolean) -> int64 {
+    if flag {
+        return 1
+    }
+    failFast()
+}

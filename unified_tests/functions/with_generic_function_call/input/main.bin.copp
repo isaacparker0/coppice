@@ -1,0 +1,10 @@
+function identity[T](value: T) -> T {
+    return value
+}
+
+function main() -> nil {
+    print(string(identity[int64](7)))
+    print(identity[string]("id ok"))
+    print(string(identity[boolean](true)))
+    return nil
+}
