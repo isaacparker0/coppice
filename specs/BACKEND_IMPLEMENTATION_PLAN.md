@@ -186,9 +186,9 @@ Per-file/package gating remains status-driven as in
 
 Extend CLI commands:
 
-1. `coppice check` (existing; unchanged behavior)
-2. `coppice build` (new)
-3. `coppice run` (new)
+1. `coppice build` (canonical build command; binary targets emit artifacts,
+   non-entrypoint targets are currently analysis-only)
+2. `coppice run` (new)
 
 Optional developer flags (non-user-contract initially):
 

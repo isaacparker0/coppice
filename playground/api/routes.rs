@@ -21,7 +21,7 @@ use crate::models::{
 };
 use crate::path_sanitizer::sanitize_workspace_path;
 use crate::session_store::SessionStore;
-use compiler__reports::{CompilerCheckJsonOutput, CompilerFailure};
+use compiler__reports::{CompilerAnalysisJsonOutput, CompilerFailure};
 
 const MAX_WORKSPACE_BYTES: usize = 512 * 1024;
 const MAX_WORKSPACE_FILES: usize = 128;
@@ -369,7 +369,7 @@ async fn check(
 
             if execution.exit_code != 0 {
                 if let Ok(mut cli_output) =
-                    serde_json::from_str::<CompilerCheckJsonOutput>(&execution.stdout)
+                    serde_json::from_str::<CompilerAnalysisJsonOutput>(&execution.stdout)
                 {
                     for diagnostic in &mut cli_output.diagnostics {
                         diagnostic.path =
@@ -407,7 +407,7 @@ async fn check(
             }
 
             if let Ok(mut cli_output) =
-                serde_json::from_str::<CompilerCheckJsonOutput>(&execution.stdout)
+                serde_json::from_str::<CompilerAnalysisJsonOutput>(&execution.stdout)
             {
                 for diagnostic in &mut cli_output.diagnostics {
                     diagnostic.path = sanitize_workspace_path(&diagnostic.path, &session_directory);

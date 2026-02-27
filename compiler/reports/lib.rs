@@ -76,7 +76,7 @@ pub enum CompilerFailureKind {
     InvalidWorkspaceRoot,
     WorkspaceRootNotDirectory,
     WorkspaceRootMissingManifest,
-    InvalidCheckTarget,
+    InvalidAnalysisTarget,
     TargetOutsideWorkspace,
     PackageNotFound,
     WorkspaceDiscoveryFailed,
@@ -92,17 +92,17 @@ pub struct CompilerFailureDetail {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CompilerCheckJsonOutput {
+pub struct CompilerAnalysisJsonOutput {
     pub ok: bool,
     pub diagnostics: Vec<RenderedDiagnostic>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub safe_fixes: Vec<CompilerCheckSafeFix>,
+    pub safe_fixes: Vec<CompilerAnalysisSafeFix>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<CompilerFailure>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CompilerCheckSafeFix {
+pub struct CompilerAnalysisSafeFix {
     pub path: String,
     pub edit_count: usize,
 }

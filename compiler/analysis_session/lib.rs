@@ -1,15 +1,17 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use compiler__check_pipeline::{CheckedTarget, check_target_with_workspace_root_and_overrides};
+use compiler__analysis_pipeline::{
+    AnalyzedTargetSummary, analyze_target_summary_with_workspace_root_and_overrides,
+};
 use compiler__reports::CompilerFailure;
 
-pub struct CheckSession {
+pub struct AnalysisSession {
     workspace_root: Option<String>,
     source_override_by_path: BTreeMap<String, String>,
 }
 
-impl CheckSession {
+impl AnalysisSession {
     #[must_use]
     pub fn new(workspace_root: Option<String>) -> Self {
         Self {
@@ -36,8 +38,8 @@ impl CheckSession {
         self.source_override_by_path.remove(path);
     }
 
-    pub fn check_target(&self, path: &str) -> Result<CheckedTarget, CompilerFailure> {
-        check_target_with_workspace_root_and_overrides(
+    pub fn analyze_target(&self, path: &str) -> Result<AnalyzedTargetSummary, CompilerFailure> {
+        analyze_target_summary_with_workspace_root_and_overrides(
             path,
             self.workspace_root.as_deref(),
             &self.source_override_by_path,

@@ -4,7 +4,8 @@ Fixture-driven test suites for the Coppice compiler and runtime contracts.
 
 ## Suites
 
-1. `tests/diagnostics/`: frontend language diagnostics contract (`check`).
+1. `tests/diagnostics/`: frontend language diagnostics contract (`build` in
+   analysis mode).
 2. `tests/executable_end_to_end/`: runnable `build`/`run` end-to-end contract.
 
 Suite-specific fixture rules, update commands, and scope live in each suite

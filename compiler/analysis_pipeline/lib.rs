@@ -29,7 +29,7 @@ use compiler__workspace::{Workspace, discover_workspace};
 
 const WORKSPACE_MARKER_FILENAME: &str = "COPPICE_WORKSPACE";
 
-pub struct CheckedTarget {
+pub struct AnalyzedTargetSummary {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub source_by_path: BTreeMap<String, String>,
     pub safe_autofix_edits_by_workspace_relative_path: BTreeMap<String, Vec<TextEdit>>,
@@ -88,21 +88,21 @@ impl FilePhaseState {
     }
 }
 
-pub fn check_target(path: &str) -> Result<CheckedTarget, CompilerFailure> {
-    check_target_with_workspace_root(path, None)
+pub fn analyze_target_summary(path: &str) -> Result<AnalyzedTargetSummary, CompilerFailure> {
+    analyze_target_summary_with_workspace_root(path, None)
 }
 
-pub fn check_target_with_workspace_root(
+pub fn analyze_target_summary_with_workspace_root(
     path: &str,
     workspace_root_override: Option<&str>,
-) -> Result<CheckedTarget, CompilerFailure> {
+) -> Result<AnalyzedTargetSummary, CompilerFailure> {
     let source_override_by_workspace_relative_path = BTreeMap::new();
     let analyzed_target = analyze_target_with_workspace_root_and_overrides(
         path,
         workspace_root_override,
         &source_override_by_workspace_relative_path,
     )?;
-    Ok(CheckedTarget {
+    Ok(AnalyzedTargetSummary {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
         safe_autofix_edits_by_workspace_relative_path: analyzed_target
@@ -122,17 +122,17 @@ pub fn analyze_target_with_workspace_root(
     )
 }
 
-pub fn check_target_with_workspace_root_and_overrides(
+pub fn analyze_target_summary_with_workspace_root_and_overrides(
     path: &str,
     workspace_root_override: Option<&str>,
     source_override_by_workspace_relative_path: &BTreeMap<String, String>,
-) -> Result<CheckedTarget, CompilerFailure> {
+) -> Result<AnalyzedTargetSummary, CompilerFailure> {
     let analyzed_target = analyze_target_with_workspace_root_and_overrides(
         path,
         workspace_root_override,
         source_override_by_workspace_relative_path,
     )?;
-    Ok(CheckedTarget {
+    Ok(AnalyzedTargetSummary {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
         safe_autofix_edits_by_workspace_relative_path: analyzed_target
@@ -170,7 +170,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let target_is_file = metadata.is_file();
     if !metadata.is_file() && !metadata.is_dir() {
         return Err(CompilerFailure {
-            kind: CompilerFailureKind::InvalidCheckTarget,
+            kind: CompilerFailureKind::InvalidAnalysisTarget,
             message: "expected a file or directory path".to_string(),
             path: Some(path.to_string()),
             details: Vec::new(),

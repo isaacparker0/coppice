@@ -971,9 +971,8 @@ No syntax alternatives. No feature overlaps.
 Single binary. All capabilities built in.
 
 ```
-coppice build .        # compile (strict: rejects unformatted code)
-coppice build --draft  # auto-fix then compile (development mode)
-coppice check .        # type-check only, no codegen (fastest feedback)
+coppice build .        # build target from current directory
+coppice build <path>   # build target from file or directory path
 coppice fix .          # auto-fix all fixable issues
 coppice fmt .          # format only (subset of fix)
 coppice test .         # run tests
@@ -998,11 +997,12 @@ Built into the compiler, not a separate tool.
 
 ### Build Modes
 
-- `coppice build .` — strict. Rejects unfixed code. Used in CI.
-- `coppice build --draft .` — runs `fix` implicitly before compiling. Used
-  during development.
-- `coppice check .` — type-check only, no codegen. Used by LSP for real-time
-  feedback. Target: <100ms incremental.
+- `coppice build .` — non-strict by default, reports pending safe autofixes as
+  warnings.
+- `coppice build --strict .` — strict mode, rejects pending safe autofixes.
+- `.bin.copp` targets run artifact-producing build behavior.
+- Non-entrypoint targets currently run analysis-only build behavior; artifact
+  generation for package/library/test targets is TODO.
 
 Command invocation policy:
 
@@ -1014,20 +1014,22 @@ Command invocation policy:
     provided)
 - If workspace root cannot be resolved, command fails before package discovery.
 - `PACKAGE.copp` defines package boundaries, not workspace root.
-- `check` (no path) is canonical and equivalent to `check .`.
-- `check <path>` accepts a file or directory path.
+- `build` (no path) is canonical and equivalent to `build .`.
+- `build <path>` accepts a file or directory path.
   - with `--workspace-root`, relative paths are resolved against that workspace
     root.
   - without `--workspace-root`, relative paths are resolved against current
     working directory.
 - If `<path>` is a source file (including `.bin.copp`/`.test.copp`), the
-  compiler resolves its owning package and checks that package.
-- If a source file has no owning package, `check` fails with a package ownership
+  compiler resolves its owning package and builds that package.
+- `.bin.copp` targets run build artifact emission.
+- non-entrypoint targets currently run analysis-only build behavior.
+- If a source file has no owning package, `build` fails with a package ownership
   error.
 
 Intent:
 
-- one canonical default (`check`)
+- one canonical default (`build`)
 - explicit workspace boundary (marker-based; override supported)
 - deterministic build graph scope
 

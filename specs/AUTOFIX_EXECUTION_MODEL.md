@@ -67,8 +67,8 @@ We need one model that preserves:
 1. Language diagnostics remain owned by phase crates per
    `specs/COMPILER_ARCHITECTURE.md`.
 2. A phase that owns a diagnostic may optionally attach autofix edits.
-3. Orchestration crates (`check_pipeline`, `driver`, `cli`) must not invent new
-   language diagnostics and must not infer autofixes from diagnostic text.
+3. Orchestration crates (`analysis_pipeline`, `driver`, `cli`) must not invent
+   new language diagnostics and must not infer autofixes from diagnostic text.
 
 ### 2) Edit Model
 
@@ -186,7 +186,7 @@ Non-scope:
 ### Existing packages
 
 1. `syntax_rules` and later `type_analysis` may emit diagnostics with autofixes.
-2. `check_pipeline` aggregates diagnostics and autofixes across phases.
+2. `analysis_pipeline` aggregates diagnostics and autofixes across phases.
 3. `driver` consumes canonicalized in-memory source for `build`/`run` when
    enabled.
 4. `cli` owns command UX only.
