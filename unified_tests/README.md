@@ -9,12 +9,12 @@ Use this README as the authoritative fixture policy for adding new tests.
 
 Each case lives at:
 
-`unified_tests/<area>/<feature>/<case>/`
+`unified_tests/<feature>/<case>/`
 
 Required case files:
 
 ```
-unified_tests/<area>/<feature>/<case>/
+unified_tests/<feature>/<case>/
   README.md
   input/...
   case.test
@@ -25,7 +25,15 @@ Path ownership is scenario-first:
 
 - Place each case under the feature family that primarily owns the behavior.
 
-## Naming And Intent
+## Naming, Placement, And Intent
+
+- A top-level directory under `unified_tests/` is a coherent contract family.
+- Top-level families may be language-facing (`functions`, `operators`,
+  `control_flow`) or non-language (`build_pipeline`, `workspace_root`,
+  `file_roles`).
+- Do not split top-level directories by command (`build`/`run`/`fix`).
+- Keep all cases for a family together; command selection belongs in
+  `case.test`.
 
 - Case names must describe input scenario facts, not outcomes.
 - Do not encode outcome words in names (`valid`, `fails`, `blocks`).

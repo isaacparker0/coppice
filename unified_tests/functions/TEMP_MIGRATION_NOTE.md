@@ -1,7 +1,7 @@
 # Temporary Migration Note: Functions Coverage Moves
 
 This is a temporary tracking note for coverage intentionally removed from
-`unified_tests/declarations/functions` while splitting the old runtime
+`unified_tests/functions` while splitting the old runtime
 `functions/minimal_valid` kitchen-sink case.
 
 ## Moved out of functions ownership
