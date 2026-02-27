@@ -1,3 +1,0 @@
-visible function plusTwo(value: int64) -> int64 {
-    return value + 2
-}
