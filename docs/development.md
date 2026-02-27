@@ -16,5 +16,5 @@ bazel test //...
 
 ```bash
 bazel run --run_in_cwd //compiler/cli:main -- \
-  check path/to/file/or/workspace
+  build path/to/file/or/workspace
 ```

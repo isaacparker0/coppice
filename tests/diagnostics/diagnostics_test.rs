@@ -45,8 +45,8 @@ fn run_case(
         "missing input directory for diagnostics case: {}",
         case_path.display()
     );
-    let text_run = run_check(compiler, &input_directory, ReportFormat::Text);
-    let json_run = run_check(compiler, &input_directory, ReportFormat::Json);
+    let text_run = run_build(compiler, &input_directory, ReportFormat::Text);
+    let json_run = run_build(compiler, &input_directory, ReportFormat::Json);
     let expected_exit = expected_exit_code(case_path);
     match mode {
         SnapshotFixtureRunMode::Update {
@@ -119,9 +119,9 @@ struct CheckRun {
     output: String,
 }
 
-fn run_check(compiler: &Path, input_directory: &Path, format: ReportFormat) -> CheckRun {
+fn run_build(compiler: &Path, input_directory: &Path, format: ReportFormat) -> CheckRun {
     let output = Command::new(compiler)
-        .arg("check")
+        .arg("build")
         .arg("--format")
         .arg(format.as_str())
         .current_dir(input_directory)

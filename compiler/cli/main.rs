@@ -28,15 +28,10 @@ struct CommandLine {
 
 #[derive(Subcommand)]
 enum Command {
-    Check {
+    Build {
         path: Option<String>,
         #[arg(long, default_value_t = ReportFormat::Text)]
         format: ReportFormat,
-        #[arg(long)]
-        strict: bool,
-    },
-    Build {
-        path: String,
         #[arg(long)]
         output_dir: Option<String>,
         #[arg(long)]
@@ -62,38 +57,14 @@ fn main() {
     let command_line = CommandLine::parse();
     let workspace_root = command_line.workspace_root.as_deref();
     match command_line.command {
-        Command::Check {
-            path,
-            format,
-            strict,
-        } => {
-            let path = path.unwrap_or_else(|| ".".to_string());
-            run_check(&path, workspace_root, format, strict);
-        }
         Command::Build {
             path,
+            format,
             output_dir,
             strict,
         } => {
-            let build_result = build_target_with_workspace_root(
-                &path,
-                workspace_root,
-                output_dir.as_deref(),
-                strict,
-            );
-            if matches!(
-                build_result.autofix_policy_outcome,
-                Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
-            ) {
-                render_safe_fix_warning();
-            }
-            match build_result.build {
-                Ok(built_target) => println!("{}", built_target.executable_path),
-                Err(error) => {
-                    render_compiler_failure_text(&path, &error);
-                    process::exit(1);
-                }
-            }
+            let path = path.unwrap_or_else(|| ".".to_string());
+            run_build(&path, workspace_root, format, strict, output_dir.as_deref());
         }
         Command::Fix { path } => {
             let path = path.unwrap_or_else(|| ".".to_string());
@@ -168,7 +139,32 @@ fn run_fix(path: &str, workspace_root: Option<&str>) {
     }
 }
 
-fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportFormat, strict: bool) {
+fn run_build(
+    path: &str,
+    workspace_root: Option<&str>,
+    report_format: ReportFormat,
+    strict: bool,
+    output_directory: Option<&str>,
+) {
+    if path.ends_with(".bin.copp") {
+        let build_result =
+            build_target_with_workspace_root(path, workspace_root, output_directory, strict);
+        if matches!(
+            build_result.autofix_policy_outcome,
+            Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
+        ) {
+            render_safe_fix_warning();
+        }
+        match build_result.build {
+            Ok(_built_target) => {}
+            Err(error) => {
+                render_compiler_failure_text(path, &error);
+                process::exit(1);
+            }
+        }
+        return;
+    }
+
     match check_target_with_workspace_root(path, workspace_root) {
         Ok(checked_target) => {
             let safe_fixes =
@@ -182,8 +178,8 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                 AutofixPolicyOutcome::FailInStrictMode { .. }
             ) && checked_target.diagnostics.is_empty();
             let strict_policy_error = strict_policy_failure.then(|| CompilerFailure {
-                kind: CompilerFailureKind::CheckFailed,
-                message: "check failed due to pending safe autofixes".to_string(),
+                kind: CompilerFailureKind::BuildFailed,
+                message: "build failed due to pending safe autofixes".to_string(),
                 path: Some(path.to_string()),
                 details: safe_fixes
                     .iter()
@@ -204,7 +200,9 @@ fn run_check(path: &str, workspace_root: Option<&str>, report_format: ReportForm
                     } else if let Some(error) = &strict_policy_error {
                         render_compiler_failure_text(path, error);
                     } else {
-                        println!("ok");
+                        println!(
+                            "analysis succeeded; package/library/test artifact generation is not implemented yet"
+                        );
                     }
                     if matches!(
                         autofix_policy_outcome,
