@@ -4,8 +4,7 @@ Pilot suite for a unified fixture model rooted at:
 
 `unified_tests/<area>/<feature>/<case>/`
 
-Each case uses a script-style `case.test` file with literal CLI commands and
-adjacent assertions.
+Each case uses a script-style `case.test` file with literal CLI commands.
 
 ## Case shape
 
@@ -19,15 +18,31 @@ unified_tests/<area>/<feature>/<case>/
 
 ## `case.test` format
 
-- `$ <command args...>` starts a run block.
-- `> exit <code>` asserts exit code.
-- `> stdout @<path>` asserts stdout from file.
-- `> stderr @<path>` asserts stderr from file.
-- `> text.stdout @<path>` / `> text.stderr @<path>` / `> text.exit <code>` are
-  build text-channel assertions.
-- `> json.stdout @<path>` / `> json.stderr @<path>` / `> json.exit <code>` are
-  build json-channel assertions.
-- `> artifacts @<path>` asserts artifact list from file.
+- Each non-empty non-comment line is one run command.
+- Use either:
+  - `<command args...>`
+  - `[label] <command args...>`
+- Labels use `[A-Za-z0-9_]`.
+- If a command appears once in a case, a label is not allowed.
+- If a command appears multiple times in a case, each occurrence must have a
+  unique label.
+
+Expectation files are convention-based under `expect/`, inferred from either the
+command name (single occurrence) or label (multiple occurrences):
+
+- `build`:
+  - `<stem>.text.stdout`
+  - `<stem>.json.stdout`
+  - `<stem>.stderr`
+  - `<stem>.artifacts`
+  - required `<stem>.exit`
+  - optional `<stem>.text.exit` / `<stem>.json.exit` to override `<stem>.exit`
+- `run` / `fix`:
+  - `<stem>.stdout`
+  - `<stem>.stderr`
+  - required `<stem>.exit`
+- `run` also requires:
+  - `<stem>.artifacts`
 
 Placeholders supported in commands and expected files:
 

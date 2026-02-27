@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -93,7 +94,9 @@ fn run_block_and_assert(
     );
     let prepared_command_args = prepare_command_args_for_execution(&command_args);
 
-    if command_name(&run_block.command_line) == "build" {
+    let run_command_name = run_block.command_name.as_str();
+
+    if run_command_name == "build" {
         let text_run = execute_command(
             compiler,
             &prepared_command_args,
@@ -113,28 +116,10 @@ fn run_block_and_assert(
             run_number,
         );
 
-        let expected_text_exit = run_block
-            .expected_text_exit
-            .or(run_block.expected_exit)
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing text exit expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
-        let expected_json_exit = run_block
-            .expected_json_exit
-            .or(run_block.expected_exit)
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing json exit expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
+        let expected_text_exit =
+            read_expected_exit_code_for_build(case_directory, run_block, case_path, "text");
+        let expected_json_exit =
+            read_expected_exit_code_for_build(case_directory, run_block, case_path, "json");
         assert_eq!(
             expected_text_exit,
             text_run.exit_code,
@@ -152,58 +137,9 @@ fn run_block_and_assert(
             case_path.display()
         );
 
-        let text_stdout_path = run_block
-            .expected_text_stdout_path
-            .as_ref()
-            .or(run_block.expected_stdout_path.as_ref())
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing text stdout expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
-        let json_stdout_path = run_block
-            .expected_json_stdout_path
-            .as_ref()
-            .or(run_block.expected_stdout_path.as_ref())
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing json stdout expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
-        let text_stderr_path = run_block
-            .expected_text_stderr_path
-            .as_ref()
-            .or(run_block.expected_stderr_path.as_ref())
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing text stderr expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
-        let json_stderr_path = run_block
-            .expected_json_stderr_path
-            .as_ref()
-            .or(run_block.expected_stderr_path.as_ref())
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing json stderr expectation for run {} ({}) in {}",
-                    run_number,
-                    run_block.command_line,
-                    case_path.display()
-                )
-            });
-
         let expected_text_stdout = read_expected_text_file(
             case_directory,
-            text_stdout_path,
+            run_block,
             case_path,
             run_output_directory,
             working_input_directory,
@@ -212,30 +148,21 @@ fn run_block_and_assert(
         );
         let expected_json_stdout = read_expected_text_file(
             case_directory,
-            json_stdout_path,
+            run_block,
             case_path,
             run_output_directory,
             working_input_directory,
             run_number,
             "json.stdout",
         );
-        let expected_text_stderr = read_expected_text_file(
+        let expected_stderr = read_expected_text_file(
             case_directory,
-            text_stderr_path,
+            run_block,
             case_path,
             run_output_directory,
             working_input_directory,
             run_number,
-            "text.stderr",
-        );
-        let expected_json_stderr = read_expected_text_file(
-            case_directory,
-            json_stderr_path,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "json.stderr",
+            "stderr",
         );
         assert_eq!(
             expected_text_stdout,
@@ -254,7 +181,7 @@ fn run_block_and_assert(
             case_path.display()
         );
         assert_eq!(
-            expected_text_stderr,
+            expected_stderr,
             text_run.stderr,
             "text stderr mismatch for run {} ({}) in {}",
             run_number,
@@ -262,7 +189,7 @@ fn run_block_and_assert(
             case_path.display()
         );
         assert_eq!(
-            expected_json_stderr,
+            expected_stderr,
             json_run.stderr,
             "json stderr mismatch for run {} ({}) in {}",
             run_number,
@@ -279,60 +206,55 @@ fn run_block_and_assert(
             case_path,
             run_number,
         );
-        if let Some(expected_exit) = run_block.expected_exit {
-            assert_eq!(
-                expected_exit,
-                run_result.exit_code,
-                "exit code mismatch for run {} ({}) in {}",
-                run_number,
-                run_block.command_line,
-                case_path.display()
-            );
-        }
-        if let Some(expected_stdout_path) = &run_block.expected_stdout_path {
-            let expected_stdout = read_expected_text_file(
-                case_directory,
-                expected_stdout_path,
-                case_path,
-                run_output_directory,
-                working_input_directory,
-                run_number,
-                "stdout",
-            );
-            assert_eq!(
-                expected_stdout,
-                run_result.stdout,
-                "stdout mismatch for run {} ({}) in {}",
-                run_number,
-                run_block.command_line,
-                case_path.display()
-            );
-        }
-        if let Some(expected_stderr_path) = &run_block.expected_stderr_path {
-            let expected_stderr = read_expected_text_file(
-                case_directory,
-                expected_stderr_path,
-                case_path,
-                run_output_directory,
-                working_input_directory,
-                run_number,
-                "stderr",
-            );
-            assert_eq!(
-                expected_stderr,
-                run_result.stderr,
-                "stderr mismatch for run {} ({}) in {}",
-                run_number,
-                run_block.command_line,
-                case_path.display()
-            );
-        }
+        let expected_exit = read_expected_exit_code(case_directory, run_block, case_path);
+        assert_eq!(
+            expected_exit,
+            run_result.exit_code,
+            "exit code mismatch for run {} ({}) in {}",
+            run_number,
+            run_block.command_line,
+            case_path.display()
+        );
+        let expected_stdout = read_expected_text_file(
+            case_directory,
+            run_block,
+            case_path,
+            run_output_directory,
+            working_input_directory,
+            run_number,
+            "stdout",
+        );
+        assert_eq!(
+            expected_stdout,
+            run_result.stdout,
+            "stdout mismatch for run {} ({}) in {}",
+            run_number,
+            run_block.command_line,
+            case_path.display()
+        );
+        let expected_stderr = read_expected_text_file(
+            case_directory,
+            run_block,
+            case_path,
+            run_output_directory,
+            working_input_directory,
+            run_number,
+            "stderr",
+        );
+        assert_eq!(
+            expected_stderr,
+            run_result.stderr,
+            "stderr mismatch for run {} ({}) in {}",
+            run_number,
+            run_block.command_line,
+            case_path.display()
+        );
     }
 
-    if let Some(expected_artifacts_path) = &run_block.expected_artifacts_path {
+    if run_command_name == "build" || run_command_name == "run" {
         let expected_artifacts = read_expected_artifact_lines(
             case_directory,
-            expected_artifacts_path,
+            run_block,
             case_path,
             run_output_directory,
             working_input_directory,
@@ -394,22 +316,14 @@ fn execute_command(
 
 #[derive(Default)]
 struct RunBlock {
+    label: Option<String>,
     command_line: String,
-    expected_exit: Option<i32>,
-    expected_stdout_path: Option<PathBuf>,
-    expected_stderr_path: Option<PathBuf>,
-    expected_text_exit: Option<i32>,
-    expected_json_exit: Option<i32>,
-    expected_text_stdout_path: Option<PathBuf>,
-    expected_text_stderr_path: Option<PathBuf>,
-    expected_json_stdout_path: Option<PathBuf>,
-    expected_json_stderr_path: Option<PathBuf>,
-    expected_artifacts_path: Option<PathBuf>,
+    command_name: String,
+    expectation_stem: String,
 }
 
 fn parse_case_script(contents: &str, case_path: &Path) -> Vec<RunBlock> {
     let mut run_blocks = Vec::new();
-    let mut current_run_block: Option<RunBlock> = None;
 
     for (line_index, raw_line) in contents.lines().enumerate() {
         let line_number = line_index + 1;
@@ -417,203 +331,144 @@ fn parse_case_script(contents: &str, case_path: &Path) -> Vec<RunBlock> {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        if let Some(command_line) = line.strip_prefix("$ ") {
-            if let Some(existing_run_block) = current_run_block.take() {
-                run_blocks.push(existing_run_block);
-            }
-            current_run_block = Some(RunBlock {
-                command_line: command_line.trim().to_string(),
-                ..RunBlock::default()
-            });
-            continue;
-        }
-        if let Some(assertion) = line.strip_prefix("> ") {
-            let run_block = current_run_block.as_mut().unwrap_or_else(|| {
-                panic!(
-                    "assertion before first command at line {} in {}",
-                    line_number,
-                    case_path.display()
-                )
-            });
-            parse_assertion_line(assertion, run_block, case_path, line_number);
-            continue;
-        }
-        panic!(
-            "unrecognized line at {}:{}: {}",
-            case_path.display(),
-            line_number,
-            line
-        );
+        let (label, command_line) = parse_labeled_run_line(line, case_path, line_number);
+        let command_name = parse_command_name(&command_line, case_path, line_number);
+        run_blocks.push(RunBlock {
+            label,
+            command_line,
+            command_name,
+            ..RunBlock::default()
+        });
     }
 
-    if let Some(existing_run_block) = current_run_block.take() {
-        run_blocks.push(existing_run_block);
-    }
-
-    for run_block in &run_blocks {
-        let has_basic_assertions = run_block.expected_exit.is_some()
-            || run_block
-                .expected_stdout_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty())
-            || run_block
-                .expected_stderr_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty())
-            || run_block.expected_artifacts_path.is_some();
-        let has_format_assertions = run_block.expected_text_exit.is_some()
-            || run_block.expected_json_exit.is_some()
-            || run_block
-                .expected_text_stdout_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty())
-            || run_block
-                .expected_text_stderr_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty())
-            || run_block
-                .expected_json_stdout_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty())
-            || run_block
-                .expected_json_stderr_path
-                .as_ref()
-                .is_some_and(|path| !path.as_os_str().is_empty());
-        assert!(
-            has_basic_assertions || has_format_assertions,
-            "run block with command '{}' in {} has no assertions",
-            run_block.command_line,
-            case_path.display()
-        );
-    }
-
+    assign_expectation_stems(&mut run_blocks, case_path);
     run_blocks
 }
 
-fn parse_assertion_line(
-    assertion: &str,
-    run_block: &mut RunBlock,
+fn parse_labeled_run_line(
+    line: &str,
     case_path: &Path,
     line_number: usize,
-) {
-    let (key, value) = assertion.split_once(' ').unwrap_or_else(|| {
-        panic!(
-            "invalid assertion at {}:{} (expected '<key> <value>')",
+) -> (Option<String>, String) {
+    if let Some(after_open_bracket) = line.strip_prefix('[') {
+        let (label, command_line) = after_open_bracket.split_once(']').unwrap_or_else(|| {
+            panic!(
+                "invalid label syntax at {}:{} (missing closing ']')",
+                case_path.display(),
+                line_number
+            )
+        });
+        assert!(
+            !label.trim().is_empty(),
+            "empty label at {}:{}",
             case_path.display(),
             line_number
-        )
-    });
-    match key {
-        "exit" => {
-            run_block.expected_exit = Some(value.parse::<i32>().unwrap_or_else(|error| {
-                panic!(
-                    "invalid exit code at {}:{}: {} ({error})",
-                    case_path.display(),
-                    line_number,
-                    value
-                )
-            }));
-        }
-        "stdout" => {
-            run_block.expected_stdout_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "stdout",
-            ));
-        }
-        "stderr" => {
-            run_block.expected_stderr_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "stderr",
-            ));
-        }
-        "artifacts" => {
-            run_block.expected_artifacts_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "artifacts",
-            ));
-        }
-        "text.exit" => {
-            run_block.expected_text_exit = Some(value.parse::<i32>().unwrap_or_else(|error| {
-                panic!(
-                    "invalid text.exit code at {}:{}: {} ({error})",
-                    case_path.display(),
-                    line_number,
-                    value
-                )
-            }));
-        }
-        "json.exit" => {
-            run_block.expected_json_exit = Some(value.parse::<i32>().unwrap_or_else(|error| {
-                panic!(
-                    "invalid json.exit code at {}:{}: {} ({error})",
-                    case_path.display(),
-                    line_number,
-                    value
-                )
-            }));
-        }
-        "text.stdout" => {
-            run_block.expected_text_stdout_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "text.stdout",
-            ));
-        }
-        "text.stderr" => {
-            run_block.expected_text_stderr_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "text.stderr",
-            ));
-        }
-        "json.stdout" => {
-            run_block.expected_json_stdout_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "json.stdout",
-            ));
-        }
-        "json.stderr" => {
-            run_block.expected_json_stderr_path = Some(parse_expected_file_reference(
-                value,
-                case_path,
-                line_number,
-                "json.stderr",
-            ));
-        }
-        _ => panic!(
-            "unknown assertion key '{}' at {}:{}",
-            key,
+        );
+        assert!(
+            label
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '_'),
+            "invalid label '{}' at {}:{} (labels may only use [A-Za-z0-9_])",
+            label,
             case_path.display(),
             line_number
-        ),
+        );
+        let command_line = command_line.trim_start();
+        assert!(
+            !command_line.is_empty(),
+            "missing command after label '{}' at {}:{}",
+            label,
+            case_path.display(),
+            line_number
+        );
+        return (Some(label.to_string()), command_line.to_string());
     }
+
+    (None, line.to_string())
 }
 
-fn parse_expected_file_reference(
-    value: &str,
-    case_path: &Path,
-    line_number: usize,
-    key: &str,
-) -> PathBuf {
-    let path = value.strip_prefix('@').unwrap_or_else(|| {
-        panic!(
-            "expected @<path> for '{}' at {}:{}",
-            key,
-            case_path.display(),
-            line_number
-        )
-    });
-    PathBuf::from(path)
+fn parse_command_name(command_line: &str, case_path: &Path, line_number: usize) -> String {
+    let command_tokens = parse_command_tokens(command_line);
+    let command_name = command_tokens.first().map_or_else(
+        || {
+            panic!(
+                "invalid case.test syntax at {}:{}; expected '[label] <command>' or '<command>'",
+                case_path.display(),
+                line_number
+            )
+        },
+        String::as_str,
+    );
+    assert!(
+        command_name_starts_with_valid_character(command_name)
+            && command_name_has_valid_remaining_characters(command_name),
+        "invalid case.test syntax at {}:{}; expected '[label] <command>' or '<command>'",
+        case_path.display(),
+        line_number
+    );
+    command_name.to_string()
+}
+
+fn command_name_starts_with_valid_character(command_name: &str) -> bool {
+    command_name
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_lowercase())
+}
+
+fn command_name_has_valid_remaining_characters(command_name: &str) -> bool {
+    command_name.chars().skip(1).all(|character| {
+        character.is_ascii_lowercase()
+            || character.is_ascii_digit()
+            || character == '_'
+            || character == '-'
+    })
+}
+
+fn assign_expectation_stems(run_blocks: &mut [RunBlock], case_path: &Path) {
+    let mut run_count_by_command: HashMap<String, usize> = HashMap::new();
+    for run_block in run_blocks.iter() {
+        let run_command_name = run_block.command_name.clone();
+        *run_count_by_command.entry(run_command_name).or_insert(0) += 1;
+    }
+
+    let mut used_labels_by_command: HashMap<String, HashSet<String>> = HashMap::new();
+    for run_block in run_blocks.iter_mut() {
+        let run_command_name = run_block.command_name.clone();
+        let run_count = run_count_by_command
+            .get(&run_command_name)
+            .copied()
+            .unwrap_or(0);
+        if run_count == 1 {
+            assert!(
+                run_block.label.is_none(),
+                "label is not allowed for single '{}' run in {}",
+                run_command_name,
+                case_path.display()
+            );
+            run_block.expectation_stem = run_command_name;
+            continue;
+        }
+
+        let label = run_block.label.clone().unwrap_or_else(|| {
+            panic!(
+                "label is required because '{}' appears multiple times in {}",
+                run_command_name,
+                case_path.display()
+            )
+        });
+        let used_labels = used_labels_by_command
+            .entry(run_command_name.clone())
+            .or_default();
+        assert!(
+            used_labels.insert(label.clone()),
+            "duplicate label '{}' for '{}' runs in {}",
+            label,
+            run_command_name,
+            case_path.display()
+        );
+        run_block.expectation_stem = label;
+    }
 }
 
 fn parse_command_tokens(command_line: &str) -> Vec<String> {
@@ -634,24 +489,21 @@ fn prepare_command_args_for_execution(command_args: &[String]) -> Vec<String> {
     prepared
 }
 
-fn command_name(command_line: &str) -> &str {
-    command_line.split_whitespace().next().unwrap_or_default()
-}
-
 fn read_expected_text_file(
     case_directory: &Path,
-    relative_path: &Path,
+    run_block: &RunBlock,
     case_path: &Path,
     run_output_directory: &Path,
     working_input_directory: &Path,
     run_number: usize,
-    stream_name: &str,
+    expected_suffix: &str,
 ) -> String {
-    let full_path = case_directory.join(relative_path);
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, expected_suffix);
+    let full_path = case_directory.join(&relative_path);
     let raw_contents = fs::read_to_string(&full_path).unwrap_or_else(|error| {
         panic!(
             "failed to read {} expectation '{}' for run {} in {}: {error}",
-            stream_name,
+            expected_suffix,
             relative_path.display(),
             run_number,
             case_path.display()
@@ -663,13 +515,14 @@ fn read_expected_text_file(
 
 fn read_expected_artifact_lines(
     case_directory: &Path,
-    relative_path: &Path,
+    run_block: &RunBlock,
     case_path: &Path,
     run_output_directory: &Path,
     working_input_directory: &Path,
     run_number: usize,
 ) -> Vec<String> {
-    let full_path = case_directory.join(relative_path);
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, "artifacts");
+    let full_path = case_directory.join(&relative_path);
     let raw_contents = fs::read_to_string(&full_path).unwrap_or_else(|error| {
         panic!(
             "failed to read artifacts expectation '{}' for run {} in {}: {error}",
@@ -685,6 +538,82 @@ fn read_expected_artifact_lines(
         .filter(|line| !line.starts_with('#'))
         .map(|line| substitute_placeholders(line, run_output_directory, working_input_directory))
         .collect()
+}
+
+fn read_expected_exit_code_for_build(
+    case_directory: &Path,
+    run_block: &RunBlock,
+    case_path: &Path,
+    report_format: &str,
+) -> i32 {
+    let format_specific_suffix = format!("{report_format}.exit");
+    read_optional_expected_exit_code(
+        case_directory,
+        run_block,
+        case_path,
+        &format_specific_suffix,
+    )
+    .unwrap_or_else(|| read_expected_exit_code(case_directory, run_block, case_path))
+}
+
+fn read_expected_exit_code(case_directory: &Path, run_block: &RunBlock, case_path: &Path) -> i32 {
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, "exit");
+    let full_path = case_directory.join(&relative_path);
+    assert!(
+        full_path.is_file(),
+        "missing required exit expectation '{}' in {}",
+        relative_path.display(),
+        case_path.display()
+    );
+    let raw_exit_code = fs::read_to_string(&full_path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read exit expectation '{}' in {}: {error}",
+            relative_path.display(),
+            case_path.display()
+        )
+    });
+    let exit_code_text = raw_exit_code.trim();
+    exit_code_text.parse::<i32>().unwrap_or_else(|error| {
+        panic!(
+            "invalid exit code '{}' in {} for {}: {error}",
+            exit_code_text,
+            relative_path.display(),
+            case_path.display()
+        )
+    })
+}
+
+fn read_optional_expected_exit_code(
+    case_directory: &Path,
+    run_block: &RunBlock,
+    case_path: &Path,
+    expected_suffix: &str,
+) -> Option<i32> {
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, expected_suffix);
+    let full_path = case_directory.join(&relative_path);
+    if !full_path.is_file() {
+        return None;
+    }
+    let raw_exit_code = fs::read_to_string(&full_path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read exit expectation '{}' in {}: {error}",
+            relative_path.display(),
+            case_path.display()
+        )
+    });
+    let exit_code_text = raw_exit_code.trim();
+    Some(exit_code_text.parse::<i32>().unwrap_or_else(|error| {
+        panic!(
+            "invalid exit code '{}' in {} for {}: {error}",
+            exit_code_text,
+            relative_path.display(),
+            case_path.display()
+        )
+    }))
+}
+
+fn expectation_relative_path(expectation_stem: &str, expected_suffix: &str) -> PathBuf {
+    PathBuf::from("expect").join(format!("{expectation_stem}.{expected_suffix}"))
 }
 
 fn collect_artifact_paths(directory: &Path) -> Vec<String> {
