@@ -2,7 +2,7 @@ load("//tools/bazel/macros:rust.bzl", "rust_test")
 
 rust_test(
     name = "unified_tests_test",
-    srcs = ["unified_tests_test.rs"],
+    srcs = ["fixtures_test.rs"],
     data = [
         "//compiler/cli:main",
     ] + glob(["**"]),
