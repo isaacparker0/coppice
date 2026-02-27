@@ -92,28 +92,27 @@ fn run_block_and_assert(
         case_path.display()
     );
     let prepared_command_args = prepare_command_args_for_execution(&command_args);
-    let substituted_command_args = prepared_command_args
-        .iter()
-        .map(|token| substitute_placeholders(token, run_output_directory, working_input_directory))
-        .collect::<Vec<_>>();
-
-    let output = Command::new(compiler)
-        .args(&substituted_command_args)
-        .current_dir(working_input_directory)
-        .output()
-        .unwrap_or_else(|error| {
-            panic!(
-                "failed to execute run {} for {}: {error}",
-                run_number,
-                case_path.display()
-            )
-        });
-
-    let actual_exit = output.status.code().unwrap_or(1);
-    let actual_stdout = normalize_process_output(&String::from_utf8_lossy(&output.stdout));
-    let actual_stderr = normalize_process_output(&String::from_utf8_lossy(&output.stderr));
 
     if command_name(&run_block.command_line) == "build" {
+        let text_run = execute_command(
+            compiler,
+            &prepared_command_args,
+            Some("text"),
+            working_input_directory,
+            run_output_directory,
+            case_path,
+            run_number,
+        );
+        let json_run = execute_command(
+            compiler,
+            &prepared_command_args,
+            Some("json"),
+            working_input_directory,
+            run_output_directory,
+            case_path,
+            run_number,
+        );
+
         let expected_text_exit = run_block
             .expected_text_exit
             .or(run_block.expected_exit)
@@ -138,7 +137,7 @@ fn run_block_and_assert(
             });
         assert_eq!(
             expected_text_exit,
-            actual_exit,
+            text_run.exit_code,
             "text exit code mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
@@ -146,7 +145,7 @@ fn run_block_and_assert(
         );
         assert_eq!(
             expected_json_exit,
-            actual_exit,
+            json_run.exit_code,
             "json exit code mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
@@ -240,7 +239,7 @@ fn run_block_and_assert(
         );
         assert_eq!(
             expected_text_stdout,
-            actual_stdout,
+            text_run.stdout,
             "text stdout mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
@@ -248,7 +247,7 @@ fn run_block_and_assert(
         );
         assert_eq!(
             expected_json_stdout,
-            actual_stdout,
+            json_run.stdout,
             "json stdout mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
@@ -256,7 +255,7 @@ fn run_block_and_assert(
         );
         assert_eq!(
             expected_text_stderr,
-            actual_stderr,
+            text_run.stderr,
             "text stderr mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
@@ -264,17 +263,26 @@ fn run_block_and_assert(
         );
         assert_eq!(
             expected_json_stderr,
-            actual_stderr,
+            json_run.stderr,
             "json stderr mismatch for run {} ({}) in {}",
             run_number,
             run_block.command_line,
             case_path.display()
         );
     } else {
+        let run_result = execute_command(
+            compiler,
+            &prepared_command_args,
+            None,
+            working_input_directory,
+            run_output_directory,
+            case_path,
+            run_number,
+        );
         if let Some(expected_exit) = run_block.expected_exit {
             assert_eq!(
                 expected_exit,
-                actual_exit,
+                run_result.exit_code,
                 "exit code mismatch for run {} ({}) in {}",
                 run_number,
                 run_block.command_line,
@@ -293,7 +301,7 @@ fn run_block_and_assert(
             );
             assert_eq!(
                 expected_stdout,
-                actual_stdout,
+                run_result.stdout,
                 "stdout mismatch for run {} ({}) in {}",
                 run_number,
                 run_block.command_line,
@@ -312,7 +320,7 @@ fn run_block_and_assert(
             );
             assert_eq!(
                 expected_stderr,
-                actual_stderr,
+                run_result.stderr,
                 "stderr mismatch for run {} ({}) in {}",
                 run_number,
                 run_block.command_line,
@@ -339,6 +347,48 @@ fn run_block_and_assert(
             run_block.command_line,
             case_path.display()
         );
+    }
+}
+
+struct ExecutedCommand {
+    exit_code: i32,
+    stdout: String,
+    stderr: String,
+}
+
+fn execute_command(
+    compiler: &Path,
+    prepared_command_args: &[String],
+    report_format: Option<&str>,
+    working_input_directory: &Path,
+    run_output_directory: &Path,
+    case_path: &Path,
+    run_number: usize,
+) -> ExecutedCommand {
+    let mut final_command_args = prepared_command_args.to_vec();
+    if let Some(format) = report_format {
+        final_command_args.push("--format".to_string());
+        final_command_args.push(format.to_string());
+    }
+    let substituted_command_args = final_command_args
+        .iter()
+        .map(|token| substitute_placeholders(token, run_output_directory, working_input_directory))
+        .collect::<Vec<_>>();
+    let output = Command::new(compiler)
+        .args(&substituted_command_args)
+        .current_dir(working_input_directory)
+        .output()
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to execute run {} for {}: {error}",
+                run_number,
+                case_path.display()
+            )
+        });
+    ExecutedCommand {
+        exit_code: output.status.code().unwrap_or(1),
+        stdout: normalize_process_output(&String::from_utf8_lossy(&output.stdout)),
+        stderr: normalize_process_output(&String::from_utf8_lossy(&output.stderr)),
     }
 }
 
