@@ -11,7 +11,7 @@ rust_library(
 dependency_enforcement_test(
     name = "source_formatting_forbidden_dependencies",
     forbidden = [
-        "//compiler/check_pipeline",
+        "//compiler/analysis_pipeline",
         "//compiler/cli:main",
         "//compiler/cranelift_backend",
         "//compiler/driver",

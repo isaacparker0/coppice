@@ -38,7 +38,7 @@ Design goals:
 4. Package/import/export/visibility resolution (`compiler/resolution`)
 5. Semantic lowering (`compiler/semantic_lowering`)
 6. Type analysis (`compiler/type_analysis`)
-7. Shared check orchestration and rendering (`compiler/check_pipeline`)
+7. Shared check orchestration and rendering (`compiler/analysis_pipeline`)
 
 The pipeline is linear. Per-file downstream skipping is controlled by explicit
 phase status, not by ad-hoc heuristics.
@@ -175,7 +175,7 @@ When introduced, this phase also owns:
 
 Output: `PhaseOutput<type_annotated_program::TypeAnnotatedFile>`.
 
-### `compiler/check_pipeline`
+### `compiler/analysis_pipeline`
 
 Owns orchestration only:
 
@@ -185,14 +185,14 @@ Owns orchestration only:
 4. status-driven downstream gating
 5. aggregation of phase-emitted safe-autofix artifacts
 
-### `compiler/check_session`
+### `compiler/analysis_session`
 
 Owns stateful interactive check orchestration for long-lived clients.
 
 Responsibilities:
 
 1. in-memory source overlay state
-2. check invalidation/re-execution via `check_pipeline`
+2. check invalidation/re-execution via `analysis_pipeline`
 3. session lifecycle/state boundaries for tooling clients
 
 ### `compiler/lsp`
@@ -202,7 +202,7 @@ Owns LSP protocol transport/serving only.
 Responsibilities:
 
 1. stdio JSON-RPC framing and message handling
-2. request/notification mapping to `check_session`
+2. request/notification mapping to `analysis_session`
 3. LSP-specific result publishing (for example diagnostics notifications)
 
 ### `compiler/driver`
@@ -212,7 +212,7 @@ Owns build/run orchestration only.
 Responsibilities:
 
 1. build/run command policy and target validation
-2. consumption of analyzed check artifacts from `check_pipeline`
+2. consumption of analyzed check artifacts from `analysis_pipeline`
 3. backend lowering/codegen execution flow
 4. application of strict/non-strict autofix policy outcome for build/run
 
@@ -246,8 +246,8 @@ Phase-owned language diagnostics:
 4. resolution: package/import/export/visibility/binding/cycle diagnostics
 5. type_analysis: type/flow/usage diagnostics
 6. phase crates may emit safe-autofix artifacts for their own diagnostics
-7. orchestration layers (`check_pipeline`, `check_session`, `lsp`, `driver`,
-   `cli`): consume/aggregate/policy-evaluate/render only
+7. orchestration layers (`analysis_pipeline`, `analysis_session`, `lsp`,
+   `driver`, `cli`): consume/aggregate/policy-evaluate/render only
 
 Hard failures:
 
@@ -268,11 +268,11 @@ High-level direction:
 6. `type_analysis -> {semantic_program,semantic_types,type_annotated_program}`
 7. `executable_lowering -> {type_annotated_program,executable_program}`
 8. `cranelift_backend -> {executable_program,runtime_interface}`
-9. `check_pipeline -> {parsing,syntax_rules,file_role_rules,resolution,semantic_lowering,type_analysis,source_formatting,fix_edits}`
-10. `check_session -> check_pipeline`
-11. `lsp -> check_session`
-12. `driver -> {check_pipeline,executable_lowering,cranelift_backend,autofix_policy}`
-13. `cli -> {check_pipeline,driver,lsp,autofix_policy}`
+9. `analysis_pipeline -> {parsing,syntax_rules,file_role_rules,resolution,semantic_lowering,type_analysis,source_formatting,fix_edits}`
+10. `analysis_session -> analysis_pipeline`
+11. `lsp -> analysis_session`
+12. `driver -> {analysis_pipeline,executable_lowering,cranelift_backend,autofix_policy}`
+13. `cli -> {analysis_pipeline,driver,lsp,autofix_policy}`
 
 Key prohibitions:
 
@@ -310,8 +310,8 @@ This architecture is required for shared CLI/tooling behavior:
 1. parser returns syntax + diagnostics under recoverable parse errors
 2. phase outputs are machine-readable and stable
 3. gating behavior is deterministic and shared across consumers
-4. `check_pipeline` is the single shared check implementation for CLI and LSP
-5. `check_session` encapsulates stateful overlays/incremental behavior for
+4. `analysis_pipeline` is the single shared check implementation for CLI and LSP
+5. `analysis_session` encapsulates stateful overlays/incremental behavior for
    long-lived tooling clients
 
 ## Acceptance Criteria

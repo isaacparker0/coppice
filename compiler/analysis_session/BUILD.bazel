@@ -2,21 +2,21 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "check_session",
+    name = "analysis_session",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
     deps = [
-        "//compiler/check_pipeline",
+        "//compiler/analysis_pipeline",
         "//compiler/reports",
     ],
 )
 
 dependency_enforcement_test(
-    name = "check_session_forbidden_dependencies",
+    name = "analysis_session_forbidden_dependencies",
     forbidden = [
         "//compiler/cranelift_backend",
         "//compiler/executable_lowering",
         "//compiler/runtime_interface",
     ],
-    target = ":check_session",
+    target = ":analysis_session",
 )

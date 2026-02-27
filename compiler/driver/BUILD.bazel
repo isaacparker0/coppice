@@ -5,8 +5,8 @@ rust_library(
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
     deps = [
+        "//compiler/analysis_pipeline",
         "//compiler/autofix_policy",
-        "//compiler/check_pipeline",
         "//compiler/cranelift_backend",
         "//compiler/executable_lowering",
         "//compiler/phase_results",

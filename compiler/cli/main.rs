@@ -2,7 +2,7 @@ use std::{fs, process};
 
 use clap::{Parser, Subcommand};
 
-use compiler__check_pipeline::analyze_target_with_workspace_root;
+use compiler__analysis_pipeline::analyze_target_with_workspace_root;
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
 use compiler__lsp::run_lsp_stdio;
 use compiler__reports::{

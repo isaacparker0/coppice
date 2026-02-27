@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use compiler__check_session::CheckSession;
+use compiler__analysis_session::AnalysisSession;
 use compiler__reports::{CompilerFailure, CompilerFailureKind, RenderedDiagnostic};
 use compiler__source::path_to_key;
 use serde_json::{Value, json};
@@ -17,7 +17,7 @@ pub fn run_lsp_stdio(workspace_root_override: Option<&str>) -> Result<(), Compil
 }
 
 struct LspServer {
-    check_session: CheckSession,
+    analysis_session: AnalysisSession,
     shutdown_requested: bool,
     published_diagnostic_uri_set: BTreeSet<String>,
     source_override_by_path: BTreeMap<String, String>,
@@ -26,7 +26,9 @@ struct LspServer {
 impl LspServer {
     fn new(workspace_root_override: Option<&str>) -> Self {
         Self {
-            check_session: CheckSession::new(workspace_root_override.map(ToString::to_string)),
+            analysis_session: AnalysisSession::new(
+                workspace_root_override.map(ToString::to_string),
+            ),
             shutdown_requested: false,
             published_diagnostic_uri_set: BTreeSet::new(),
             source_override_by_path: BTreeMap::new(),
@@ -202,11 +204,11 @@ impl LspServer {
             return Ok(());
         };
         let target_path = path_to_key(&absolute_path);
-        self.check_session
+        self.analysis_session
             .open_or_update_document(&target_path, text.clone());
         self.source_override_by_path
             .insert(target_path.clone(), text);
-        self.recheck_target_and_publish(writer, &target_path)
+        self.reanalyze_target_and_publish(writer, &target_path)
     }
 
     fn close_document_and_publish<W: Write>(
@@ -218,20 +220,22 @@ impl LspServer {
             return Ok(());
         };
         let target_path = path_to_key(&absolute_path);
-        self.check_session.close_document(&target_path);
+        self.analysis_session.close_document(&target_path);
         self.source_override_by_path.remove(&target_path);
-        self.recheck_target_and_publish(writer, &target_path)
+        self.reanalyze_target_and_publish(writer, &target_path)
     }
 
-    fn recheck_target_and_publish<W: Write>(
+    fn reanalyze_target_and_publish<W: Write>(
         &mut self,
         writer: &mut W,
         target_path: &str,
     ) -> Result<(), CompilerFailure> {
-        match self.check_session.check_target(target_path) {
-            Ok(checked_target) => {
-                self.publish_checked_target(writer, checked_target.diagnostics, target_path)
-            }
+        match self.analysis_session.analyze_target(target_path) {
+            Ok(analyzed_target_summary) => self.publish_analyzed_target(
+                writer,
+                analyzed_target_summary.diagnostics,
+                target_path,
+            ),
             Err(error) => {
                 Self::publish_log_message(writer, &error.message)?;
                 if let Some(target_uri) = Self::path_to_uri(target_path) {
@@ -243,7 +247,7 @@ impl LspServer {
         }
     }
 
-    fn publish_checked_target<W: Write>(
+    fn publish_analyzed_target<W: Write>(
         &mut self,
         writer: &mut W,
         diagnostics: Vec<RenderedDiagnostic>,
