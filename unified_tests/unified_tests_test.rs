@@ -5,13 +5,17 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use runfiles::{Runfiles, rlocation};
-use tests__snapshot_fixture_helpers::collect_snapshot_fixture_case_paths;
+use tests__snapshot_fixture_helpers::{
+    SnapshotFixtureRunMode, collect_snapshot_fixture_case_paths,
+    snapshot_fixture_run_mode_from_environment, write_snapshot_fixture_file_if_changed,
+};
 
 #[test]
 fn unified_cases() {
     let runfiles = Runfiles::create().unwrap();
     let compiler = rlocation!(runfiles, "_main/compiler/cli/main").unwrap();
     let runfiles_directory = runfiles::find_runfiles_dir().unwrap().join("_main");
+    let mode = snapshot_fixture_run_mode_from_environment();
 
     let mut case_paths = Vec::new();
     collect_snapshot_fixture_case_paths(
@@ -24,11 +28,16 @@ fn unified_cases() {
     assert!(!case_paths.is_empty(), "no unified fixture cases found");
 
     for case_path in &case_paths {
-        run_case(&compiler, &runfiles_directory, case_path);
+        run_case(&compiler, &runfiles_directory, case_path, &mode);
     }
 }
 
-fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path) {
+fn run_case(
+    compiler: &Path,
+    runfiles_directory: &Path,
+    case_path: &Path,
+    mode: &SnapshotFixtureRunMode,
+) {
     let case_directory = runfiles_directory.join(case_path);
     let input_directory = case_directory.join("input");
     assert!(
@@ -36,6 +45,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path) {
         "missing input directory for case {}",
         case_path.display()
     );
+    assert_valid_case_contract_readme(&case_directory, case_path);
 
     let script_path = case_directory.join("case.test");
     let script_contents = fs::read_to_string(&script_path)
@@ -70,6 +80,7 @@ fn run_case(compiler: &Path, runfiles_directory: &Path, case_path: &Path) {
             &run_output_directory,
             run_block,
             run_index + 1,
+            mode,
         );
     }
 
@@ -84,6 +95,7 @@ fn run_block_and_assert(
     run_output_directory: &Path,
     run_block: &RunBlock,
     run_number: usize,
+    mode: &SnapshotFixtureRunMode,
 ) {
     let command_args = parse_command_tokens(&run_block.command_line);
     assert!(
@@ -92,14 +104,127 @@ fn run_block_and_assert(
         run_number,
         case_path.display()
     );
-    let prepared_command_args = prepare_command_args_for_execution(&command_args);
+    let run_command = parse_run_command(&run_block.command_name, case_path, run_number);
+    let prepared_command_args = prepare_command_args_for_execution(run_command, &command_args);
+    let run_actual = execute_run_and_collect_actual_outputs(
+        compiler,
+        run_command,
+        &prepared_command_args,
+        working_input_directory,
+        run_output_directory,
+        case_path,
+        run_number,
+    );
 
-    let run_command_name = run_block.command_name.as_str();
+    match mode {
+        SnapshotFixtureRunMode::Check => {
+            assert_expected_outputs_match(
+                case_directory,
+                case_path,
+                working_input_directory,
+                run_output_directory,
+                run_block,
+                run_number,
+                run_command,
+                &run_actual,
+            );
+        }
+        SnapshotFixtureRunMode::Update {
+            workspace_directory,
+        } => {
+            update_expected_outputs(
+                &workspace_directory.join(case_path),
+                case_path,
+                working_input_directory,
+                run_output_directory,
+                run_block,
+                run_command,
+                &run_actual,
+            );
+        }
+    }
+}
 
-    if run_command_name == "build" {
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+enum RunCommand {
+    Build,
+    Run,
+    Fix,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum OutputKind {
+    Exit,
+    Stdout,
+    Stderr,
+    Artifacts,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum OutputFormat {
+    None,
+    Text,
+    Json,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct OutputKey {
+    kind: OutputKind,
+    format: OutputFormat,
+}
+
+enum OutputValue {
+    ExitCode(i32),
+    Text(String),
+    ArtifactPaths(Vec<String>),
+}
+
+struct RunActual {
+    value_by_output_key: HashMap<OutputKey, OutputValue>,
+}
+
+fn parse_run_command(command_name: &str, case_path: &Path, run_number: usize) -> RunCommand {
+    match command_name {
+        "build" => RunCommand::Build,
+        "run" => RunCommand::Run,
+        "fix" => RunCommand::Fix,
+        _ => panic!(
+            "unsupported command '{}' in run {} for {}; expected one of: build, run, fix",
+            command_name,
+            run_number,
+            case_path.display()
+        ),
+    }
+}
+
+fn prepare_command_args_for_execution(
+    run_command: RunCommand,
+    command_args: &[String],
+) -> Vec<String> {
+    if run_command != RunCommand::Build && run_command != RunCommand::Run {
+        return command_args.to_vec();
+    }
+    let mut prepared = command_args.to_vec();
+    prepared.push("--output-dir".to_string());
+    prepared.push("${TMP_OUTPUT_DIR}".to_string());
+    prepared
+}
+
+fn execute_run_and_collect_actual_outputs(
+    compiler: &Path,
+    run_command: RunCommand,
+    prepared_command_args: &[String],
+    working_input_directory: &Path,
+    run_output_directory: &Path,
+    case_path: &Path,
+    run_number: usize,
+) -> RunActual {
+    let mut value_by_output_key = HashMap::new();
+
+    if run_command == RunCommand::Build {
         let text_run = execute_command(
             compiler,
-            &prepared_command_args,
+            prepared_command_args,
             Some("text"),
             working_input_directory,
             run_output_directory,
@@ -108,168 +233,484 @@ fn run_block_and_assert(
         );
         let json_run = execute_command(
             compiler,
-            &prepared_command_args,
+            prepared_command_args,
             Some("json"),
             working_input_directory,
             run_output_directory,
             case_path,
             run_number,
         );
-
-        let expected_text_exit =
-            read_expected_exit_code_for_build(case_directory, run_block, case_path, "text");
-        let expected_json_exit =
-            read_expected_exit_code_for_build(case_directory, run_block, case_path, "json");
         assert_eq!(
-            expected_text_exit,
-            text_run.exit_code,
-            "text exit code mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
-        );
-        assert_eq!(
-            expected_json_exit,
-            json_run.exit_code,
-            "json exit code mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
-        );
-
-        let expected_text_stdout = read_expected_text_file(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "text.stdout",
-        );
-        let expected_json_stdout = read_expected_text_file(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "json.stdout",
-        );
-        let expected_stderr = read_expected_text_file(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "stderr",
-        );
-        assert_eq!(
-            expected_text_stdout,
-            text_run.stdout,
-            "text stdout mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
-        );
-        assert_eq!(
-            expected_json_stdout,
-            json_run.stdout,
-            "json stdout mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
-        );
-        assert_eq!(
-            expected_stderr,
             text_run.stderr,
-            "text stderr mismatch for run {} ({}) in {}",
+            json_run.stderr,
+            "build stderr differs between text and json for run {} in {}",
             run_number,
-            run_block.command_line,
             case_path.display()
         );
-        assert_eq!(
-            expected_stderr,
-            json_run.stderr,
-            "json stderr mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::Text,
+            },
+            OutputValue::ExitCode(text_run.exit_code),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::Json,
+            },
+            OutputValue::ExitCode(json_run.exit_code),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputValue::ExitCode(text_run.exit_code),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Text,
+            },
+            OutputValue::Text(text_run.stdout),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Json,
+            },
+            OutputValue::Text(json_run.stdout),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputValue::Text(text_run.stderr),
         );
     } else {
         let run_result = execute_command(
             compiler,
-            &prepared_command_args,
+            prepared_command_args,
             None,
             working_input_directory,
             run_output_directory,
             case_path,
             run_number,
         );
-        let expected_exit = read_expected_exit_code(case_directory, run_block, case_path);
-        assert_eq!(
-            expected_exit,
-            run_result.exit_code,
-            "exit code mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputValue::ExitCode(run_result.exit_code),
         );
-        let expected_stdout = read_expected_text_file(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "stdout",
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::None,
+            },
+            OutputValue::Text(run_result.stdout),
         );
-        assert_eq!(
-            expected_stdout,
-            run_result.stdout,
-            "stdout mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
-        );
-        let expected_stderr = read_expected_text_file(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
-            "stderr",
-        );
-        assert_eq!(
-            expected_stderr,
-            run_result.stderr,
-            "stderr mismatch for run {} ({}) in {}",
-            run_number,
-            run_block.command_line,
-            case_path.display()
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputValue::Text(run_result.stderr),
         );
     }
 
-    if run_command_name == "build" || run_command_name == "run" {
-        let expected_artifacts = read_expected_artifact_lines(
-            case_directory,
-            run_block,
-            case_path,
-            run_output_directory,
-            working_input_directory,
-            run_number,
+    if run_command_has_artifacts(run_command) {
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Artifacts,
+                format: OutputFormat::None,
+            },
+            OutputValue::ArtifactPaths(collect_artifact_paths(run_output_directory)),
         );
-        let actual_artifacts = collect_artifact_paths(run_output_directory);
-        assert_eq!(
-            expected_artifacts,
-            actual_artifacts,
-            "artifact list mismatch for run {} ({}) in {}",
+    }
+
+    RunActual {
+        value_by_output_key,
+    }
+}
+
+fn run_command_has_artifacts(run_command: RunCommand) -> bool {
+    run_command == RunCommand::Build || run_command == RunCommand::Run
+}
+
+fn output_keys_for_check(run_command: RunCommand) -> Vec<OutputKey> {
+    match run_command {
+        RunCommand::Build => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::Json,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Json,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Artifacts,
+                format: OutputFormat::None,
+            },
+        ],
+        RunCommand::Run => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Artifacts,
+                format: OutputFormat::None,
+            },
+        ],
+        RunCommand::Fix => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+        ],
+    }
+}
+
+fn output_keys_for_update(run_command: RunCommand) -> Vec<OutputKey> {
+    match run_command {
+        RunCommand::Build => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::Json,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Artifacts,
+                format: OutputFormat::None,
+            },
+        ],
+        RunCommand::Run => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Artifacts,
+                format: OutputFormat::None,
+            },
+        ],
+        RunCommand::Fix => vec![
+            OutputKey {
+                kind: OutputKind::Exit,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stdout,
+                format: OutputFormat::None,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::None,
+            },
+        ],
+    }
+}
+
+fn assert_expected_outputs_match(
+    case_directory: &Path,
+    case_path: &Path,
+    working_input_directory: &Path,
+    run_output_directory: &Path,
+    run_block: &RunBlock,
+    run_number: usize,
+    run_command: RunCommand,
+    run_actual: &RunActual,
+) {
+    for output_key in output_keys_for_check(run_command) {
+        let actual_output_value = actual_output_value_for_key(run_actual, output_key);
+        match output_key.kind {
+            OutputKind::Exit => {
+                let expected_exit = if run_command == RunCommand::Build
+                    && output_key.format != OutputFormat::None
+                {
+                    read_expected_exit_code_for_build(
+                        case_directory,
+                        run_block,
+                        case_path,
+                        output_format_suffix(output_key.format),
+                    )
+                } else {
+                    read_expected_exit_code(case_directory, run_block, case_path)
+                };
+                assert_output_value_matches_exit(
+                    output_key,
+                    expected_exit,
+                    actual_output_value,
+                    run_number,
+                    run_block,
+                    case_path,
+                );
+            }
+            OutputKind::Stdout | OutputKind::Stderr => {
+                let expected_text = read_expected_text_file(
+                    case_directory,
+                    run_block,
+                    case_path,
+                    run_output_directory,
+                    working_input_directory,
+                    run_number,
+                    output_suffix_for_key(output_key),
+                );
+                assert_output_value_matches_text(
+                    output_key,
+                    &expected_text,
+                    actual_output_value,
+                    run_number,
+                    run_block,
+                    case_path,
+                );
+            }
+            OutputKind::Artifacts => {
+                let expected_artifact_paths = read_expected_artifact_lines(
+                    case_directory,
+                    run_block,
+                    case_path,
+                    run_output_directory,
+                    working_input_directory,
+                    run_number,
+                );
+                assert_output_value_matches_artifacts(
+                    &expected_artifact_paths,
+                    actual_output_value,
+                    run_number,
+                    run_block,
+                    case_path,
+                );
+            }
+        }
+    }
+}
+
+fn assert_output_value_matches_exit(
+    output_key: OutputKey,
+    expected_exit: i32,
+    actual_output_value: &OutputValue,
+    run_number: usize,
+    run_block: &RunBlock,
+    case_path: &Path,
+) {
+    let OutputValue::ExitCode(actual_exit) = actual_output_value else {
+        panic!(
+            "internal error: expected exit output value for {:?} in run {} ({}) in {}",
+            output_key,
             run_number,
             run_block.command_line,
             case_path.display()
-        );
+        )
+    };
+    assert_eq!(
+        expected_exit,
+        *actual_exit,
+        "{} mismatch for run {} ({}) in {}",
+        output_key_label(output_key),
+        run_number,
+        run_block.command_line,
+        case_path.display()
+    );
+}
+
+fn assert_output_value_matches_text(
+    output_key: OutputKey,
+    expected_text: &str,
+    actual_output_value: &OutputValue,
+    run_number: usize,
+    run_block: &RunBlock,
+    case_path: &Path,
+) {
+    let OutputValue::Text(actual_text) = actual_output_value else {
+        panic!(
+            "internal error: expected text output value for {:?} in run {} ({}) in {}",
+            output_key,
+            run_number,
+            run_block.command_line,
+            case_path.display()
+        )
+    };
+    assert_eq!(
+        expected_text,
+        actual_text,
+        "{} mismatch for run {} ({}) in {}",
+        output_key_label(output_key),
+        run_number,
+        run_block.command_line,
+        case_path.display()
+    );
+}
+
+fn assert_output_value_matches_artifacts(
+    expected_artifact_paths: &[String],
+    actual_output_value: &OutputValue,
+    run_number: usize,
+    run_block: &RunBlock,
+    case_path: &Path,
+) {
+    let OutputValue::ArtifactPaths(actual_artifact_paths) = actual_output_value else {
+        panic!(
+            "internal error: expected artifact output value in run {} ({}) in {}",
+            run_number,
+            run_block.command_line,
+            case_path.display()
+        )
+    };
+    assert_eq!(
+        expected_artifact_paths,
+        actual_artifact_paths,
+        "artifact list mismatch for run {} ({}) in {}",
+        run_number,
+        run_block.command_line,
+        case_path.display()
+    );
+}
+
+fn update_expected_outputs(
+    source_case_directory: &Path,
+    case_path: &Path,
+    working_input_directory: &Path,
+    run_output_directory: &Path,
+    run_block: &RunBlock,
+    run_command: RunCommand,
+    run_actual: &RunActual,
+) {
+    for output_key in output_keys_for_update(run_command) {
+        let actual_output_value = actual_output_value_for_key(run_actual, output_key);
+        match actual_output_value {
+            OutputValue::ExitCode(exit_code) => {
+                write_expected_exit_file(
+                    source_case_directory,
+                    run_block,
+                    case_path,
+                    output_suffix_for_key(output_key),
+                    *exit_code,
+                );
+            }
+            OutputValue::Text(text) => {
+                let normalized_output = normalize_output_for_snapshot(
+                    text,
+                    run_output_directory,
+                    working_input_directory,
+                );
+                write_expected_text_file(
+                    source_case_directory,
+                    run_block,
+                    case_path,
+                    output_suffix_for_key(output_key),
+                    &normalized_output,
+                );
+            }
+            OutputValue::ArtifactPaths(artifact_paths) => {
+                let artifact_placeholders =
+                    collect_artifact_placeholders(artifact_paths, run_output_directory);
+                write_expected_artifacts_file(
+                    source_case_directory,
+                    run_block,
+                    case_path,
+                    &artifact_placeholders,
+                );
+            }
+        }
     }
+}
+
+fn output_suffix_for_key(output_key: OutputKey) -> &'static str {
+    match (output_key.kind, output_key.format) {
+        (OutputKind::Exit, OutputFormat::None) => "exit",
+        (OutputKind::Exit, OutputFormat::Text) => "text.exit",
+        (OutputKind::Exit, OutputFormat::Json) => "json.exit",
+        (OutputKind::Stdout, OutputFormat::None) => "stdout",
+        (OutputKind::Stdout, OutputFormat::Text) => "text.stdout",
+        (OutputKind::Stdout, OutputFormat::Json) => "json.stdout",
+        (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Artifacts, OutputFormat::None) => "artifacts",
+        _ => panic!("invalid output key combination for expectation suffix: {output_key:?}"),
+    }
+}
+
+fn output_key_label(output_key: OutputKey) -> &'static str {
+    match (output_key.kind, output_key.format) {
+        (OutputKind::Exit, OutputFormat::None) => "exit",
+        (OutputKind::Exit, OutputFormat::Text) => "text exit code",
+        (OutputKind::Exit, OutputFormat::Json) => "json exit code",
+        (OutputKind::Stdout, OutputFormat::None) => "stdout",
+        (OutputKind::Stdout, OutputFormat::Text) => "text stdout",
+        (OutputKind::Stdout, OutputFormat::Json) => "json stdout",
+        (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Artifacts, OutputFormat::None) => "artifact list",
+        _ => "output",
+    }
+}
+
+fn output_format_suffix(output_format: OutputFormat) -> &'static str {
+    match output_format {
+        OutputFormat::Text => "text",
+        OutputFormat::Json => "json",
+        OutputFormat::None => {
+            panic!("output format suffix is only valid for text/json formats")
+        }
+    }
+}
+
+fn actual_output_value_for_key(run_actual: &RunActual, output_key: OutputKey) -> &OutputValue {
+    run_actual
+        .value_by_output_key
+        .get(&output_key)
+        .unwrap_or_else(|| panic!("missing actual output value for key {output_key:?}"))
 }
 
 struct ExecutedCommand {
@@ -478,17 +919,6 @@ fn parse_command_tokens(command_line: &str) -> Vec<String> {
         .collect()
 }
 
-fn prepare_command_args_for_execution(command_args: &[String]) -> Vec<String> {
-    let command_name = command_args[0].as_str();
-    if command_name != "build" && command_name != "run" {
-        return command_args.to_vec();
-    }
-    let mut prepared = command_args.to_vec();
-    prepared.push("--output-dir".to_string());
-    prepared.push("${TMP_OUTPUT_DIR}".to_string());
-    prepared
-}
-
 fn read_expected_text_file(
     case_directory: &Path,
     run_block: &RunBlock,
@@ -616,6 +1046,67 @@ fn expectation_relative_path(expectation_stem: &str, expected_suffix: &str) -> P
     PathBuf::from("expect").join(format!("{expectation_stem}.{expected_suffix}"))
 }
 
+fn write_expected_text_file(
+    source_case_directory: &Path,
+    run_block: &RunBlock,
+    case_path: &Path,
+    expected_suffix: &str,
+    content: &str,
+) {
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, expected_suffix);
+    let full_path = source_case_directory.join(&relative_path);
+    write_snapshot_fixture_file_if_changed(&full_path, format!("{content}\n"), case_path);
+}
+
+fn write_expected_exit_file(
+    source_case_directory: &Path,
+    run_block: &RunBlock,
+    case_path: &Path,
+    expected_suffix: &str,
+    exit_code: i32,
+) {
+    write_expected_text_file(
+        source_case_directory,
+        run_block,
+        case_path,
+        expected_suffix,
+        &exit_code.to_string(),
+    );
+}
+
+fn write_expected_artifacts_file(
+    source_case_directory: &Path,
+    run_block: &RunBlock,
+    case_path: &Path,
+    artifact_paths: &[String],
+) {
+    let relative_path = expectation_relative_path(&run_block.expectation_stem, "artifacts");
+    let full_path = source_case_directory.join(&relative_path);
+    let content = if artifact_paths.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", artifact_paths.join("\n"))
+    };
+    write_snapshot_fixture_file_if_changed(&full_path, content, case_path);
+}
+
+fn collect_artifact_placeholders(
+    artifact_paths: &[String],
+    run_output_directory: &Path,
+) -> Vec<String> {
+    let mut artifact_placeholders = Vec::new();
+    for artifact_path in artifact_paths {
+        let relative_path = Path::new(artifact_path)
+            .strip_prefix(run_output_directory)
+            .unwrap();
+        artifact_placeholders.push(format!(
+            "${{TMP_OUTPUT_DIR}}/{}",
+            relative_path.to_string_lossy()
+        ));
+    }
+    artifact_placeholders
+}
+
 fn collect_artifact_paths(directory: &Path) -> Vec<String> {
     let mut artifacts = Vec::new();
     if let Ok(entries) = fs::read_dir(directory) {
@@ -664,6 +1155,77 @@ fn substitute_placeholders(
             "${INPUT_DIR}",
             working_input_directory.to_string_lossy().as_ref(),
         )
+}
+
+fn normalize_output_for_snapshot(
+    value: &str,
+    run_output_directory: &Path,
+    working_input_directory: &Path,
+) -> String {
+    value
+        .replace(
+            run_output_directory.to_string_lossy().as_ref(),
+            "${TMP_OUTPUT_DIR}",
+        )
+        .replace(
+            working_input_directory.to_string_lossy().as_ref(),
+            "${INPUT_DIR}",
+        )
+}
+
+fn assert_valid_case_contract_readme(case_directory: &Path, case_path: &Path) {
+    let readme_path = case_directory.join("README.md");
+    assert!(
+        readme_path.is_file(),
+        "missing README.md for unified case {}",
+        case_path.display()
+    );
+    let readme_contents = fs::read_to_string(&readme_path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read README.md for unified case {}: {error}",
+            case_path.display()
+        )
+    });
+    let readme_lines = readme_contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    assert!(
+        !readme_lines.is_empty(),
+        "README.md must contain exactly one sentence for unified case {}",
+        case_path.display()
+    );
+    assert!(
+        readme_lines.len() == 1,
+        "README.md must contain exactly one non-empty line for unified case {}",
+        case_path.display()
+    );
+    let sentence = readme_lines[0];
+    assert!(
+        !sentence.starts_with('#')
+            && !sentence.starts_with('-')
+            && !sentence.starts_with('*')
+            && !sentence.starts_with("```")
+            && !sentence
+                .chars()
+                .next()
+                .is_some_and(|character| character.is_ascii_digit())
+            && !sentence.contains('`'),
+        "README.md must contain a plain one-sentence contract (no headings/lists/code) for unified case {}",
+        case_path.display()
+    );
+    assert!(
+        sentence.ends_with('.'),
+        "README.md contract sentence must end with '.' for unified case {}",
+        case_path.display()
+    );
+    let sentence_without_period = sentence.strip_suffix('.').unwrap();
+    assert!(
+        !sentence_without_period.contains('.'),
+        "README.md must contain exactly one sentence for unified case {}",
+        case_path.display()
+    );
 }
 
 fn normalize_process_output(value: &str) -> String {
