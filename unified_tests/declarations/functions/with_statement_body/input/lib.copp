@@ -1,0 +1,7 @@
+function normalized(value: int64) -> int64 {
+    mut current := value
+    if current < 0 {
+        current = 0
+    }
+    return current
+}

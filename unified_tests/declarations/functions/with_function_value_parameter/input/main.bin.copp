@@ -1,0 +1,12 @@
+function apply(value: int64, mapper: function(int64) -> int64) -> int64 {
+    return mapper(value)
+}
+
+function plusOne(value: int64) -> int64 {
+    return value + 1
+}
+
+function main() -> nil {
+    print(string(apply(7, plusOne)))
+    return nil
+}

@@ -1,0 +1,7 @@
+type Ranked :: interface {
+    function rank(self) -> int64,
+}
+
+function keep[T: Ranked](value: T) -> T {
+    return value
+}

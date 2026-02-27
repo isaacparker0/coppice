@@ -1,0 +1,7 @@
+function foo() -> int64 {
+    return 1
+}
+
+function foo() -> int64 {
+    return 2
+}

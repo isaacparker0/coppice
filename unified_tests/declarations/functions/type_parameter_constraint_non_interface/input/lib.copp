@@ -1,0 +1,3 @@
+function identityConstrained[T: int64](value: T) -> T {
+    return value
+}

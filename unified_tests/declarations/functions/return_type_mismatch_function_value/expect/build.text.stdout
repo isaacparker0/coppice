@@ -1,0 +1,3 @@
+lib.copp:2:12: error: return type mismatch: expected int64, got function(string) -> never
+      return abort
+             ^

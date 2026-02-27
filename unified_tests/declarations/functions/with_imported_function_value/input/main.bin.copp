@@ -1,0 +1,10 @@
+import workspace/lib { plusTwo }
+
+function apply(value: int64, mapper: function(int64) -> int64) -> int64 {
+    return mapper(value)
+}
+
+function main() -> nil {
+    print(string(apply(7, plusTwo)))
+    return nil
+}
