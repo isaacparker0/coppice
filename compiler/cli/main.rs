@@ -143,33 +143,32 @@ fn run_build(
 ) {
     let build_result =
         build_target_with_workspace_root(path, workspace_root, output_directory, strict);
-    if matches!(
-        build_result.autofix_policy_outcome,
-        Some(AutofixPolicyOutcome::WarnInNonStrictMode { .. })
-    ) {
+    let safe_autofixes_by_path = safe_fix_summaries_from_edit_counts(
+        &build_result.safe_autofix_edit_count_by_workspace_relative_path,
+    );
+    let has_pending_safe_autofixes = !safe_autofixes_by_path.is_empty();
+    if report_format == ReportFormat::Text && !strict && has_pending_safe_autofixes {
         render_safe_fix_warning();
     }
 
     match build_result.build {
         Ok(()) => {
             if let Some(analysis_result) = build_result.analysis_result {
-                let safe_fixes = safe_fix_summaries_from_edit_counts(
-                    &analysis_result.safe_autofix_edit_count_by_workspace_relative_path,
-                );
                 let has_diagnostics = !analysis_result.diagnostics.is_empty();
-                let strict_policy_failure = matches!(
-                    build_result.autofix_policy_outcome,
-                    Some(AutofixPolicyOutcome::FailInStrictMode { .. })
-                ) && !has_diagnostics;
+                let strict_policy_failure =
+                    strict && has_pending_safe_autofixes && !has_diagnostics;
                 let strict_policy_error = strict_policy_failure.then(|| CompilerFailure {
                     kind: CompilerFailureKind::BuildFailed,
                     message: "build failed due to pending safe autofixes".to_string(),
                     path: Some(path.to_string()),
-                    details: safe_fixes
+                    details: safe_autofixes_by_path
                         .iter()
-                        .map(|safe_fix| compiler__reports::CompilerFailureDetail {
-                            message: format!("{} pending safe autofix edits", safe_fix.edit_count),
-                            path: Some(safe_fix.path.clone()),
+                        .map(|safe_autofix| compiler__reports::CompilerFailureDetail {
+                            message: format!(
+                                "{} pending safe autofix edits",
+                                safe_autofix.edit_count
+                            ),
+                            path: Some(safe_autofix.path.clone()),
                         })
                         .collect(),
                 });
@@ -190,8 +189,8 @@ fn run_build(
                     ReportFormat::Json => {
                         let output = CompilerCheckJsonOutput {
                             ok: !has_diagnostics && !strict_policy_failure,
-                            diagnostics: analysis_result.diagnostics.clone(),
-                            safe_fixes,
+                            diagnostics: analysis_result.diagnostics,
+                            safe_fixes: safe_autofixes_by_path,
                             error: strict_policy_error,
                         };
                         println!("{}", serde_json::to_string_pretty(&output).unwrap());
@@ -211,7 +210,7 @@ fn run_build(
                     let output = CompilerCheckJsonOutput {
                         ok: true,
                         diagnostics: Vec::new(),
-                        safe_fixes: Vec::new(),
+                        safe_fixes: safe_autofixes_by_path,
                         error: None,
                     };
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());
@@ -227,7 +226,7 @@ fn run_build(
                     let output = CompilerCheckJsonOutput {
                         ok: false,
                         diagnostics: Vec::new(),
-                        safe_fixes: Vec::new(),
+                        safe_fixes: safe_autofixes_by_path,
                         error: Some(error),
                     };
                     println!("{}", serde_json::to_string_pretty(&output).unwrap());

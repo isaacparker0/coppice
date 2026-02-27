@@ -21,6 +21,7 @@ pub struct BuildTargetResult {
     pub autofix_policy_outcome: Option<AutofixPolicyOutcome>,
     pub executable_path: Option<String>,
     pub success_message: Option<String>,
+    pub safe_autofix_edit_count_by_workspace_relative_path: BTreeMap<String, usize>,
     pub analysis_result: Option<BuildAnalysisResult>,
     pub build: Result<(), CompilerFailure>,
 }
@@ -28,7 +29,6 @@ pub struct BuildTargetResult {
 pub struct BuildAnalysisResult {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub source_by_path: BTreeMap<String, String>,
-    pub safe_autofix_edit_count_by_workspace_relative_path: BTreeMap<String, usize>,
 }
 
 #[must_use]
@@ -46,6 +46,7 @@ pub fn build_target_with_workspace_root(
                     autofix_policy_outcome: None,
                     executable_path: None,
                     success_message: None,
+                    safe_autofix_edit_count_by_workspace_relative_path: BTreeMap::new(),
                     analysis_result: None,
                     build: Err(error),
                 };
@@ -70,6 +71,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(build_failed_from_pending_safe_autofixes(
                 &safe_autofix_edit_count_by_workspace_relative_path,
@@ -92,6 +95,8 @@ pub fn build_target_with_workspace_root(
                     autofix_policy_outcome: Some(autofix_policy_outcome),
                     executable_path: None,
                     success_message: None,
+                    safe_autofix_edit_count_by_workspace_relative_path:
+                        safe_autofix_edit_count_by_workspace_relative_path.clone(),
                     analysis_result: None,
                     build: Err(error),
                 };
@@ -114,11 +119,11 @@ pub fn build_target_with_workspace_root(
                 "analysis succeeded; package/library/test artifact generation is not implemented yet"
                     .to_string(),
             ),
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: Some(BuildAnalysisResult {
                 diagnostics: analyzed_target.diagnostics,
                 source_by_path: analyzed_target.source_by_path,
-                safe_autofix_edit_count_by_workspace_relative_path:
-                    safe_autofix_edit_count_by_workspace_relative_path.clone(),
             }),
             build: Ok(()),
         };
@@ -128,6 +133,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(build_failed_from_rendered_diagnostics(
                 &analyzed_target.diagnostics,
@@ -142,6 +149,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -158,6 +167,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -187,6 +198,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(build_failed_from_rendered_diagnostics(
                 &reachable_diagnostics,
@@ -219,6 +232,8 @@ pub fn build_target_with_workspace_root(
             autofix_policy_outcome: Some(autofix_policy_outcome),
             executable_path: None,
             success_message: None,
+            safe_autofix_edit_count_by_workspace_relative_path:
+                safe_autofix_edit_count_by_workspace_relative_path.clone(),
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -259,6 +274,8 @@ pub fn build_target_with_workspace_root(
                 autofix_policy_outcome: Some(autofix_policy_outcome),
                 executable_path: None,
                 success_message: None,
+                safe_autofix_edit_count_by_workspace_relative_path:
+                    safe_autofix_edit_count_by_workspace_relative_path.clone(),
                 analysis_result: None,
                 build: Err(error),
             };
@@ -275,6 +292,8 @@ pub fn build_target_with_workspace_root(
                 autofix_policy_outcome: Some(autofix_policy_outcome),
                 executable_path: None,
                 success_message: None,
+                safe_autofix_edit_count_by_workspace_relative_path:
+                    safe_autofix_edit_count_by_workspace_relative_path.clone(),
                 analysis_result: None,
                 build: Err(error),
             };
@@ -285,6 +304,7 @@ pub fn build_target_with_workspace_root(
         autofix_policy_outcome: Some(autofix_policy_outcome),
         executable_path: Some(display_path(&built_program.binary_path)),
         success_message: None,
+        safe_autofix_edit_count_by_workspace_relative_path,
         analysis_result: None,
         build: Ok(()),
     }
@@ -312,6 +332,8 @@ pub fn run_target_with_workspace_root(
         autofix_policy_outcome,
         executable_path,
         success_message: _success_message,
+        safe_autofix_edit_count_by_workspace_relative_path:
+            _safe_autofix_edit_count_by_workspace_relative_path,
         analysis_result: _analysis_result,
         build,
     } = built_result;
