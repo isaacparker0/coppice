@@ -13,6 +13,5 @@ rust_library(
         "//compiler/reports",
         "//compiler/source",
         "//compiler/visibility",
-        "//compiler/workspace",
     ],
 )

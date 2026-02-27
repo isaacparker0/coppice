@@ -997,10 +997,9 @@ Built into the compiler, not a separate tool.
 
 ### Build Modes
 
-- `coppice build .` — strict build mode. Rejects pending safe autofixes and
-  diagnostics. Used in CI.
-- `coppice build --strict=false .` — non-strict build mode. Reports pending safe
-  autofixes as warnings.
+- `coppice build .` — non-strict by default, reports pending safe autofixes as
+  warnings.
+- `coppice build --strict .` — strict mode, rejects pending safe autofixes.
 - `.bin.copp` targets run artifact-producing build behavior.
 - Non-entrypoint targets currently run analysis-only build behavior; artifact
   generation for package/library/test targets is TODO.
