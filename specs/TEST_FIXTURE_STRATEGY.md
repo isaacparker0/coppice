@@ -40,14 +40,14 @@ The unified model provides three concrete benefits:
    `run`, `fix`), avoiding suite-specific drift.
 2. One scenario can assert multiple command behaviors when that overlap is
    meaningful, avoiding duplicated fixture setup.
-3. Coverage is organized by language/domain scenario (`<area>/<feature>/<case>`)
-   rather than fragmented by command suites.
+3. Coverage is organized by contract scenario (`<feature>/<case>`) rather than
+   fragmented by command suites.
 
 ## Execution Plan
 
 Use a parallel pilot root first, then migrate after validation.
 
-1. Pilot root: `unified_tests/<area>/<feature>/<case>/`
+1. Pilot root: `unified_tests/<feature>/<case>/`
 2. Existing suites remain unchanged during pilot.
 3. Evaluate fixture authoring/review ergonomics on real cases.
 4. After format confirmation, migrate all cases and retire legacy suite split.
@@ -58,13 +58,20 @@ Use a parallel pilot root first, then migrate after validation.
 
 Unified fixture layout:
 
-`<root>/<area>/<feature>/<case>/`
+`<root>/<feature>/<case>/`
 
 Keep the same shared hierarchy semantics:
 
-1. `<area>` = subsystem boundary
-2. `<feature>` = feature family
-3. `<case>` = single scenario
+1. `<feature>` = coherent contract family
+2. `<case>` = single scenario
+
+`<feature>` is not limited to language constructs. It may represent language
+features (for example `functions`, `methods`, `control_flow`) or non-language
+capability families (for example `build_pipeline`, `fix`, `workspace_root`).
+
+Top-level organization must not split by command (`build`/`run`/`fix`). Command
+selection belongs in `case.test`, while path placement is owned by the
+scenario's primary contract family.
 
 ### 2) Case naming
 
