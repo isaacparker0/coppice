@@ -203,9 +203,7 @@ fn run_build(
             }
 
             match report_format {
-                ReportFormat::Text => {
-                    // Binary builds are silent on success.
-                }
+                ReportFormat::Text => {}
                 ReportFormat::Json => {
                     let output = CompilerCheckJsonOutput {
                         ok: true,
