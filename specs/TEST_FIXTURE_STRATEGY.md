@@ -9,8 +9,8 @@ Current pain points:
 1. Passing behavior is often packed into `minimal_valid`, which hides intent.
 2. It is hard to tell why a line exists, what contract it protects, and whether
    coverage is redundant.
-3. Frontend diagnostics are shared across `check`/`build`/`run`, which makes
-   ownership unclear and causes repeated snapshots.
+3. Shared behavior across commands can create duplicated snapshots when command
+   ownership is unclear.
 4. We need one consistent runner API and fixture shape, not ad hoc command-
    specific formats.
 
@@ -21,17 +21,36 @@ Current pain points:
 2. Encode outcomes in case names (`*_valid`, `*_fails`, `*_blocks`):
    - readable in isolation, but couples names to compiler behavior instead of
      input scenario facts.
-3. Split everything by command suite (`tests/check`, `tests/build`,
-   `tests/run`):
+3. Split everything by command suite:
    - cleaner than old split, but still duplicates shared scenario setup and
      encourages drift between command trees.
-4. Run `check`/`build`/`run` for every case:
+4. Run every command for every case:
    - over-constrained, noisy, and redundant for many invalid/pure-command cases.
-5. Unified fixture pool + explicit per-case run entries + command-scoped
-   assertion policy:
+5. Unified fixture pool + explicit per-case runs + command-scoped assertion
+   policy:
    - single API, explicit command intent, minimal duplication.
 
 Selected direction: option 5.
+
+## Why Unified
+
+The unified model provides three concrete benefits:
+
+1. One fixture format and one harness API for all command contracts (`build`,
+   `run`, `fix`), avoiding suite-specific drift.
+2. One scenario can assert multiple command behaviors when that overlap is
+   meaningful, avoiding duplicated fixture setup.
+3. Coverage is organized by language/domain scenario (`<area>/<feature>/<case>`)
+   rather than fragmented by command suites.
+
+## Execution Plan
+
+Use a parallel pilot root first, then migrate after validation.
+
+1. Pilot root: `unified_tests/<area>/<feature>/<case>/`
+2. Existing suites remain unchanged during pilot.
+3. Evaluate fixture authoring/review ergonomics on real cases.
+4. After format confirmation, migrate all cases and retire legacy suite split.
 
 ## Conventions
 
@@ -39,7 +58,7 @@ Selected direction: option 5.
 
 Unified fixture layout:
 
-`tests/<area>/<feature>/<case>/`
+`<root>/<area>/<feature>/<case>/`
 
 Keep the same shared hierarchy semantics:
 
@@ -80,13 +99,24 @@ Each behavior should have one primary ownership location.
 
 Command ownership is by run type within the unified fixture pool:
 
-1. `check` runs own full diagnostics/reporting contract.
-2. `build` runs own build-path contracts (target validation, dependency closure,
-   artifacts, strict gating outcome).
-3. `run` runs own runtime/output/exit contracts plus run-path gating outcome.
+1. `build` runs own diagnostics/reporting contract and build-path contracts
+   (target validation, dependency closure, artifacts, strict gating outcome).
+2. `run` runs own runtime/output/exit contracts plus run-path gating outcome.
+3. `fix` runs own source-rewrite contract.
 
 If a case intentionally overlaps behavior owned elsewhere, the case `README.md`
 must explicitly reference the owning path.
+
+### 6) Case shape defaults
+
+Choose the smallest natural input shape for the scenario.
+
+1. Default to library/package-shaped fixtures for declaration/type/package
+   contracts that do not require executable behavior.
+2. Use binary-entrypoint-shaped fixtures when runtime execution is part of the
+   contract.
+3. Do not add binary scaffolding to purely library/package scenarios only to
+   force run coverage.
 
 ## Shared Harness
 
@@ -103,89 +133,92 @@ One runner executes all cases and all declared runs.
 
 ## Fixture Format Decision
 
-Use file-based expectations with explicit command runs.
+Use script-style case files with literal CLI commands and adjacent assertions.
 
 Per case:
 
 1. `input/`
-2. `case.runs`
-3. `expect.build.stdout`
-4. `expect.build.stderr`
-5. `expect.build.exit`
-6. `expect.build.artifacts`
-7. `expect.run.stdout`
-8. `expect.run.stderr`
-9. `expect.run.exit`
-10. `expect.run.artifacts`
-11. `expect.check.text.stdout`
-12. `expect.check.text.stderr`
-13. `expect.check.text.exit`
-14. `expect.check.json.stdout`
-15. `expect.check.json.stderr`
-16. `expect.check.json.exit`
+2. `case.test`
+3. `expect/` payload files referenced from `case.test`
 
-`case.runs` format:
+`case.test` format:
 
-1. One run per line
-2. Literal command token (`check`/`build`/`run`) followed by args
-3. No synthetic run IDs
+1. `$ <command args...>` starts a run block
+2. `> <assertion>` lines attach expectations to that run block
+3. Large outputs live in files referenced as `@expect/...`
+4. No synthetic run IDs and no manual labels
 
-Example:
+Expected file policy:
 
-```text
-check
-build main.bin.copp
-run main.bin.copp
-```
+1. Keep a fixed expectation shape per asserted channel/field.
+2. If expected output is empty, keep the expectation file and leave it empty.
+3. Do not encode "no output" by omitting expected files.
 
 Rationale:
 
 1. Literal command runs avoid redundant command encoding and keep fixture files
    directly aligned with actual CLI invocations.
-2. File-per-expectation keeps large snapshots diff-friendly.
-3. One format works for single-run and multi-run cases without ad hoc per-
-   command fixture schemas.
+2. Script blocks avoid brittle run-id mapping logic for repeated command types.
+3. Referenced payload files keep large snapshots diff-friendly.
 
 Why this is needed:
 
-1. `check` diagnostics are shared frontend behavior and should be snapshotted
-   once in their owning run type, not duplicated under `build`/`run`.
-2. `build`/`run` still need command-level coverage, but usually not full
-   diagnostic snapshot duplication.
-3. A single runner API keeps command additions (for example `fix`, `lsp`) from
-   creating fragmented fixture systems.
+1. `build` now owns diagnostics/reporting.
+2. `run` and `fix` need different assertion shapes while keeping one case model.
+3. A single runner API keeps command additions (for example `lsp`) from creating
+   fragmented fixture systems.
 
 ## Assertion Policy by Run Command
 
-1. `check` run:
-   - must verify both text and json diagnostic outputs.
-   - each mode must assert actual command output channels (`stdout`/`stderr`)
-     and exit code.
-   - owns full diagnostics snapshot contract.
-2. `build` run:
-   - verifies build-path contract (exit/output/artifacts/failure summary).
-   - does not re-own full diagnostics snapshot contract.
-3. `run` run:
-   - verifies runtime/output/exit contract (and run-path failure summary).
-   - does not re-own full diagnostics snapshot contract.
+1. `build` run:
+   - runner executes both `--format text` and `--format json` for the same run
+     block.
+   - must assert text and json channels separately (`stdout`/`stderr`/`exit`).
+   - verifies build-path contract (artifacts/failure summary).
+   - concrete assertion keys:
+     - `text.stdout`, `text.stderr`, `text.exit`
+     - `json.stdout`, `json.stderr`, `json.exit`
+     - `artifacts` (shared once per build run)
+   - if text/json values are identical, both keys may reference the same payload
+     file/value.
+2. `run` run:
+   - verifies runtime/output/exit contract.
+   - for build-phase failure paths, verifies human-readable diagnostic output.
+3. `fix` run:
+   - verifies fix command exit/output contract.
+   - verifies expected rewritten source tree contract (where asserted).
+
+Runner-owned execution details:
+
+1. `build`/`run` output directory plumbing is runner-managed to keep case files
+   clean and deterministic.
+2. Cases should not pass per-run output-directory flags in `case.test`.
+3. Strictness coverage is explicit only where mode differences are the behavior
+   under test.
+
+Run selection policy:
+
+1. Runnable happy-path scenarios generally use `run` only.
+2. Include both `build` and `run` in one case only when a build-specific
+   contract is also being asserted (for example artifacts, format/report
+   surfaces, strict/default gating).
+3. Use build-only for non-runnable scenarios.
+4. Use strict mode by default for most cases; add default/non-strict mode only
+   for scenarios where mode differences are the contract under test.
 
 Tradeoffs accepted:
 
-1. More files per case than single-manifest approaches.
-2. Some command overlap remains by design, but ownership is explicit by run
-   type.
-3. Build/run diagnostic rendering regressions rely primarily on `check`
-   coverage.
-4. `check` mode-specific expectation files add surface area, but keep channel
-   semantics explicit and faithful to actual command output.
+1. More expectation payload files than inline-manifest approaches.
+2. Build coverage includes explicit dual-format assertions by design.
+3. Script parser complexity is higher than line-only command files.
 
 Alternatives considered:
 
-1. Single nested manifest (all expected outputs inline):
+1. Single nested manifest with inline output payloads:
    - fewer files, but worse large-output review ergonomics.
-2. Indexed outputs (`expect.1.*`, `expect.2.*`) or synthetic run IDs:
-   - too implicit and redundant with command tokens.
-3. Force all commands on every case:
+2. Indexed output trees (`expect.1.*`, `expect.2.*`) or synthetic run IDs:
+   - introduces mapping indirection and weak readability.
+3. Force all commands/modes on every case:
    - strict but noisy/redundant and poor signal for command-specific scenarios.
 4. Command-specific fixture trees:
    - clearer than old split, but higher duplication and drift risk.
@@ -194,11 +227,11 @@ Alternatives considered:
 
 1. This model depends on disciplined case intent docs and ownership notes; the
    runner alone cannot prevent semantic overlap.
-2. If non-`check` commands later expose stable structured report modes, this
-   policy should be revisited so those contracts are owned explicitly.
+2. If command/report surfaces change significantly, assertion profiles should be
+   revised before broad migration.
 
 ## Migration Note
 
-Case-by-case migration and rename/split recommendations are tracked in:
+Legacy case-by-case migration and rename/split recommendations are tracked in:
 
 `specs/TEST_FIXTURE_STRATEGY_SEMANTIC_MAPPING.md`

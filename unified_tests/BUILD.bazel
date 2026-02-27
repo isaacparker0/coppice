@@ -1,0 +1,13 @@
+load("//tools/bazel/macros:rust.bzl", "rust_test")
+
+rust_test(
+    name = "unified_tests_test",
+    srcs = ["unified_tests_test.rs"],
+    data = [
+        "//compiler/cli:main",
+    ] + glob(["**"]),
+    deps = [
+        "//tests/snapshot_fixture_helpers",
+        "@rules_rust//tools/runfiles",
+    ],
+)

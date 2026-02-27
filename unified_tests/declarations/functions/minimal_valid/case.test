@@ -1,0 +1,6 @@
+$ build
+> exit 0
+> text.stdout @expect/build.text.stdout
+> json.stdout @expect/build.json.stdout
+> stderr @expect/build.stderr
+> artifacts @expect/build.artifacts
