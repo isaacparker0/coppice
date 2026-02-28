@@ -690,8 +690,8 @@ impl Parser {
         if !start_text.is_empty() {
             parts.push(SyntaxStringInterpolationPart::Literal(start_text));
         }
-        let expr = self.parse_expression()?;
-        parts.push(SyntaxStringInterpolationPart::Expression(expr));
+        let expression = self.parse_expression()?;
+        parts.push(SyntaxStringInterpolationPart::Expression(expression));
         loop {
             let token = self.advance();
             match token.kind {
@@ -699,8 +699,8 @@ impl Parser {
                     if !text.is_empty() {
                         parts.push(SyntaxStringInterpolationPart::Literal(text));
                     }
-                    let expr = self.parse_expression()?;
-                    parts.push(SyntaxStringInterpolationPart::Expression(expr));
+                    let expression = self.parse_expression()?;
+                    parts.push(SyntaxStringInterpolationPart::Expression(expression));
                 }
                 TokenKind::StringInterpolationEnd(text) => {
                     if !text.is_empty() {

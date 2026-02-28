@@ -1378,10 +1378,10 @@ fn type_annotated_expression_from_semantic_expression(
                         SemanticStringInterpolationPart::Literal(text) => {
                             TypeAnnotatedStringInterpolationPart::Literal(text.clone())
                         }
-                        SemanticStringInterpolationPart::Expression(expr) => {
+                        SemanticStringInterpolationPart::Expression(expression) => {
                             TypeAnnotatedStringInterpolationPart::Expression(Box::new(
                                 type_annotated_expression_from_semantic_expression(
-                                    expr,
+                                    expression,
                                     resolved_type_by_expression_id,
                                     call_target_by_expression_id,
                                     resolved_type_argument_types_by_expression_id,
@@ -1749,9 +1749,9 @@ fn annotate_expression_nominal_references(
         }
         TypeAnnotatedExpression::StringInterpolation { parts, .. } => {
             for part in parts {
-                if let TypeAnnotatedStringInterpolationPart::Expression(expr) = part {
+                if let TypeAnnotatedStringInterpolationPart::Expression(expression) = part {
                     annotate_expression_nominal_references(
-                        expr,
+                        expression,
                         nominal_type_reference_by_local_name,
                     );
                 }

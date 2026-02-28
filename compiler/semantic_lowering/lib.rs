@@ -557,9 +557,9 @@ fn lower_expression(
                         syntax::SyntaxStringInterpolationPart::Literal(text) => {
                             semantic::SemanticStringInterpolationPart::Literal(text.clone())
                         }
-                        syntax::SyntaxStringInterpolationPart::Expression(expr) => {
+                        syntax::SyntaxStringInterpolationPart::Expression(expression) => {
                             semantic::SemanticStringInterpolationPart::Expression(lower_expression(
-                                expr, context,
+                                expression, context,
                             ))
                         }
                     })

@@ -744,9 +744,9 @@ fn lower_expression(
                             })
                         }
                     }
-                    TypeAnnotatedStringInterpolationPart::Expression(expr) => {
-                        Some(lower_expression(expr, type_parameter_names, diagnostics))
-                    }
+                    TypeAnnotatedStringInterpolationPart::Expression(expression) => Some(
+                        lower_expression(expression, type_parameter_names, diagnostics),
+                    ),
                 })
                 .collect();
             match lowered_parts.len() {
