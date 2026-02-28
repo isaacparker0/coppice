@@ -1,0 +1,14 @@
+type Direction :: enum {
+    North,
+    South,
+}
+
+function main() -> nil {
+    heading: Direction := Direction.North
+    label := match heading {
+        Direction.North => "north"
+        Direction.South => "south"
+    }
+    print(label)
+    return nil
+}

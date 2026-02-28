@@ -1,9 +1,0 @@
-type Result :: int64 | string
-
-function run() -> string {
-    value: int64 | string := "ok"
-    return match value {
-        int64 => "int"
-        s: string => s
-    }
-}

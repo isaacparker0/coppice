@@ -1,3 +1,0 @@
-function run() -> string {
-    return string(nil)
-}

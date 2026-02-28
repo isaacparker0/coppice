@@ -1,0 +1,7 @@
+function main() -> nil {
+    converted := boolean(false)
+    if not converted {
+        print("boolean pass")
+    }
+    return nil
+}

@@ -1,0 +1,6 @@
+function main() -> nil {
+    mut dynamic := "row "
+    dynamic = dynamic + string(7)
+    print(dynamic)
+    return nil
+}

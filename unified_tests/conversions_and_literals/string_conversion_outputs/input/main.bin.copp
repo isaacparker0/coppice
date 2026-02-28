@@ -1,0 +1,9 @@
+function main() -> nil {
+    print(string("ok"))
+    print(string(123))
+    print(string(-45))
+    print(string(0))
+    print(string(true))
+    print(string(nil))
+    return nil
+}

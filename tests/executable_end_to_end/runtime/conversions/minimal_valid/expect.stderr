@@ -1,4 +1,0 @@
-main.bin.copp: error: build failed due to diagnostics
-main.bin.copp: error: variable name must be camelCase (main.bin.copp:2:5)
-main.bin.copp: error: variable name must be camelCase (main.bin.copp:3:5)
-main.bin.copp: error: variable name must be camelCase (main.bin.copp:4:5)

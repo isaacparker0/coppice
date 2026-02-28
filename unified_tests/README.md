@@ -24,6 +24,13 @@ unified_tests/<feature>/<case>/
 Path ownership is scenario-first:
 
 - Place each case under the feature family that primarily owns the behavior.
+- If a case exercises multiple concerns, place it under the family that owns the
+  asserted contract, not the setup mechanism used to trigger it.
+- Use package/import families when package-boundary mechanics are the contract
+  (for example export visibility, import resolution, package wiring, or
+  transitive import behavior). Keep cases under language-feature families when
+  imports/cross-file setup are only context for asserting that feature's
+  semantics.
 
 ## Naming, Placement, And Intent
 
@@ -142,16 +149,23 @@ output-directory flags in `case.test`.
 - `fix` runs own `fix` command exit/stdout/stderr contract. Source rewrite
   assertions should be added under the same unified case model as `fix` coverage
   expands.
+- Build-owned contracts are diagnostics/reporting surfaces (text/json), artifact
+  set expectations, and build-only gating behavior for non-runnable or
+  pre-runtime failure paths.
 
 If a case intentionally overlaps behavior owned elsewhere, state that ownership
 in the case `README.md`.
 
 ## Run Selection Guidance
 
-- Use `run` for runnable happy-path runtime behavior.
+- For runnable success-path semantics, use `run` as the single default. Do not
+  add a separate build-only success smoke case unless the case asserts a
+  build-owned contract.
 - Use `build` for non-runnable analysis/build scenarios.
-- Include both `build` and `run` in one case only when the case explicitly
-  asserts both contracts.
+- If a new `run` case subsumes an existing build-only success smoke case,
+  replace the build case rather than keeping both.
+- Include both `build` and `run` in one case only when the same scenario
+  intentionally asserts both runtime behavior and a build-owned contract.
 - Use strict/default mode differences only when mode behavior is the contract
   being tested.
 

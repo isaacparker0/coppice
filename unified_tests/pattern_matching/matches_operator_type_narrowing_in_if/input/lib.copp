@@ -1,6 +1,0 @@
-function unwrapInt(value: int64 | string) -> int64 {
-    if value matches int64 {
-        return value
-    }
-    return 0
-}

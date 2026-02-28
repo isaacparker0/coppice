@@ -1,0 +1,16 @@
+type Readable :: interface {
+    function read(self) -> string,
+}
+
+type Message implements Readable :: struct {
+    text: string,
+    function read(self) -> string {
+        return self.text
+    },
+}
+
+function main() -> nil {
+    value: Readable := Message { text: "hello" }
+    print(value.read())
+    return nil
+}

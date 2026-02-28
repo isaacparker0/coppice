@@ -1,0 +1,17 @@
+function genericApplicationMatches[T](value: T | int64) -> boolean {
+    return value matches int64
+}
+
+function main() -> nil {
+    if genericApplicationMatches[string](7) {
+        print("generic app true")
+    } else {
+        print("generic app false")
+    }
+    if genericApplicationMatches[string]("oops") {
+        print("generic app true")
+    } else {
+        print("generic app false")
+    }
+    return nil
+}

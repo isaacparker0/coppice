@@ -1,0 +1,5 @@
+function main() -> nil {
+    converted := int64(7)
+    print(string(converted))
+    return nil
+}

@@ -1,0 +1,16 @@
+function identity[T](value: T) -> T {
+    return value
+}
+
+type Box[T] :: struct {
+    value: T,
+    function passthrough(self) -> T {
+        return identity(self.value)
+    },
+}
+
+function main() -> nil {
+    boxed := Box[string] { value: "method generic ok" }
+    print(boxed.passthrough())
+    return nil
+}

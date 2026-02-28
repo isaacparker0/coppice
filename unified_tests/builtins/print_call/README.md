@@ -1,1 +1,1 @@
-Builtin print calls are valid with string arguments.
+Builtin print calls emit string output lines.

@@ -1,1 +1,1 @@
-Mutable local bindings can be reassigned within function bodies.
+Mutable local bindings can be reassigned before later statements.

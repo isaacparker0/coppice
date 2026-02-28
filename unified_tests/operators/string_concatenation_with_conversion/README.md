@@ -1,1 +1,1 @@
-String concatenation can use explicit string conversion.
+String concatenation can combine dynamic string conversions.

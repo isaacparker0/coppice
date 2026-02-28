@@ -1,4 +1,0 @@
-function run() -> nil {
-    print("ok")
-    return nil
-}

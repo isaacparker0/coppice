@@ -1,5 +1,0 @@
-function update() -> int64 {
-    mut x := 1
-    x = 2
-    return x
-}
