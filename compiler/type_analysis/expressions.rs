@@ -148,7 +148,7 @@ impl TypeChecker<'_> {
                 {
                     if self.name_reference_resolves_to_value_binding(name) {
                         None
-                    } else if name == "string" || name == "int64" || name == "boolean" {
+                    } else if name == "string" {
                         if !type_arguments.is_empty() {
                             self.error(
                                 format!("builtin conversion '{name}' does not take type arguments"),
@@ -157,41 +157,16 @@ impl TypeChecker<'_> {
                         }
                         let argument_type =
                             argument_types.first().cloned().unwrap_or(Type::Unknown);
-                        let return_type = if name == "string" {
-                            if !matches!(
-                                argument_type,
-                                Type::String
-                                    | Type::Boolean
-                                    | Type::Nil
-                                    | Type::Integer64
-                                    | Type::Unknown
-                            ) {
-                                self.error(
-                                    format!("cannot convert {} to string", argument_type.display()),
-                                    arguments.first().map_or(span.clone(), ExpressionSpan::span),
-                                );
-                            }
-                            Type::String
-                        } else if name == "int64" {
-                            if !matches!(argument_type, Type::Integer64 | Type::Unknown) {
-                                self.error(
-                                    format!("cannot convert {} to int64", argument_type.display()),
-                                    arguments.first().map_or(span.clone(), ExpressionSpan::span),
-                                );
-                            }
-                            Type::Integer64
-                        } else {
-                            if !matches!(argument_type, Type::Boolean | Type::Unknown) {
-                                self.error(
-                                    format!(
-                                        "cannot convert {} to boolean",
-                                        argument_type.display()
-                                    ),
-                                    arguments.first().map_or(span.clone(), ExpressionSpan::span),
-                                );
-                            }
-                            Type::Boolean
-                        };
+                        if !matches!(
+                            argument_type,
+                            Type::Boolean | Type::Nil | Type::Integer64 | Type::Unknown
+                        ) {
+                            self.error(
+                                format!("cannot convert {} to string", argument_type.display()),
+                                arguments.first().map_or(span.clone(), ExpressionSpan::span),
+                            );
+                        }
+                        let return_type = Type::String;
                         let resolved_target = ResolvedCallTarget {
                             display_name: name.clone(),
                             parameter_types: vec![argument_type],

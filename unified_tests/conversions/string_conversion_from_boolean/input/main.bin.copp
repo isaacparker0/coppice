@@ -1,0 +1,5 @@
+function main() -> nil {
+    print(string(true))
+    print(string(false))
+    return nil
+}

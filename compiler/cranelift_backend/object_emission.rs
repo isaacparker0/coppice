@@ -2148,7 +2148,7 @@ fn compile_builtin_conversion_call(
     function_name: &str,
     arguments: &[ExecutableExpression],
 ) -> Result<Option<TypedValue>, CompilerFailure> {
-    if function_name != "string" && function_name != "int64" && function_name != "boolean" {
+    if function_name != "string" {
         return Ok(None);
     }
     if arguments.len() != 1 {
@@ -2165,11 +2165,6 @@ fn compile_builtin_conversion_call(
 
     let converted = match function_name {
         "string" => match &argument.type_reference {
-            ExecutableTypeReference::String => TypedValue {
-                value: argument.value,
-                type_reference: ExecutableTypeReference::String,
-                terminates: false,
-            },
             ExecutableTypeReference::Int64 => {
                 let value = argument.value.ok_or_else(|| {
                     build_failed(
@@ -2216,38 +2211,6 @@ fn compile_builtin_conversion_call(
                 ));
             }
         },
-        "int64" => {
-            if argument.type_reference != ExecutableTypeReference::Int64 {
-                return Err(build_failed(
-                    format!(
-                        "cannot convert {} to int64",
-                        type_reference_display(&argument.type_reference)
-                    ),
-                    None,
-                ));
-            }
-            TypedValue {
-                value: argument.value,
-                type_reference: ExecutableTypeReference::Int64,
-                terminates: false,
-            }
-        }
-        "boolean" => {
-            if argument.type_reference != ExecutableTypeReference::Boolean {
-                return Err(build_failed(
-                    format!(
-                        "cannot convert {} to boolean",
-                        type_reference_display(&argument.type_reference)
-                    ),
-                    None,
-                ));
-            }
-            TypedValue {
-                value: argument.value,
-                type_reference: ExecutableTypeReference::Boolean,
-                terminates: false,
-            }
-        }
         _ => {
             return Ok(None);
         }
