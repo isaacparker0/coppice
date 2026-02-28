@@ -1,1 +1,2 @@
-String interpolation with only an expression and no literal text.
+String interpolation can contain only an expression with no surrounding literal
+text.

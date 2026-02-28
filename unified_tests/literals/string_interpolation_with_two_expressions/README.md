@@ -1,1 +1,1 @@
-String interpolation with multiple expressions.
+String interpolation can substitute multiple expressions into a single string.

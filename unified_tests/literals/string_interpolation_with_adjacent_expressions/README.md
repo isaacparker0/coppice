@@ -1,1 +1,2 @@
-String interpolation with adjacent expressions and no literal text between them.
+String interpolation supports adjacent expressions with no literal text between
+them.

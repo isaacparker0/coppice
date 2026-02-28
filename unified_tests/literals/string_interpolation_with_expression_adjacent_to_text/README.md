@@ -1,1 +1,2 @@
-String interpolation with an expression adjacent to literal text.
+String interpolation correctly concatenates expressions adjacent to literal
+text.
