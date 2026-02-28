@@ -1,0 +1,4 @@
+function demo() -> int64 {
+    requestCount := 1
+    return requestCount
+}

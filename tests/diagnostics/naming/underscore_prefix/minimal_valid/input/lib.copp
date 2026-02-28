@@ -1,4 +1,0 @@
-function demo(_unused: int64) -> int64 {
-    _ := 1
-    return 0
-}

@@ -40,6 +40,8 @@ Path ownership is scenario-first:
 - Do not encode command choice in case names (`build`, `run`, `fix`, `runtime`)
   unless command-phase behavior is itself the contract being tested.
 - Prefer scenario-first names (`list_index_assignment_out_of_range`).
+- Prefer a consistent slug shape: `subject_rule_variant` (for example
+  `variable_name_not_camel_case`, `variable_name_double_underscore`).
 - `minimal_valid` may be used if there is a truly minimal case for the feature.
 
 Each case directory must include `README.md` with one plain contract sentence.

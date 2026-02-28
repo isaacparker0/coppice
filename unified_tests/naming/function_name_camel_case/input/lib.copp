@@ -1,0 +1,3 @@
+function getUser() -> int64 {
+    return 1
+}
