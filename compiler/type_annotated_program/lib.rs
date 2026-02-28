@@ -188,6 +188,12 @@ pub enum TypeAnnotatedAssignTarget {
 }
 
 #[derive(Clone)]
+pub enum TypeAnnotatedStringInterpolationPart {
+    Literal(String),
+    Expression(Box<TypeAnnotatedExpression>),
+}
+
+#[derive(Clone)]
 pub enum TypeAnnotatedExpression {
     IntegerLiteral {
         value: i64,
@@ -264,6 +270,10 @@ pub enum TypeAnnotatedExpression {
     Matches {
         value: Box<TypeAnnotatedExpression>,
         type_name: TypeAnnotatedTypeName,
+        span: Span,
+    },
+    StringInterpolation {
+        parts: Vec<TypeAnnotatedStringInterpolationPart>,
         span: Span,
     },
 }

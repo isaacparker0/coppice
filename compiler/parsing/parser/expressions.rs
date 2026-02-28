@@ -2,8 +2,8 @@ use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxBinaryOperator, SyntaxExpression, SyntaxMatchArm, SyntaxMatchPattern,
-    SyntaxNameReferenceKind, SyntaxStructLiteralField, SyntaxTypeName, SyntaxTypeNameSegment,
-    SyntaxUnaryOperator,
+    SyntaxNameReferenceKind, SyntaxStringInterpolationPart, SyntaxStructLiteralField,
+    SyntaxTypeName, SyntaxTypeNameSegment, SyntaxUnaryOperator,
 };
 
 use super::{
@@ -384,6 +384,9 @@ impl Parser {
                 value,
                 span: token.span,
             }),
+            TokenKind::StringInterpolationStart(text) => {
+                self.parse_string_interpolation(text, &token.span)
+            }
             TokenKind::BooleanLiteral(value) => Ok(SyntaxExpression::BooleanLiteral {
                 value,
                 span: token.span,
@@ -676,6 +679,49 @@ impl Parser {
             value,
             span,
         })
+    }
+
+    pub(super) fn parse_string_interpolation(
+        &mut self,
+        start_text: String,
+        start_span: &Span,
+    ) -> ParseResult<SyntaxExpression> {
+        let mut parts = Vec::new();
+        if !start_text.is_empty() {
+            parts.push(SyntaxStringInterpolationPart::Literal(start_text));
+        }
+        let expression = self.parse_expression()?;
+        parts.push(SyntaxStringInterpolationPart::Expression(expression));
+        loop {
+            let token = self.advance();
+            match token.kind {
+                TokenKind::StringInterpolationMiddle(text) => {
+                    if !text.is_empty() {
+                        parts.push(SyntaxStringInterpolationPart::Literal(text));
+                    }
+                    let expression = self.parse_expression()?;
+                    parts.push(SyntaxStringInterpolationPart::Expression(expression));
+                }
+                TokenKind::StringInterpolationEnd(text) => {
+                    if !text.is_empty() {
+                        parts.push(SyntaxStringInterpolationPart::Literal(text));
+                    }
+                    let span = Span {
+                        start: start_span.start,
+                        end: token.span.end,
+                        line: start_span.line,
+                        column: start_span.column,
+                    };
+                    return Ok(SyntaxExpression::StringInterpolation { parts, span });
+                }
+                _ => {
+                    return Err(ParseError::UnexpectedToken {
+                        kind: UnexpectedTokenKind::ExpectedExpression,
+                        span: token.span,
+                    });
+                }
+            }
+        }
     }
 
     pub(super) fn parse_list_literal_elements(&mut self) -> Vec<SyntaxExpression> {

@@ -104,6 +104,9 @@ pub(crate) enum TokenKind {
     Identifier(String),
     IntegerLiteral(i64),
     StringLiteral(String),
+    StringInterpolationStart(String),
+    StringInterpolationMiddle(String),
+    StringInterpolationEnd(String),
     BooleanLiteral(bool),
     DocComment(String),
     Keyword(Keyword),
@@ -134,6 +137,7 @@ pub(crate) struct Lexer<'a> {
     line: usize,
     column: usize,
     lex_errors: Vec<LexError>,
+    interpolation_brace_depth: Option<usize>,
 }
 
 impl<'a> Lexer<'a> {
@@ -145,6 +149,7 @@ impl<'a> Lexer<'a> {
             line: 1,
             column: 1,
             lex_errors: Vec::new(),
+            interpolation_brace_depth: None,
         }
     }
 
@@ -198,8 +203,25 @@ impl<'a> Lexer<'a> {
             }
             b'(' => self.single(Symbol::LeftParenthesis, 1, start, line, column),
             b')' => self.single(Symbol::RightParenthesis, 1, start, line, column),
-            b'{' => self.single(Symbol::LeftBrace, 1, start, line, column),
-            b'}' => self.single(Symbol::RightBrace, 1, start, line, column),
+            b'{' => {
+                if let Some(ref mut depth) = self.interpolation_brace_depth {
+                    *depth += 1;
+                }
+                self.single(Symbol::LeftBrace, 1, start, line, column)
+            }
+            b'}' => {
+                if let Some(depth) = self.interpolation_brace_depth {
+                    if depth > 0 {
+                        self.interpolation_brace_depth = Some(depth - 1);
+                        self.single(Symbol::RightBrace, 1, start, line, column)
+                    } else {
+                        self.advance();
+                        self.lex_string_continuation(start, line, column)
+                    }
+                } else {
+                    self.single(Symbol::RightBrace, 1, start, line, column)
+                }
+            }
             b'[' => self.single(Symbol::LeftBracket, 1, start, line, column),
             b']' => self.single(Symbol::RightBracket, 1, start, line, column),
             b',' => self.single(Symbol::Comma, 1, start, line, column),
@@ -296,14 +318,13 @@ impl<'a> Lexer<'a> {
 
     fn lex_string(&mut self, start: usize, line: usize, column: usize) -> Token {
         self.advance();
-        let content_start = self.index;
+        let mut accumulated = String::new();
         while self.index < self.bytes.len() {
             let byte = self.peek_byte();
             if byte == b'"' {
-                let content = &self.source[content_start..self.index];
                 self.advance();
                 return Token {
-                    kind: TokenKind::StringLiteral(content.to_string()),
+                    kind: TokenKind::StringLiteral(accumulated),
                     span: Span {
                         start,
                         end: self.index,
@@ -312,12 +333,172 @@ impl<'a> Lexer<'a> {
                     },
                 };
             }
+            if byte == b'{' {
+                self.advance();
+                self.interpolation_brace_depth = Some(0);
+                return Token {
+                    kind: TokenKind::StringInterpolationStart(accumulated),
+                    span: Span {
+                        start,
+                        end: self.index,
+                        line,
+                        column,
+                    },
+                };
+            }
+            if byte == b'\\' {
+                self.advance();
+                if self.index >= self.bytes.len() {
+                    break;
+                }
+                let escaped = self.peek_byte();
+                match escaped {
+                    b'{' => {
+                        accumulated.push('{');
+                        self.advance();
+                    }
+                    b'}' => {
+                        accumulated.push('}');
+                        self.advance();
+                    }
+                    b'\\' => {
+                        accumulated.push('\\');
+                        self.advance();
+                    }
+                    _ => {
+                        let escape_start = self.index - 1;
+                        self.advance();
+                        self.lex_errors.push(LexError {
+                            message: format!("unknown escape sequence '\\{}'", escaped as char),
+                            span: Span {
+                                start: escape_start,
+                                end: self.index,
+                                line,
+                                column,
+                            },
+                        });
+                        return Token {
+                            kind: TokenKind::Error,
+                            span: Span {
+                                start,
+                                end: self.index,
+                                line,
+                                column,
+                            },
+                        };
+                    }
+                }
+                continue;
+            }
             if byte == b'\n' {
                 break;
             }
+            accumulated.push(byte as char);
             self.advance();
         }
 
+        self.lex_errors.push(LexError {
+            message: "unterminated string literal".to_string(),
+            span: Span {
+                start,
+                end: self.index,
+                line,
+                column,
+            },
+        });
+        Token {
+            kind: TokenKind::Error,
+            span: Span {
+                start,
+                end: self.index,
+                line,
+                column,
+            },
+        }
+    }
+
+    fn lex_string_continuation(&mut self, start: usize, line: usize, column: usize) -> Token {
+        let mut accumulated = String::new();
+        while self.index < self.bytes.len() {
+            let byte = self.peek_byte();
+            if byte == b'"' {
+                self.advance();
+                self.interpolation_brace_depth = None;
+                return Token {
+                    kind: TokenKind::StringInterpolationEnd(accumulated),
+                    span: Span {
+                        start,
+                        end: self.index,
+                        line,
+                        column,
+                    },
+                };
+            }
+            if byte == b'{' {
+                self.advance();
+                self.interpolation_brace_depth = Some(0);
+                return Token {
+                    kind: TokenKind::StringInterpolationMiddle(accumulated),
+                    span: Span {
+                        start,
+                        end: self.index,
+                        line,
+                        column,
+                    },
+                };
+            }
+            if byte == b'\\' {
+                self.advance();
+                if self.index >= self.bytes.len() {
+                    break;
+                }
+                let escaped = self.peek_byte();
+                match escaped {
+                    b'{' => {
+                        accumulated.push('{');
+                        self.advance();
+                    }
+                    b'}' => {
+                        accumulated.push('}');
+                        self.advance();
+                    }
+                    b'\\' => {
+                        accumulated.push('\\');
+                        self.advance();
+                    }
+                    _ => {
+                        let escape_start = self.index - 1;
+                        self.advance();
+                        self.lex_errors.push(LexError {
+                            message: format!("unknown escape sequence '\\{}'", escaped as char),
+                            span: Span {
+                                start: escape_start,
+                                end: self.index,
+                                line,
+                                column,
+                            },
+                        });
+                        return Token {
+                            kind: TokenKind::Error,
+                            span: Span {
+                                start,
+                                end: self.index,
+                                line,
+                                column,
+                            },
+                        };
+                    }
+                }
+                continue;
+            }
+            if byte == b'\n' {
+                break;
+            }
+            accumulated.push(byte as char);
+            self.advance();
+        }
+
+        self.interpolation_brace_depth = None;
         self.lex_errors.push(LexError {
             message: "unterminated string literal".to_string(),
             span: Span {
@@ -575,10 +756,12 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
 
 fn update_parenthesis_depth(kind: &TokenKind, parenthesis_depth: &mut usize) {
     match kind {
-        TokenKind::Symbol(Symbol::LeftParenthesis | Symbol::LeftBracket) => {
+        TokenKind::Symbol(Symbol::LeftParenthesis | Symbol::LeftBracket)
+        | TokenKind::StringInterpolationStart(_) => {
             *parenthesis_depth = parenthesis_depth.saturating_add(1);
         }
-        TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBracket) => {
+        TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBracket)
+        | TokenKind::StringInterpolationEnd(_) => {
             *parenthesis_depth = parenthesis_depth.saturating_sub(1);
         }
         _ => {}
@@ -591,6 +774,7 @@ fn is_statement_terminator_trigger(kind: &TokenKind) -> bool {
         TokenKind::Identifier(_)
             | TokenKind::IntegerLiteral(_)
             | TokenKind::StringLiteral(_)
+            | TokenKind::StringInterpolationEnd(_)
             | TokenKind::BooleanLiteral(_)
             | TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBrace)
             | TokenKind::Keyword(

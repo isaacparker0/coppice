@@ -23,10 +23,10 @@ use compiler__type_annotated_program::{
     TypeAnnotatedMatchArm, TypeAnnotatedMatchPattern, TypeAnnotatedMethodDeclaration,
     TypeAnnotatedNameReferenceKind, TypeAnnotatedNominalTypeReference,
     TypeAnnotatedParameterDeclaration, TypeAnnotatedResolvedTypeArgument, TypeAnnotatedStatement,
-    TypeAnnotatedStructDeclaration, TypeAnnotatedStructFieldDeclaration,
-    TypeAnnotatedStructLiteralField, TypeAnnotatedStructReference, TypeAnnotatedTypeName,
-    TypeAnnotatedTypeNameSegment, TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator,
-    TypeResolvedDeclarations,
+    TypeAnnotatedStringInterpolationPart, TypeAnnotatedStructDeclaration,
+    TypeAnnotatedStructFieldDeclaration, TypeAnnotatedStructLiteralField,
+    TypeAnnotatedStructReference, TypeAnnotatedTypeName, TypeAnnotatedTypeNameSegment,
+    TypeAnnotatedTypeParameter, TypeAnnotatedUnaryOperator, TypeResolvedDeclarations,
 };
 
 mod assignability;
@@ -1369,6 +1369,33 @@ fn type_annotated_expression_from_semantic_expression(
             type_name: type_annotated_type_name_from_semantic_type_name(type_name),
             span: span.clone(),
         },
+        SemanticExpression::StringInterpolation { parts, span, .. } => {
+            use compiler__semantic_program::SemanticStringInterpolationPart;
+            TypeAnnotatedExpression::StringInterpolation {
+                parts: parts
+                    .iter()
+                    .map(|part| match part {
+                        SemanticStringInterpolationPart::Literal(text) => {
+                            TypeAnnotatedStringInterpolationPart::Literal(text.clone())
+                        }
+                        SemanticStringInterpolationPart::Expression(expression) => {
+                            TypeAnnotatedStringInterpolationPart::Expression(Box::new(
+                                type_annotated_expression_from_semantic_expression(
+                                    expression,
+                                    resolved_type_by_expression_id,
+                                    call_target_by_expression_id,
+                                    resolved_type_argument_types_by_expression_id,
+                                    struct_reference_by_expression_id,
+                                    enum_variant_reference_by_expression_id,
+                                    constant_reference_by_expression_id,
+                                ),
+                            ))
+                        }
+                    })
+                    .collect(),
+                span: span.clone(),
+            }
+        }
     }
 }
 
@@ -1446,7 +1473,8 @@ fn semantic_expression_id(expression: &SemanticExpression) -> SemanticExpression
         | SemanticExpression::Unary { id, .. }
         | SemanticExpression::Binary { id, .. }
         | SemanticExpression::Match { id, .. }
-        | SemanticExpression::Matches { id, .. } => *id,
+        | SemanticExpression::Matches { id, .. }
+        | SemanticExpression::StringInterpolation { id, .. } => *id,
     }
 }
 
@@ -1718,6 +1746,16 @@ fn annotate_expression_nominal_references(
         } => {
             annotate_expression_nominal_references(value, nominal_type_reference_by_local_name);
             annotate_type_name_nominal_references(type_name, nominal_type_reference_by_local_name);
+        }
+        TypeAnnotatedExpression::StringInterpolation { parts, .. } => {
+            for part in parts {
+                if let TypeAnnotatedStringInterpolationPart::Expression(expression) = part {
+                    annotate_expression_nominal_references(
+                        expression,
+                        nominal_type_reference_by_local_name,
+                    );
+                }
+            }
         }
     }
 }
@@ -2735,7 +2773,8 @@ impl ExpressionSpan for SemanticExpression {
             | SemanticExpression::Unary { span, .. }
             | SemanticExpression::Binary { span, .. }
             | SemanticExpression::Match { span, .. }
-            | SemanticExpression::Matches { span, .. } => span.clone(),
+            | SemanticExpression::Matches { span, .. }
+            | SemanticExpression::StringInterpolation { span, .. } => span.clone(),
         }
     }
 }

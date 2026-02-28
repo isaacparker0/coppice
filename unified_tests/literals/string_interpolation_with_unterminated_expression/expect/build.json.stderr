@@ -1,0 +1,38 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "unterminated string literal",
+            "span": {
+                "start": 46,
+                "end": 47,
+                "line": 2,
+                "column": 20
+            }
+        },
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "unterminated string literal",
+            "span": {
+                "start": 48,
+                "end": 49,
+                "line": 3,
+                "column": 1
+            }
+        },
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "expected symbol",
+            "span": {
+                "start": 50,
+                "end": 50,
+                "line": 4,
+                "column": 1
+            }
+        }
+    ]
+}
