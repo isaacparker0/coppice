@@ -1,0 +1,11 @@
+function writeFirst(mut values: List[int64], value: int64) -> nil {
+    values[0] = value
+    return nil
+}
+
+function main() -> nil {
+    mut values := [1, 2, 3]
+    writeFirst(values, 9)
+    print(string(values[0]))
+    return nil
+}

@@ -1,0 +1,6 @@
+function main() -> nil {
+    mut values := [1, 2, 3]
+    values[1] = 7
+    print(string(values[1]))
+    return nil
+}

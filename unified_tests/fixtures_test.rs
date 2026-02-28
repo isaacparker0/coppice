@@ -1211,25 +1211,22 @@ fn assert_valid_case_contract_readme(case_directory: &Path, case_path: &Path) {
         "README.md must contain exactly one sentence for fixture case {}",
         case_path.display()
     );
-    assert!(
-        readme_lines.len() == 1,
-        "README.md must contain exactly one non-empty line for fixture case {}",
-        case_path.display()
-    );
-    let sentence = readme_lines[0];
-    assert!(
-        !sentence.starts_with('#')
-            && !sentence.starts_with('-')
-            && !sentence.starts_with('*')
-            && !sentence.starts_with("```")
-            && !sentence
-                .chars()
-                .next()
-                .is_some_and(|character| character.is_ascii_digit())
-            && !sentence.contains('`'),
-        "README.md must contain a plain one-sentence contract (no headings/lists/code) for fixture case {}",
-        case_path.display()
-    );
+    for line in &readme_lines {
+        assert!(
+            !line.starts_with('#')
+                && !line.starts_with('-')
+                && !line.starts_with('*')
+                && !line.starts_with("```")
+                && !line
+                    .chars()
+                    .next()
+                    .is_some_and(|character| character.is_ascii_digit())
+                && !line.contains('`'),
+            "README.md must contain a plain one-sentence contract (no headings/lists/code) for fixture case {}",
+            case_path.display()
+        );
+    }
+    let sentence = readme_lines.join(" ");
     assert!(
         sentence.ends_with('.'),
         "README.md contract sentence must end with '.' for fixture case {}",

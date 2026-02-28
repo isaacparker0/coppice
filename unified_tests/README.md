@@ -37,13 +37,15 @@ Path ownership is scenario-first:
 
 - Case names must describe input scenario facts, not outcomes.
 - Do not encode outcome words in names (`valid`, `fails`, `blocks`).
+- Do not encode command choice in case names (`build`, `run`, `fix`, `runtime`)
+  unless command-phase behavior is itself the contract being tested.
+- Prefer scenario-first names (`list_index_assignment_out_of_range`).
 - `minimal_valid` may be used if there is a truly minimal case for the feature.
 
 Each case directory must include `README.md` with one plain contract sentence.
 
 Required format:
 
-- exactly one non-empty line
 - plain prose only (no heading/list/code formatting)
 - must end with `.`
 
