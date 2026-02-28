@@ -540,11 +540,17 @@ impl TypeChecker<'_> {
                                 "string interpolation expression must not be a string literal",
                                 expression.span(),
                             );
-                            self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
-                                start_byte_offset: expression.span().start,
-                                end_byte_offset: expression.span().end,
-                                replacement_text: escape_string_interpolation_literal_text(value),
-                            }));
+                            if let Some((start_byte_offset, end_byte_offset)) =
+                                self.enclosing_interpolation_expression_range(&expression.span())
+                            {
+                                self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
+                                    start_byte_offset,
+                                    end_byte_offset,
+                                    replacement_text: escape_string_interpolation_literal_text(
+                                        value,
+                                    ),
+                                }));
+                            }
                         }
                         let expression_type = self.check_expression(expression);
                         if expression_type != Type::String && expression_type != Type::Unknown {

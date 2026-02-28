@@ -501,9 +501,12 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         let Some(semantic_file) = semantic_file_by_path.get(&parsed_unit.path) else {
             continue;
         };
+        let source_path = display_path(&workspace_root.join(&parsed_unit.path));
+        let source_text = source_by_path.get(&source_path).map_or("", String::as_str);
         let type_analysis_result = type_analysis::check_package_unit(
             parsed_unit.package_id,
             &parsed_unit.package_path,
+            source_text,
             semantic_file,
             imported_bindings,
         );

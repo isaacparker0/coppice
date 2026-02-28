@@ -124,6 +124,7 @@ For `fix` runs:
 - required: `<stem>.stdout`
 - required: `<stem>.stderr`
 - required: `<stem>.exit`
+- required: `<stem>.source_tree`
 
 General file policy:
 
@@ -148,8 +149,9 @@ output-directory flags in `case.test`.
 - `build` runs own diagnostics/reporting and build-path contracts.
 - `run` runs own runtime/stdout/stderr/exit behavior and run-path gating.
 - `fix` runs own `fix` command exit/stdout/stderr contract. Source rewrite
-  assertions should be added under the same unified case model as `fix` coverage
-  expands.
+  assertions are validated by `<stem>.source_tree`. The runner also enforces
+  idempotency for successful `fix` runs by re-running `fix` and requiring no
+  source-tree changes.
 - Build-owned contracts are diagnostics/reporting surfaces (text/json), artifact
   set expectations, and build-only gating behavior for non-runnable or
   pre-runtime failure paths.

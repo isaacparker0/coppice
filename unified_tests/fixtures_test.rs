@@ -57,14 +57,26 @@ fn run_case(
         "case.test has no run blocks for {}",
         case_path.display()
     );
+    let expect_directory = case_directory.join("expect");
     match mode {
         SnapshotFixtureRunMode::Check => {
+            assert!(
+                expect_directory.is_dir(),
+                "missing expect directory for fixture case {}",
+                case_path.display()
+            );
             assert_no_unexpected_expectation_files(&case_directory, case_path, &run_blocks);
         }
         SnapshotFixtureRunMode::Update {
             workspace_directory,
         } => {
             let source_case_directory = workspace_directory.join(case_path);
+            fs::create_dir_all(source_case_directory.join("expect")).unwrap_or_else(|error| {
+                panic!(
+                    "failed to create expect directory for fixture case {}: {error}",
+                    case_path.display()
+                )
+            });
             remove_unexpected_expectation_files(&source_case_directory, case_path, &run_blocks);
         }
     }
@@ -307,6 +319,7 @@ enum OutputKind {
     Stdout,
     Stderr,
     Artifacts,
+    SourceTree,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -469,6 +482,44 @@ fn execute_run_and_collect_actual_outputs(
             },
             OutputValue::Text(run_result.stderr),
         );
+
+        if run_command == RunCommand::Fix {
+            let source_tree_after_first_run = snapshot_source_tree(working_input_directory);
+            value_by_output_key.insert(
+                OutputKey {
+                    kind: OutputKind::SourceTree,
+                    format: OutputFormat::None,
+                },
+                OutputValue::Text(source_tree_after_first_run.clone()),
+            );
+
+            if run_result.exit_code == 0 {
+                let second_run_result = execute_command(
+                    compiler,
+                    prepared_command_args,
+                    None,
+                    working_input_directory,
+                    run_output_directory,
+                    case_path,
+                    run_number,
+                );
+                assert_eq!(
+                    0,
+                    second_run_result.exit_code,
+                    "fix idempotency rerun must exit with code 0 for run {} in {}",
+                    run_number,
+                    case_path.display()
+                );
+                let source_tree_after_second_run = snapshot_source_tree(working_input_directory);
+                assert_eq!(
+                    source_tree_after_first_run,
+                    source_tree_after_second_run,
+                    "fix idempotency rerun changed source tree for run {} in {}",
+                    run_number,
+                    case_path.display()
+                );
+            }
+        }
     }
 
     if run_command_has_artifacts(run_command) {
@@ -553,6 +604,10 @@ fn output_keys_for_check(run_command: RunCommand) -> Vec<OutputKey> {
                 kind: OutputKind::Stderr,
                 format: OutputFormat::None,
             },
+            OutputKey {
+                kind: OutputKind::SourceTree,
+                format: OutputFormat::None,
+            },
         ],
     }
 }
@@ -616,6 +671,10 @@ fn output_keys_for_update(run_command: RunCommand) -> Vec<OutputKey> {
                 kind: OutputKind::Stderr,
                 format: OutputFormat::None,
             },
+            OutputKey {
+                kind: OutputKind::SourceTree,
+                format: OutputFormat::None,
+            },
         ],
     }
 }
@@ -655,7 +714,7 @@ fn assert_expected_outputs_match(
                     case_path,
                 );
             }
-            OutputKind::Stdout | OutputKind::Stderr => {
+            OutputKind::Stdout | OutputKind::Stderr | OutputKind::SourceTree => {
                 let expected_text = read_expected_text_file(
                     case_directory,
                     run_block,
@@ -837,6 +896,7 @@ fn output_suffix_for_key(output_key: OutputKey) -> &'static str {
         (OutputKind::Stderr, OutputFormat::Text) => "text.stderr",
         (OutputKind::Stderr, OutputFormat::Json) => "json.stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifacts",
+        (OutputKind::SourceTree, OutputFormat::None) => "source_tree",
         _ => panic!("invalid output key combination for expectation suffix: {output_key:?}"),
     }
 }
@@ -853,6 +913,7 @@ fn output_key_label(output_key: OutputKey) -> &'static str {
         (OutputKind::Stderr, OutputFormat::Text) => "text stderr",
         (OutputKind::Stderr, OutputFormat::Json) => "json stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifact list",
+        (OutputKind::SourceTree, OutputFormat::None) => "source tree",
         _ => "output",
     }
 }
@@ -1299,6 +1360,91 @@ fn collect_artifact_paths(directory: &Path) -> Vec<String> {
     }
     artifacts.sort();
     artifacts
+}
+
+fn snapshot_source_tree(root_directory: &Path) -> String {
+    let mut relative_file_paths = Vec::new();
+    collect_relative_file_paths(root_directory, root_directory, &mut relative_file_paths);
+    relative_file_paths.sort();
+
+    let mut sections = Vec::new();
+    for relative_file_path in relative_file_paths {
+        let full_path = root_directory.join(&relative_file_path);
+        let contents = fs::read_to_string(&full_path).unwrap_or_else(|error| {
+            panic!(
+                "failed to read source-tree file '{}': {error}",
+                full_path.display()
+            )
+        });
+        let normalized_contents = contents.replace("\r\n", "\n").replace('\r', "\n");
+        let mut section = String::new();
+        section.push_str(&source_tree_start_separator_line(&relative_file_path));
+        section.push('\n');
+        section.push_str(&normalized_contents);
+        if !normalized_contents.ends_with('\n') {
+            section.push('\n');
+        }
+        section.push_str(&source_tree_end_separator_line());
+        sections.push(section);
+    }
+    sections.join("\n")
+}
+
+const SOURCE_TREE_SEPARATOR_WIDTH: usize = 79;
+
+fn source_tree_start_separator_line(relative_file_path: &Path) -> String {
+    let mut prefix = String::from("====== path: ");
+    prefix.push_str(relative_file_path.to_string_lossy().as_ref());
+    prefix.push(' ');
+    assert!(
+        prefix.len() <= SOURCE_TREE_SEPARATOR_WIDTH,
+        "source-tree path separator exceeds {} characters for '{}'",
+        SOURCE_TREE_SEPARATOR_WIDTH,
+        relative_file_path.display()
+    );
+    let mut line = prefix;
+    line.push_str(&"=".repeat(SOURCE_TREE_SEPARATOR_WIDTH - line.len()));
+    line
+}
+
+fn source_tree_end_separator_line() -> String {
+    "~".repeat(SOURCE_TREE_SEPARATOR_WIDTH)
+}
+
+fn collect_relative_file_paths(
+    root_directory: &Path,
+    current_directory: &Path,
+    relative_file_paths: &mut Vec<PathBuf>,
+) {
+    let read_directory_entries = fs::read_dir(current_directory).unwrap_or_else(|error| {
+        panic!(
+            "failed to read source-tree directory '{}': {error}",
+            current_directory.display()
+        )
+    });
+
+    for entry in read_directory_entries {
+        let entry = entry.unwrap_or_else(|error| {
+            panic!(
+                "failed to read source-tree entry in '{}': {error}",
+                current_directory.display()
+            )
+        });
+        let path = entry.path();
+        if path.is_dir() {
+            collect_relative_file_paths(root_directory, &path, relative_file_paths);
+            continue;
+        }
+        if path.is_file() {
+            let relative_path = path.strip_prefix(root_directory).unwrap_or_else(|error| {
+                panic!(
+                    "failed to compute source-tree relative path for '{}': {error}",
+                    path.display()
+                )
+            });
+            relative_file_paths.push(relative_path.to_path_buf());
+        }
+    }
 }
 
 fn copy_directory_tree(source_directory: &Path, destination_directory: &Path) {

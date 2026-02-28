@@ -72,6 +72,7 @@ struct ResolvedDeclarations {
 pub fn check_package_unit(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
 ) -> PhaseOutput<Result<TypeResolvedDeclarations, TypeAnalysisBlockingReason>> {
@@ -80,6 +81,7 @@ pub fn check_package_unit(
     let summary = analyze_package_unit(
         package_id,
         package_path,
+        source_text,
         package_unit,
         imported_bindings,
         &mut diagnostics,
@@ -1911,6 +1913,7 @@ fn type_annotated_resolved_type_argument_from_type(
 fn analyze_package_unit(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
@@ -1919,6 +1922,7 @@ fn analyze_package_unit(
     check_package_unit_declarations(
         package_id,
         package_path,
+        source_text,
         package_unit,
         imported_bindings,
         diagnostics,
@@ -1929,6 +1933,7 @@ fn analyze_package_unit(
 fn check_package_unit_declarations(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
@@ -1954,6 +1959,7 @@ fn check_package_unit_declarations(
     let mut summary = check_declarations(
         package_id,
         package_path,
+        source_text,
         diagnostics,
         safe_autofixes,
         &type_declarations,
@@ -1970,6 +1976,7 @@ fn check_package_unit_declarations(
 fn check_declarations(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     diagnostics: &mut Vec<PhaseDiagnostic>,
     safe_autofixes: &mut Vec<SafeAutofix>,
     type_declarations: &[SemanticTypeDeclaration],
@@ -1980,6 +1987,7 @@ fn check_declarations(
     let mut type_checker = TypeChecker::new(
         package_id,
         package_path,
+        source_text,
         imported_bindings,
         diagnostics,
         safe_autofixes,
@@ -2082,6 +2090,7 @@ struct MethodKey {
 struct TypeChecker<'a> {
     package_id: PackageId,
     package_path: String,
+    source_text: &'a str,
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
@@ -2133,6 +2142,7 @@ impl<'a> TypeChecker<'a> {
     fn new(
         package_id: PackageId,
         package_path: &str,
+        source_text: &'a str,
         imported_bindings: &[ImportedBinding],
         diagnostics: &'a mut Vec<PhaseDiagnostic>,
         safe_autofixes: &'a mut Vec<SafeAutofix>,
@@ -2153,6 +2163,7 @@ impl<'a> TypeChecker<'a> {
         Self {
             package_id,
             package_path: package_path.to_string(),
+            source_text,
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: builtin_functions(),
@@ -2439,6 +2450,37 @@ impl<'a> TypeChecker<'a> {
 
     fn push_safe_autofix(&mut self, safe_autofix: SafeAutofix) {
         self.safe_autofixes.push(safe_autofix);
+    }
+
+    fn enclosing_interpolation_expression_range(
+        &self,
+        expression_span: &Span,
+    ) -> Option<(usize, usize)> {
+        if expression_span.start > expression_span.end
+            || expression_span.end > self.source_text.len()
+        {
+            return None;
+        }
+
+        let bytes = self.source_text.as_bytes();
+        let mut start = expression_span.start;
+        while start > 0 && bytes[start - 1].is_ascii_whitespace() {
+            start -= 1;
+        }
+        if start == 0 || bytes[start - 1] != b'{' {
+            return None;
+        }
+        let replacement_start = start - 1;
+
+        let mut end = expression_span.end;
+        while end < bytes.len() && bytes[end].is_ascii_whitespace() {
+            end += 1;
+        }
+        if end >= bytes.len() || bytes[end] != b'}' {
+            return None;
+        }
+        let replacement_end = end + 1;
+        Some((replacement_start, replacement_end))
     }
 
     fn push_type_parameters(&mut self, names_and_spans: &[(String, Span)]) {
