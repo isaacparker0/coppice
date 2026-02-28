@@ -54,19 +54,34 @@ pub fn read_snapshot_fixture_file(path: &Path, case_path: &Path, file_name: &str
             error
         )
     });
+    if raw_contents.is_empty() {
+        return String::new();
+    }
     assert!(
         raw_contents.ends_with('\n'),
         "{} must end with a trailing newline for case {}",
         file_name,
         case_path.display()
     );
-    raw_contents.strip_suffix('\n').unwrap().to_string()
+    let contents = raw_contents.strip_suffix('\n').unwrap();
+    assert!(
+        !contents.is_empty(),
+        "{} must be empty (no newline) or non-empty text ending with a trailing newline for case {}",
+        file_name,
+        case_path.display()
+    );
+    contents.to_string()
 }
 
-pub fn write_snapshot_fixture_file_if_changed(path: &Path, content: String, case_path: &Path) {
+pub fn write_snapshot_fixture_file_if_changed(path: &Path, content: &str, case_path: &Path) {
+    let canonical_content = if content.is_empty() {
+        String::new()
+    } else {
+        format!("{content}\n")
+    };
     let existing_contents = fs::read_to_string(path).unwrap_or_default();
-    if existing_contents != content {
-        fs::write(path, content).unwrap();
+    if existing_contents != canonical_content {
+        fs::write(path, canonical_content).unwrap();
         println!("updated: {}", case_path.display());
     }
 }

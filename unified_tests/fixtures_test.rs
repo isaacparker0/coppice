@@ -954,7 +954,26 @@ fn read_expected_text_file(
             case_path.display()
         )
     });
-    let contents = raw_contents.strip_suffix('\n').unwrap_or(&raw_contents);
+    let contents = if raw_contents.is_empty() {
+        ""
+    } else {
+        assert!(
+            raw_contents.ends_with('\n'),
+            "{} expectation '{}' must end with a trailing newline in {}",
+            expected_suffix,
+            relative_path.display(),
+            case_path.display()
+        );
+        let stripped = raw_contents.strip_suffix('\n').unwrap();
+        assert!(
+            !stripped.is_empty(),
+            "{} expectation '{}' must be empty (no newline) or non-empty text ending with a trailing newline in {}",
+            expected_suffix,
+            relative_path.display(),
+            case_path.display()
+        );
+        stripped
+    };
     substitute_placeholders(contents, run_output_directory, working_input_directory)
 }
 
@@ -1070,7 +1089,7 @@ fn write_expected_text_file(
 ) {
     let relative_path = expectation_relative_path(&run_block.expectation_stem, expected_suffix);
     let full_path = source_case_directory.join(&relative_path);
-    write_snapshot_fixture_file_if_changed(&full_path, format!("{content}\n"), case_path);
+    write_snapshot_fixture_file_if_changed(&full_path, content, case_path);
 }
 
 fn write_expected_exit_file(
@@ -1097,12 +1116,8 @@ fn write_expected_artifacts_file(
 ) {
     let relative_path = expectation_relative_path(&run_block.expectation_stem, "artifacts");
     let full_path = source_case_directory.join(&relative_path);
-    let content = if artifact_paths.is_empty() {
-        String::new()
-    } else {
-        format!("{}\n", artifact_paths.join("\n"))
-    };
-    write_snapshot_fixture_file_if_changed(&full_path, content, case_path);
+    let content = artifact_paths.join("\n");
+    write_snapshot_fixture_file_if_changed(&full_path, &content, case_path);
 }
 
 fn collect_artifact_placeholders(

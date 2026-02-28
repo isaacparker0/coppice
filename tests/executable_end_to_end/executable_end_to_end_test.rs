@@ -92,29 +92,25 @@ fn run_case(
             );
             write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.exit"),
-                format!("{actual_exit}\n"),
+                &actual_exit.to_string(),
                 case_path,
             );
             write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.stdout"),
-                format!("{snapshot_stdout}\n"),
+                &snapshot_stdout,
                 case_path,
             );
             write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.stderr"),
-                format!("{snapshot_stderr}\n"),
+                &snapshot_stderr,
                 case_path,
             );
             let artifact_placeholders =
                 collect_artifact_placeholders(&actual_artifact_paths, &temp_output_directory);
-            let artifact_lines = if artifact_placeholders.is_empty() {
-                String::new()
-            } else {
-                format!("{}\n", artifact_placeholders.join("\n"))
-            };
+            let artifact_lines = artifact_placeholders.join("\n");
             write_snapshot_fixture_file_if_changed(
                 &source_case_directory.join("expect.artifacts"),
-                artifact_lines,
+                &artifact_lines,
                 case_path,
             );
         }

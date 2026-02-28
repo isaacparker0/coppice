@@ -55,14 +55,14 @@ fn run_case(
             let source_expect_text = workspace_directory.join(case_path).join("expect.text");
             write_snapshot_fixture_file_if_changed(
                 &source_expect_text,
-                format!("{}\n", text_run.output),
+                &text_run.output,
                 case_path,
             );
 
             let source_expect_json = workspace_directory.join(case_path).join("expect.json");
             write_snapshot_fixture_file_if_changed(
                 &source_expect_json,
-                format!("{}\n", json_run.output),
+                &json_run.output,
                 case_path,
             );
         }
