@@ -1,0 +1,14 @@
+{
+    "ok": false,
+    "diagnostics": [],
+    "error": {
+        "kind": "build_failed",
+        "message": "build failed due to diagnostics",
+        "details": [
+            {
+                "message": "type mismatch: expected string, got int64 (lib/lib.copp:1:9)",
+                "path": "lib/lib.copp"
+            }
+        ]
+    }
+}

@@ -79,8 +79,11 @@ pub fn write_snapshot_fixture_file_if_changed(path: &Path, content: &str, case_p
     } else {
         format!("{content}\n")
     };
-    let existing_contents = fs::read_to_string(path).unwrap_or_default();
-    if existing_contents != canonical_content {
+    let should_write = match fs::read_to_string(path) {
+        Ok(existing_contents) => existing_contents != canonical_content,
+        Err(_) => true,
+    };
+    if should_write {
         fs::write(path, canonical_content).unwrap();
         println!("updated: {}", case_path.display());
     }

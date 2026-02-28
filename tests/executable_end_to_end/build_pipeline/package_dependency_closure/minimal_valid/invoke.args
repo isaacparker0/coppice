@@ -1,4 +1,0 @@
-run
-${INPUT_DIR}/main.bin.copp
---output-dir
-${TMP_OUTPUT_DIR}
