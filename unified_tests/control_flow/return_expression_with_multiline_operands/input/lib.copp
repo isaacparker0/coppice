@@ -1,0 +1,6 @@
+function demo() -> int64 {
+    base := 10
+    tax := 2
+    return base
+        + tax
+}
