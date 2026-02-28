@@ -1,16 +1,16 @@
 {
-  "ok": false,
-  "diagnostics": [
-    {
-      "phase": "syntax_rules",
-      "path": "lib.copp",
-      "message": "doc comment must document a declaration",
-      "span": {
-        "start": 30,
-        "end": 63,
-        "line": 2,
-        "column": 5
-      }
-    }
-  ]
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "syntax_rules",
+            "path": "lib.copp",
+            "message": "doc comment must document a declaration",
+            "span": {
+                "start": 30,
+                "end": 63,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
 }

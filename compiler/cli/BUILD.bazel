@@ -10,6 +10,7 @@ rust_binary(
         "//compiler/lsp",
         "//compiler/reports",
         "@crates//:clap",
+        "@crates//:serde",
         "@crates//:serde_json",
     ],
 )

@@ -1,6 +1,7 @@
 use std::{fs, process};
 
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 
 use compiler__analysis_pipeline::analyze_target_with_workspace_root;
 use compiler__driver::{build_target_with_workspace_root, run_target_with_workspace_root};
@@ -192,7 +193,7 @@ fn run_build(
                             safe_fixes: safe_autofixes_by_path,
                             error: strict_policy_error,
                         };
-                        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                        print_json_output(&output);
                     }
                 }
                 if has_diagnostics || strict_policy_failure {
@@ -210,7 +211,7 @@ fn run_build(
                         safe_fixes: safe_autofixes_by_path,
                         error: None,
                     };
-                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    print_json_output(&output);
                 }
             }
         }
@@ -226,12 +227,20 @@ fn run_build(
                         safe_fixes: safe_autofixes_by_path,
                         error: Some(error),
                     };
-                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    print_json_output(&output);
                 }
             }
             process::exit(1);
         }
     }
+}
+
+fn print_json_output<T: Serialize>(output: &T) {
+    let mut bytes = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, formatter);
+    output.serialize(&mut serializer).unwrap();
+    println!("{}", String::from_utf8(bytes).unwrap());
 }
 
 fn render_safe_fix_warning() {

@@ -1,16 +1,16 @@
 {
-  "ok": false,
-  "diagnostics": [
-    {
-      "phase": "type_analysis",
-      "path": "lib.copp",
-      "message": "return type mismatch: expected never, got nil",
-      "span": {
-        "start": 37,
-        "end": 40,
-        "line": 2,
-        "column": 12
-      }
-    }
-  ]
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "return type mismatch: expected never, got nil",
+            "span": {
+                "start": 37,
+                "end": 40,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
 }

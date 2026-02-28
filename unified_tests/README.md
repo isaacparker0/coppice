@@ -150,3 +150,9 @@ in the case `README.md`.
   asserts both contracts.
 - Use strict/default mode differences only when mode behavior is the contract
   being tested.
+
+## Update snapshots
+
+```sh
+UPDATE_SNAPSHOTS=1 bazel run //unified_tests:unified_tests_test
+```
