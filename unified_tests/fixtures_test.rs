@@ -39,6 +39,7 @@ fn run_case(
     mode: &SnapshotFixtureRunMode,
 ) {
     let case_directory = runfiles_directory.join(case_path);
+    assert_valid_case_slug(case_path);
     let input_directory = case_directory.join("input");
     assert!(
         input_directory.is_dir(),
@@ -85,6 +86,20 @@ fn run_case(
     }
 
     let _ = fs::remove_dir_all(&temp_case_directory);
+}
+
+fn assert_valid_case_slug(case_path: &Path) {
+    let case_slug = case_path
+        .file_name()
+        .and_then(|segment| segment.to_str())
+        .unwrap_or_else(|| panic!("invalid fixture case path {}", case_path.display()));
+    if case_slug.contains("minimal_valid") {
+        assert!(
+            case_slug == "minimal_valid",
+            "fixture case '{}' uses forbidden minimal_valid variant; use exactly 'minimal_valid' or a factual scenario name",
+            case_path.display()
+        );
+    }
 }
 
 fn run_block_and_assert(

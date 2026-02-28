@@ -1,0 +1,4 @@
+function run() -> int64 {
+    values := [1, 2, 3]
+    return values[0]
+}

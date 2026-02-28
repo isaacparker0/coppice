@@ -1,0 +1,11 @@
+type User :: struct {
+    id: int64,
+    function idValue(self) -> int64 {
+        return self.id
+    },
+}
+
+function run() -> int64 {
+    user := User { id: 1 }
+    return user.idValue()
+}

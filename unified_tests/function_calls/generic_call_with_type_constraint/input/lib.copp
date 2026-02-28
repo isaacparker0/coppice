@@ -1,0 +1,19 @@
+type Ordered :: interface {
+    function score(self) -> int64,
+}
+
+type Number implements Ordered :: struct {
+    value: int64,
+    function score(self) -> int64 {
+        return self.value
+    },
+}
+
+function identityConstrained[T: Ordered](value: T) -> T {
+    return value
+}
+
+function run() -> int64 {
+    number := identityConstrained(Number { value: 1 })
+    return number.score()
+}

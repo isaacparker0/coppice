@@ -1,0 +1,3 @@
+function run(a: int64, b: int64) -> boolean {
+    return a < b or a <= b or a > b or a >= b
+}

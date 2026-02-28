@@ -1,0 +1,3 @@
+function run(a: boolean, b: boolean) -> boolean {
+    return (a and b) or (a and not b)
+}

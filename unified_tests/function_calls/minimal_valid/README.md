@@ -1,0 +1,1 @@
+Function calls are valid.

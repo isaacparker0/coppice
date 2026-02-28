@@ -1,0 +1,3 @@
+function run(value: boolean) -> string {
+    return string(value)
+}

@@ -1,0 +1,11 @@
+type Box[T] :: struct {
+    value: T,
+    function get(self) -> T {
+        return self.value
+    },
+}
+
+function run() -> int64 {
+    box := Box[int64] { value: 42 }
+    return box.get()
+}

@@ -1,0 +1,3 @@
+function run(prefix: string, suffix: string) -> string {
+    return prefix + suffix
+}

@@ -1,0 +1,8 @@
+type Direction :: enum {
+    North,
+    South,
+}
+
+function isNorth(value: Direction) -> boolean {
+    return value matches Direction.North
+}

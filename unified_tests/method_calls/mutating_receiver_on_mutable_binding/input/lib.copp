@@ -1,0 +1,12 @@
+type User :: struct {
+    id: int64,
+    function bump(mut self, delta: int64) -> int64 {
+        self = User { id: self.id + delta }
+        return self.id
+    },
+}
+
+function run() -> int64 {
+    mut user := User { id: 1 }
+    return user.bump(2)
+}
