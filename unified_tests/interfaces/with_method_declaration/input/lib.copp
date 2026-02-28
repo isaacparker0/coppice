@@ -1,0 +1,3 @@
+type Printable :: interface {
+    function toString(self) -> string,
+}

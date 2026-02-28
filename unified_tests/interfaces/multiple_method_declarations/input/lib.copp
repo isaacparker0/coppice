@@ -1,0 +1,4 @@
+type Comparable :: interface {
+    function compare(self, other: Comparable) -> int64,
+    function rank(self) -> int64,
+}

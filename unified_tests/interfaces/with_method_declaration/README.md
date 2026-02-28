@@ -1,0 +1,1 @@
+Interfaces can declare methods.

@@ -1,0 +1,1 @@
+Interface declarations are valid.
