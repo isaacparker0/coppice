@@ -1,2 +1,2 @@
-Build reports diagnostics when a transitively imported package in the dependency
-closure contains a type error.
+Transitively imported packages must not contain type errors in the dependency
+closure.

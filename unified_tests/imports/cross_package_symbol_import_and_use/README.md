@@ -1,2 +1,2 @@
-Run resolves and executes values imported from another package through named
-symbol imports.
+Named imports can reference values from another package and preserve those
+values through use sites.
