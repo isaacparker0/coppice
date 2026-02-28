@@ -102,6 +102,7 @@ fn lower_type_declaration(
 ) -> semantic::SemanticTypeDeclaration {
     semantic::SemanticTypeDeclaration {
         name: type_declaration.name.clone(),
+        name_span: type_declaration.name_span.clone(),
         type_parameters: type_declaration
             .type_parameters
             .iter()
@@ -236,6 +237,7 @@ fn lower_constant_declaration(
 ) -> semantic::SemanticConstantDeclaration {
     semantic::SemanticConstantDeclaration {
         name: constant.name.clone(),
+        name_span: constant.name_span.clone(),
         type_name: lower_type_name(&constant.type_name),
         expression: lower_expression(&constant.expression, context),
         doc,
@@ -275,6 +277,7 @@ fn lower_parameter_declaration(
 ) -> semantic::SemanticParameterDeclaration {
     semantic::SemanticParameterDeclaration {
         name: parameter.name.clone(),
+        name_span: parameter.name_span.clone(),
         mutable: parameter.mutable,
         type_name: lower_type_name(&parameter.type_name),
         span: parameter.span.clone(),
@@ -307,12 +310,14 @@ fn lower_statement(
     match statement {
         syntax::SyntaxStatement::Binding {
             name,
+            name_span,
             mutable,
             type_name,
             initializer,
             span,
         } => semantic::SemanticStatement::Binding {
             name: name.clone(),
+            name_span: name_span.clone(),
             mutable: *mutable,
             type_name: type_name.as_ref().map(lower_type_name),
             initializer: lower_expression(initializer, context),

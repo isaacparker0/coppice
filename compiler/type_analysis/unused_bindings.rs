@@ -7,13 +7,13 @@ impl TypeChecker<'_> {
             let mut used_with_ignored_prefix = Vec::new();
             for (name, info) in scope {
                 if info.used && name.starts_with('_') {
-                    used_with_ignored_prefix.push((name.clone(), info.span.clone()));
+                    used_with_ignored_prefix.push((name.clone(), info.name_span.clone()));
                     continue;
                 }
                 if info.used || name.starts_with('_') {
                     continue;
                 }
-                unused.push((name.clone(), info.span.clone()));
+                unused.push((name.clone(), info.name_span.clone()));
             }
             for (name, span) in used_with_ignored_prefix {
                 self.error(

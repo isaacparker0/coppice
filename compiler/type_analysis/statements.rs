@@ -28,13 +28,14 @@ impl TypeChecker<'_> {
         self.current_return_type = return_type;
 
         for (index, parameter) in function.parameters.iter().enumerate() {
-            self.check_parameter_name(&parameter.name, &parameter.span);
+            self.check_parameter_name(&parameter.name, &parameter.name_span);
             let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
             self.define_variable(
                 parameter.name.clone(),
                 value_type,
                 parameter.mutable,
-                parameter.span.clone(),
+                &parameter.span,
+                parameter.name_span.clone(),
             );
         }
 
@@ -118,6 +119,7 @@ impl TypeChecker<'_> {
             "self".to_string(),
             self_type,
             method.self_mutable,
+            &method.self_span,
             method.self_span.clone(),
         );
         if let Some(scope) = self.scopes.last_mut()
@@ -127,13 +129,14 @@ impl TypeChecker<'_> {
         }
 
         for (index, parameter) in method.parameters.iter().enumerate() {
-            self.check_parameter_name(&parameter.name, &parameter.span);
+            self.check_parameter_name(&parameter.name, &parameter.name_span);
             let value_type = parameter_types.get(index).cloned().unwrap_or(Type::Unknown);
             self.define_variable(
                 parameter.name.clone(),
                 value_type,
                 parameter.mutable,
-                parameter.span.clone(),
+                &parameter.span,
+                parameter.name_span.clone(),
             );
         }
 
@@ -181,13 +184,14 @@ impl TypeChecker<'_> {
         match statement {
             SemanticStatement::Binding {
                 name,
+                name_span,
                 mutable,
                 type_name,
                 initializer,
                 span,
                 ..
             } => {
-                self.check_variable_name(name, span);
+                self.check_variable_name(name, name_span);
                 let value_type = self.check_expression(initializer);
                 let mut binding_type = value_type.clone();
                 let mut annotation_mismatch = false;
@@ -217,7 +221,13 @@ impl TypeChecker<'_> {
                         fallthrough_narrowing: None,
                     };
                 }
-                self.define_variable(name.clone(), binding_type, *mutable, span.clone());
+                self.define_variable(
+                    name.clone(),
+                    binding_type,
+                    *mutable,
+                    span,
+                    name_span.clone(),
+                );
                 StatementOutcome {
                     terminates: false,
                     fallthrough_narrowing: None,

@@ -7,7 +7,7 @@
             "message": "constant name must be UPPER_SNAKE_CASE",
             "span": {
                 "start": 0,
-                "end": 26,
+                "end": 10,
                 "line": 1,
                 "column": 1
             }

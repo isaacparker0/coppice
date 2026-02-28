@@ -35,6 +35,7 @@ pub struct SemanticDocComment {
 #[derive(Clone, Debug)]
 pub struct SemanticTypeDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub type_parameters: Vec<SemanticTypeParameter>,
     pub implemented_interfaces: Vec<SemanticTypeName>,
     pub kind: SemanticTypeDeclarationKind,
@@ -103,6 +104,7 @@ pub struct SemanticInterfaceMethodDeclaration {
 #[derive(Clone, Debug)]
 pub struct SemanticConstantDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub type_name: SemanticTypeName,
     pub expression: SemanticExpression,
     pub doc: Option<SemanticDocComment>,
@@ -126,6 +128,7 @@ pub struct SemanticFunctionDeclaration {
 #[derive(Clone, Debug)]
 pub struct SemanticParameterDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub mutable: bool,
     pub type_name: SemanticTypeName,
     pub span: Span,
@@ -141,6 +144,7 @@ pub struct SemanticBlock {
 pub enum SemanticStatement {
     Binding {
         name: String,
+        name_span: Span,
         mutable: bool,
         type_name: Option<SemanticTypeName>,
         initializer: SemanticExpression,

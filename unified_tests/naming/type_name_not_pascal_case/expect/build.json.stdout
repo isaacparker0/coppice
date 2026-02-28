@@ -7,7 +7,7 @@
             "message": "type name must be PascalCase",
             "span": {
                 "start": 5,
-                "end": 45,
+                "end": 16,
                 "line": 1,
                 "column": 6
             }

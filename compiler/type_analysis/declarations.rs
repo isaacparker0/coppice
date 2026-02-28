@@ -217,7 +217,7 @@ impl TypeChecker<'_> {
 
     fn collect_type_declaration_headers(&mut self, types: &[SemanticTypeDeclaration]) {
         for type_declaration in types {
-            self.check_type_name(&type_declaration.name, &type_declaration.span);
+            self.check_type_name(&type_declaration.name, &type_declaration.name_span);
             if self.types.contains_key(&type_declaration.name) {
                 self.error(
                     format!("duplicate type '{}'", type_declaration.name),
@@ -586,7 +586,7 @@ impl TypeChecker<'_> {
         constants: &[SemanticConstantDeclaration],
     ) {
         for constant in constants {
-            self.check_constant_name(&constant.name, &constant.span);
+            self.check_constant_name(&constant.name, &constant.name_span);
             let value_type = self.check_expression(&constant.expression);
             let declared_type = self.resolve_type_name(&constant.type_name);
             if self.constants.contains_key(&constant.name) {

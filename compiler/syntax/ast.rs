@@ -79,6 +79,7 @@ pub enum SyntaxMemberVisibility {
 #[derive(Clone, Debug)]
 pub struct SyntaxTypeDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub type_parameters: Vec<SyntaxTypeParameter>,
     pub implemented_interfaces: Vec<SyntaxTypeName>,
     pub kind: SyntaxTypeDeclarationKind,
@@ -150,6 +151,7 @@ pub struct SyntaxInterfaceMethodDeclaration {
 #[derive(Clone, Debug)]
 pub struct SyntaxConstantDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub type_name: SyntaxTypeName,
     pub expression: SyntaxExpression,
     pub visibility: SyntaxTopLevelVisibility,
@@ -171,6 +173,7 @@ pub struct SyntaxFunctionDeclaration {
 #[derive(Clone, Debug)]
 pub struct SyntaxParameterDeclaration {
     pub name: String,
+    pub name_span: Span,
     pub mutable: bool,
     pub type_name: SyntaxTypeName,
     pub span: Span,
@@ -192,6 +195,7 @@ pub enum SyntaxBlockItem {
 pub enum SyntaxStatement {
     Binding {
         name: String,
+        name_span: Span,
         mutable: bool,
         type_name: Option<SyntaxTypeName>,
         initializer: SyntaxExpression,

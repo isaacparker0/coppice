@@ -36,6 +36,7 @@ impl Parser {
             };
             return Ok(SyntaxTypeDeclaration {
                 name,
+                name_span,
                 type_parameters,
                 implemented_interfaces,
                 kind: SyntaxTypeDeclarationKind::Struct { items },
@@ -58,6 +59,7 @@ impl Parser {
             };
             return Ok(SyntaxTypeDeclaration {
                 name,
+                name_span,
                 type_parameters,
                 implemented_interfaces,
                 kind: SyntaxTypeDeclarationKind::Enum { variants },
@@ -77,6 +79,7 @@ impl Parser {
             };
             return Ok(SyntaxTypeDeclaration {
                 name,
+                name_span,
                 type_parameters,
                 implemented_interfaces,
                 kind: SyntaxTypeDeclarationKind::Interface { methods },
@@ -96,6 +99,7 @@ impl Parser {
         };
         Ok(SyntaxTypeDeclaration {
             name,
+            name_span,
             type_parameters,
             implemented_interfaces,
             kind: SyntaxTypeDeclarationKind::Union { variants },
@@ -424,6 +428,7 @@ impl Parser {
         };
         Ok(SyntaxConstantDeclaration {
             name,
+            name_span,
             type_name,
             expression,
             visibility,
@@ -472,7 +477,7 @@ impl Parser {
             mutable = true;
             span_start = mut_span;
         }
-        let (name, _) = self.expect_identifier()?;
+        let (name, name_span) = self.expect_identifier()?;
         self.expect_symbol(Symbol::Colon)?;
         let type_name = self.parse_type_name()?;
         let span = Span {
@@ -483,6 +488,7 @@ impl Parser {
         };
         Ok(SyntaxParameterDeclaration {
             name,
+            name_span,
             mutable,
             type_name,
             span,

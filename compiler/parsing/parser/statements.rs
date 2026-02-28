@@ -118,6 +118,7 @@ impl Parser {
             };
             return Ok(SyntaxStatement::Binding {
                 name,
+                name_span,
                 mutable: true,
                 type_name,
                 initializer,
@@ -204,6 +205,7 @@ impl Parser {
             };
             return Ok(SyntaxStatement::Binding {
                 name,
+                name_span,
                 mutable: false,
                 type_name,
                 initializer,

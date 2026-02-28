@@ -657,7 +657,13 @@ impl TypeChecker<'_> {
                 name, name_span, ..
             } = &arm.pattern
             {
-                self.define_variable(name.clone(), pattern_type.clone(), false, name_span.clone());
+                self.define_variable(
+                    name.clone(),
+                    pattern_type.clone(),
+                    false,
+                    name_span,
+                    name_span.clone(),
+                );
             }
 
             let arm_type = self.check_expression(&arm.value);

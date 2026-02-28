@@ -7,7 +7,7 @@
             "message": "variable name must be camelCase",
             "span": {
                 "start": 31,
-                "end": 42,
+                "end": 37,
                 "line": 2,
                 "column": 5
             }

@@ -1957,7 +1957,7 @@ struct VariableInfo {
     value_type: Type,
     used: bool,
     mutable: bool,
-    span: Span,
+    name_span: Span,
 }
 
 struct ConstantInfo {
@@ -2238,7 +2238,14 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn define_variable(&mut self, name: String, value_type: Type, mutable: bool, span: Span) {
+    fn define_variable(
+        &mut self,
+        name: String,
+        value_type: Type,
+        mutable: bool,
+        span: &Span,
+        name_span: Span,
+    ) {
         let duplicate = self
             .scopes
             .last()
@@ -2253,7 +2260,7 @@ impl<'a> TypeChecker<'a> {
                     value_type,
                     used: false,
                     mutable,
-                    span,
+                    name_span,
                 },
             );
         }

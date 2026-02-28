@@ -7,7 +7,7 @@
             "message": "parameter name must be camelCase",
             "span": {
                 "start": 14,
-                "end": 29,
+                "end": 22,
                 "line": 1,
                 "column": 15
             }
