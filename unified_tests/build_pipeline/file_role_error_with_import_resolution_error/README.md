@@ -1,0 +1,2 @@
+File-role diagnostics suppress downstream import-resolution diagnostics for the
+same build target.
