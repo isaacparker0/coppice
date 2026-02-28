@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use compiler__analysis_pipeline::{
     analyze_target_with_workspace_root, analyze_target_with_workspace_root_and_overrides,
+    group_text_edits_by_workspace_relative_path,
 };
 use compiler__autofix_policy::{
     AutofixPolicyMode, AutofixPolicyOutcome, evaluate_autofix_policy,
@@ -51,13 +52,13 @@ pub fn build_target_with_workspace_root(
             }
         };
 
-    let safe_autofix_edit_count_by_workspace_relative_path = analyzed_target
-        .safe_autofix_edits_by_workspace_relative_path
-        .iter()
-        .map(|(workspace_relative_path, text_edits)| {
-            (workspace_relative_path.clone(), text_edits.len())
-        })
-        .collect::<BTreeMap<_, _>>();
+    let safe_autofix_edit_count_by_workspace_relative_path =
+        group_text_edits_by_workspace_relative_path(&analyzed_target.safe_autofixes)
+            .iter()
+            .map(|(workspace_relative_path, text_edits)| {
+                (workspace_relative_path.clone(), text_edits.len())
+            })
+            .collect::<BTreeMap<_, _>>();
     let autofix_policy_outcome =
         evaluate_safe_autofix_policy(strict, &safe_autofix_edit_count_by_workspace_relative_path);
 
