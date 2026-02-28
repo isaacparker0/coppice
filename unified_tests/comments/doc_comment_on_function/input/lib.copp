@@ -1,0 +1,8 @@
+type User :: struct {
+    name: string,
+}
+
+/// Function docs.
+function greet(user: User) -> string {
+    return user.name
+}

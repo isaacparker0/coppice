@@ -1,0 +1,4 @@
+type User :: struct {
+    /// Public id field docs.
+    public id: int64,
+}

@@ -1,0 +1,4 @@
+/// User docs.
+type User :: struct {
+    id: int64,
+}

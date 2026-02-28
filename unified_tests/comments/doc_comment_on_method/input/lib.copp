@@ -1,0 +1,8 @@
+type User :: struct {
+    name: string,
+
+    /// Method docs.
+    function displayName(self) -> string {
+        return self.name
+    },
+}

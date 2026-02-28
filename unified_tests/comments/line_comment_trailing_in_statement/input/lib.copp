@@ -1,0 +1,4 @@
+function run() -> int64 {
+    value := 1 // trailing comment
+    return value
+}

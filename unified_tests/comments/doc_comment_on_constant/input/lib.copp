@@ -1,0 +1,2 @@
+/// Constant docs.
+ANSWER: int64 := 42
