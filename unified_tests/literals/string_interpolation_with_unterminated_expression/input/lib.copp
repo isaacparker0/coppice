@@ -1,0 +1,3 @@
+function run() -> string {
+    return "hello {"
+}

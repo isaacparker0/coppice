@@ -1,0 +1,6 @@
+function main() -> nil {
+    a := "foo"
+    b := "bar"
+    print("{a} and {b}")
+    return nil
+}

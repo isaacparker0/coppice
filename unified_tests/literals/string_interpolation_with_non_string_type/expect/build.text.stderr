@@ -1,0 +1,3 @@
+lib.copp:3:14: error: string interpolation expression must be type string, got int64
+      return "{n}"
+               ^

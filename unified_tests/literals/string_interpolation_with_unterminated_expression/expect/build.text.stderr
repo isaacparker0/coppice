@@ -1,0 +1,8 @@
+lib.copp:2:20: error: unterminated string literal
+      return "hello {"
+                     ^
+lib.copp:3:1: error: unterminated string literal
+  }
+  ^
+lib.copp:4:1: error: expected symbol
+  

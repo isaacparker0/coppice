@@ -1,0 +1,4 @@
+function run() -> string {
+    n: int64 := 42
+    return "{n}"
+}

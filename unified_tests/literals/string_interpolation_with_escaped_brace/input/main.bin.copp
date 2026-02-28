@@ -1,0 +1,4 @@
+function main() -> nil {
+    print("use \{braces\}")
+    return nil
+}

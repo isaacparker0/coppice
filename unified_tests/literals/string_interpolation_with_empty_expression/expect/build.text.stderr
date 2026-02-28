@@ -1,0 +1,3 @@
+lib.copp:2:20: error: expected expression
+      return "hello {}"
+                     ^

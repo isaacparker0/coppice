@@ -730,6 +730,41 @@ fn lower_expression(
                 type_reference,
             }
         }
+        TypeAnnotatedExpression::StringInterpolation { parts, .. } => {
+            use compiler__type_annotated_program::TypeAnnotatedStringInterpolationPart;
+            let lowered_parts: Vec<ExecutableExpression> = parts
+                .iter()
+                .filter_map(|part| match part {
+                    TypeAnnotatedStringInterpolationPart::Literal(text) => {
+                        if text.is_empty() {
+                            None
+                        } else {
+                            Some(ExecutableExpression::StringLiteral {
+                                value: text.clone(),
+                            })
+                        }
+                    }
+                    TypeAnnotatedStringInterpolationPart::Expression(expr) => {
+                        Some(lower_expression(expr, type_parameter_names, diagnostics))
+                    }
+                })
+                .collect();
+            match lowered_parts.len() {
+                0 => ExecutableExpression::StringLiteral {
+                    value: String::new(),
+                },
+                1 => lowered_parts.into_iter().next().unwrap(),
+                _ => {
+                    let mut iter = lowered_parts.into_iter();
+                    let first = iter.next().unwrap();
+                    iter.fold(first, |left, right| ExecutableExpression::Binary {
+                        operator: ExecutableBinaryOperator::Add,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    })
+                }
+            }
+        }
     }
 }
 

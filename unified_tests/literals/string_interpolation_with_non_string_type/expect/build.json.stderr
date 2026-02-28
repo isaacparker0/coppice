@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "string interpolation expression must be type string, got int64",
+            "span": {
+                "start": 59,
+                "end": 60,
+                "line": 3,
+                "column": 14
+            }
+        }
+    ]
+}

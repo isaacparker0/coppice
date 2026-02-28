@@ -248,6 +248,12 @@ pub enum SyntaxAssignTarget {
 }
 
 #[derive(Clone, Debug)]
+pub enum SyntaxStringInterpolationPart {
+    Literal(String),
+    Expression(SyntaxExpression),
+}
+
+#[derive(Clone, Debug)]
 pub enum SyntaxExpression {
     IntegerLiteral {
         value: i64,
@@ -314,6 +320,10 @@ pub enum SyntaxExpression {
     Matches {
         value: Box<SyntaxExpression>,
         type_name: SyntaxTypeName,
+        span: Span,
+    },
+    StringInterpolation {
+        parts: Vec<SyntaxStringInterpolationPart>,
         span: Span,
     },
 }

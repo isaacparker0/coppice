@@ -548,6 +548,25 @@ fn lower_expression(
             type_name: lower_type_name(type_name),
             span: span.clone(),
         },
+        syntax::SyntaxExpression::StringInterpolation { parts, span } => {
+            semantic::SemanticExpression::StringInterpolation {
+                id,
+                parts: parts
+                    .iter()
+                    .map(|part| match part {
+                        syntax::SyntaxStringInterpolationPart::Literal(text) => {
+                            semantic::SemanticStringInterpolationPart::Literal(text.clone())
+                        }
+                        syntax::SyntaxStringInterpolationPart::Expression(expr) => {
+                            semantic::SemanticStringInterpolationPart::Expression(lower_expression(
+                                expr, context,
+                            ))
+                        }
+                    })
+                    .collect(),
+                span: span.clone(),
+            }
+        }
     }
 }
 

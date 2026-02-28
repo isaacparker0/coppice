@@ -527,6 +527,26 @@ impl TypeChecker<'_> {
                 span: _,
                 ..
             } => self.check_matches_expression(value, type_name),
+            SemanticExpression::StringInterpolation { parts, .. } => {
+                for part in parts {
+                    if let compiler__semantic_program::SemanticStringInterpolationPart::Expression(
+                        expr,
+                    ) = part
+                    {
+                        let expr_type = self.check_expression(expr);
+                        if expr_type != Type::String && expr_type != Type::Unknown {
+                            self.error(
+                                format!(
+                                    "string interpolation expression must be type string, got {}",
+                                    expr_type.display()
+                                ),
+                                expr.span(),
+                            );
+                        }
+                    }
+                }
+                Type::String
+            }
         };
         self.resolved_type_by_expression_id.insert(
             super::semantic_expression_id(expression),

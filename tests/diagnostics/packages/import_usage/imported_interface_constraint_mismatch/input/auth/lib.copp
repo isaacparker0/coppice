@@ -5,7 +5,7 @@ visible type Printable :: interface {
 visible type User :: struct {
     id: int64,
     function toString(self) -> string {
-        return "{self.id}"
+        return "{string(self.id)}"
     },
 }
 

@@ -197,6 +197,12 @@ pub enum SemanticAssignTarget {
 }
 
 #[derive(Clone, Debug)]
+pub enum SemanticStringInterpolationPart {
+    Literal(String),
+    Expression(SemanticExpression),
+}
+
+#[derive(Clone, Debug)]
 pub enum SemanticExpression {
     IntegerLiteral {
         id: SemanticExpressionId,
@@ -277,6 +283,11 @@ pub enum SemanticExpression {
         id: SemanticExpressionId,
         value: Box<SemanticExpression>,
         type_name: SemanticTypeName,
+        span: Span,
+    },
+    StringInterpolation {
+        id: SemanticExpressionId,
+        parts: Vec<SemanticStringInterpolationPart>,
         span: Span,
     },
 }

@@ -419,7 +419,8 @@ impl ExpressionSpan for SyntaxExpression {
             | SyntaxExpression::Unary { span, .. }
             | SyntaxExpression::Binary { span, .. }
             | SyntaxExpression::Match { span, .. }
-            | SyntaxExpression::Matches { span, .. } => span.clone(),
+            | SyntaxExpression::Matches { span, .. }
+            | SyntaxExpression::StringInterpolation { span, .. } => span.clone(),
         }
     }
 }
