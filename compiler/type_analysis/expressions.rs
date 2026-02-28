@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use compiler__diagnostics::SafeAutofix;
+use compiler__fix_edits::TextEdit;
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticExpression, SemanticMatchArm, SemanticMatchPattern,
     SemanticStructLiteralField, SemanticTypeName, SemanticUnaryOperator,
@@ -533,6 +535,17 @@ impl TypeChecker<'_> {
                         expression,
                     ) = part
                     {
+                        if let SemanticExpression::StringLiteral { value, .. } = expression {
+                            self.error(
+                                "string interpolation expression must not be a string literal",
+                                expression.span(),
+                            );
+                            self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
+                                start_byte_offset: expression.span().start,
+                                end_byte_offset: expression.span().end,
+                                replacement_text: escape_string_interpolation_literal_text(value),
+                            }));
+                        }
                         let expression_type = self.check_expression(expression);
                         if expression_type != Type::String && expression_type != Type::Unknown {
                             self.error(
@@ -1342,4 +1355,17 @@ impl TypeChecker<'_> {
             | Type::Unknown => {}
         }
     }
+}
+
+fn escape_string_interpolation_literal_text(text: &str) -> String {
+    let mut escaped = String::new();
+    for character in text.chars() {
+        match character {
+            '{' => escaped.push_str("\\{"),
+            '}' => escaped.push_str("\\}"),
+            '\\' => escaped.push_str("\\\\"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
 }

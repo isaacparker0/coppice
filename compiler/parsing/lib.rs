@@ -29,6 +29,7 @@ pub fn parse_file(source: &str, role: FileRole) -> PhaseOutput<SyntaxParsedFile>
     PhaseOutput {
         value: file,
         diagnostics,
+        safe_autofixes: Vec::new(),
         status,
     }
 }

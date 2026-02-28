@@ -35,6 +35,7 @@ pub fn check_file(file: &SyntaxParsedFile) -> PhaseOutput<()> {
     PhaseOutput {
         value: (),
         diagnostics,
+        safe_autofixes: Vec::new(),
         status,
     }
 }

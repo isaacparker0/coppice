@@ -125,6 +125,7 @@ pub fn lower_resolved_declarations_build_unit(
             function_declarations,
         },
         diagnostics,
+        safe_autofixes: Vec::new(),
         status,
     }
 }

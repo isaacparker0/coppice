@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use compiler__diagnostics::PhaseDiagnostic;
+use compiler__diagnostics::{PhaseDiagnostic, SafeAutofix};
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
 use compiler__semantic_program::{
@@ -76,12 +76,14 @@ pub fn check_package_unit(
     imported_bindings: &[ImportedBinding],
 ) -> PhaseOutput<Result<TypeResolvedDeclarations, TypeAnalysisBlockingReason>> {
     let mut diagnostics = Vec::new();
+    let mut safe_autofixes = Vec::new();
     let summary = analyze_package_unit(
         package_id,
         package_path,
         package_unit,
         imported_bindings,
         &mut diagnostics,
+        &mut safe_autofixes,
     );
     let status = if diagnostics.is_empty() {
         PhaseStatus::Ok
@@ -102,6 +104,7 @@ pub fn check_package_unit(
     PhaseOutput {
         value,
         diagnostics,
+        safe_autofixes,
         status,
     }
 }
@@ -1911,6 +1914,7 @@ fn analyze_package_unit(
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
 ) -> TypeAnalysisSummary {
     check_package_unit_declarations(
         package_id,
@@ -1918,6 +1922,7 @@ fn analyze_package_unit(
         package_unit,
         imported_bindings,
         diagnostics,
+        safe_autofixes,
     )
 }
 
@@ -1927,6 +1932,7 @@ fn check_package_unit_declarations(
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
 ) -> TypeAnalysisSummary {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
@@ -1949,6 +1955,7 @@ fn check_package_unit_declarations(
         package_id,
         package_path,
         diagnostics,
+        safe_autofixes,
         &type_declarations,
         &constant_declarations,
         &function_declarations,
@@ -1964,13 +1971,19 @@ fn check_declarations(
     package_id: PackageId,
     package_path: &str,
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
     type_declarations: &[SemanticTypeDeclaration],
     constant_declarations: &[SemanticConstantDeclaration],
     function_declarations: &[SemanticFunctionDeclaration],
     imported_bindings: &[ImportedBinding],
 ) -> TypeAnalysisSummary {
-    let mut type_checker =
-        TypeChecker::new(package_id, package_path, imported_bindings, diagnostics);
+    let mut type_checker = TypeChecker::new(
+        package_id,
+        package_path,
+        imported_bindings,
+        diagnostics,
+        safe_autofixes,
+    );
     type_checker.collect_imported_type_declarations();
     type_checker.collect_type_declarations(type_declarations);
     type_checker.collect_imported_function_signatures();
@@ -2078,6 +2091,7 @@ struct TypeChecker<'a> {
     scopes: Vec<HashMap<String, VariableInfo>>,
     type_parameter_scopes: Vec<HashMap<String, Span>>,
     diagnostics: &'a mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &'a mut Vec<SafeAutofix>,
     current_return_type: Type,
     loop_depth: usize,
     resolved_type_by_expression_id: BTreeMap<SemanticExpressionId, Type>,
@@ -2121,6 +2135,7 @@ impl<'a> TypeChecker<'a> {
         package_path: &str,
         imported_bindings: &[ImportedBinding],
         diagnostics: &'a mut Vec<PhaseDiagnostic>,
+        safe_autofixes: &'a mut Vec<SafeAutofix>,
     ) -> Self {
         let mut imported_binding_map = HashMap::new();
         for imported in imported_bindings {
@@ -2147,6 +2162,7 @@ impl<'a> TypeChecker<'a> {
             scopes: Vec::new(),
             type_parameter_scopes: Vec::new(),
             diagnostics,
+            safe_autofixes,
             current_return_type: Type::Unknown,
             loop_depth: 0,
             resolved_type_by_expression_id: BTreeMap::new(),
@@ -2419,6 +2435,10 @@ impl<'a> TypeChecker<'a> {
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(PhaseDiagnostic::new(message, span));
+    }
+
+    fn push_safe_autofix(&mut self, safe_autofix: SafeAutofix) {
+        self.safe_autofixes.push(safe_autofix);
     }
 
     fn push_type_parameters(&mut self, names_and_spans: &[(String, Span)]) {

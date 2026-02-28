@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
+use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic, SafeAutofix};
 use compiler__file_role_rules as file_role_rules;
 use compiler__fix_edits::{TextEdit, apply_text_edits, merge_text_edits};
 use compiler__package_symbols::{
@@ -232,6 +232,8 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let mut all_diagnostics_by_file = BTreeMap::<PathBuf, Vec<RenderedDiagnostic>>::new();
     let mut source_by_path = BTreeMap::new();
     let mut source_by_workspace_relative_path_in_scope = BTreeMap::new();
+    let mut phase_safe_autofix_edits_by_workspace_relative_path =
+        BTreeMap::<String, Vec<TextEdit>>::new();
     let mut parsed_units = Vec::new();
     let mut package_path_by_file = BTreeMap::new();
     let mut file_role_by_path = BTreeMap::new();
@@ -292,19 +294,32 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                     package_in_scope,
                 );
             }
+            let compiler__phase_results::PhaseOutput {
+                value: parsed_file,
+                diagnostics: _,
+                safe_autofixes: parse_safe_autofixes,
+                status: parsing_status,
+            } = parse_result;
             parsed_units.push(ParsedUnit {
                 package_id: package.id,
                 package_path: package.package_path.clone(),
                 path: relative_path,
-                parsed: parse_result.value,
+                parsed: parsed_file,
                 phase_state: FilePhaseState {
-                    parsing: parse_result.status,
+                    parsing: parsing_status,
                     syntax_rules: PhaseStatus::Ok,
                     file_role_rules: PhaseStatus::Ok,
                     resolution: PhaseStatus::Ok,
                     semantic_lowering: PhaseStatus::Ok,
                 },
             });
+            if package_in_scope {
+                append_safe_autofix_edits_for_file(
+                    &mut phase_safe_autofix_edits_by_workspace_relative_path,
+                    &workspace_relative_key,
+                    &parse_safe_autofixes,
+                );
+            }
         }
     }
 
@@ -322,11 +337,11 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             scope_is_workspace,
             scoped_package_paths.as_ref(),
         );
-        for diagnostic in syntax_rules_result.diagnostics {
+        for diagnostic in &syntax_rules_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::SyntaxRules,
                 display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                diagnostic,
+                diagnostic.clone(),
             );
             push_rendered_diagnostic(
                 &mut rendered_diagnostics,
@@ -336,11 +351,11 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                 parsed_unit_in_scope,
             );
         }
-        for diagnostic in file_role_rules_result.diagnostics {
+        for diagnostic in &file_role_rules_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::FileRoleRules,
                 display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                diagnostic,
+                diagnostic.clone(),
             );
             push_rendered_diagnostic(
                 &mut rendered_diagnostics,
@@ -348,6 +363,18 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                 &parsed_unit.path,
                 rendered_diagnostic,
                 parsed_unit_in_scope,
+            );
+        }
+        if parsed_unit_in_scope {
+            append_safe_autofix_edits_for_file(
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
+                &path_to_key(&parsed_unit.path),
+                &syntax_rules_result.safe_autofixes,
+            );
+            append_safe_autofix_edits_for_file(
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
+                &path_to_key(&parsed_unit.path),
+                &file_role_rules_result.safe_autofixes,
             );
         }
     }
@@ -405,6 +432,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         let compiler__phase_results::PhaseOutput {
             value,
             diagnostics,
+            safe_autofixes,
             status,
         } = lowering_result;
         parsed_unit.phase_state.semantic_lowering = status;
@@ -429,6 +457,13 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         }
         if matches!(parsed_unit.phase_state.semantic_lowering, PhaseStatus::Ok) {
             semantic_file_by_path.insert(parsed_unit.path.clone(), value);
+        }
+        if parsed_unit_in_scope {
+            append_safe_autofix_edits_for_file(
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
+                &path_to_key(&parsed_unit.path),
+                &safe_autofixes,
+            );
         }
     }
     let package_symbol_file_inputs: Vec<PackageSymbolFileInput<'_>> = parsed_units
@@ -475,11 +510,11 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         if let Ok(resolved_declarations) = type_analysis_result.value {
             resolved_declarations_by_path.insert(parsed_unit.path.clone(), resolved_declarations);
         }
-        for diagnostic in type_analysis_result.diagnostics {
+        for diagnostic in &type_analysis_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::TypeAnalysis,
                 display_path(&diagnostic_display_base.join(&parsed_unit.path)),
-                diagnostic,
+                diagnostic.clone(),
             );
             push_rendered_diagnostic(
                 &mut rendered_diagnostics,
@@ -487,6 +522,13 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                 &parsed_unit.path,
                 rendered_diagnostic,
                 parsed_unit_in_scope,
+            );
+        }
+        if parsed_unit_in_scope {
+            append_safe_autofix_edits_for_file(
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
+                &path_to_key(&parsed_unit.path),
+                &type_analysis_result.safe_autofixes,
             );
         }
     }
@@ -498,7 +540,10 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let (
         safe_autofix_edits_by_workspace_relative_path,
         canonical_source_override_by_workspace_relative_path,
-    ) = compute_safe_autofix_outputs(&source_by_workspace_relative_path_in_scope);
+    ) = compute_safe_autofix_outputs(
+        &source_by_workspace_relative_path_in_scope,
+        &phase_safe_autofix_edits_by_workspace_relative_path,
+    );
 
     Ok(AnalyzedTarget {
         diagnostics: rendered_diagnostics,
@@ -520,6 +565,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
 
 fn compute_safe_autofix_outputs(
     source_by_workspace_relative_path: &BTreeMap<String, String>,
+    phase_safe_autofix_edits_by_workspace_relative_path: &BTreeMap<String, Vec<TextEdit>>,
 ) -> (BTreeMap<String, Vec<TextEdit>>, BTreeMap<String, String>) {
     let mut safe_autofix_edits_by_workspace_relative_path = BTreeMap::new();
     let mut canonical_source_override_by_workspace_relative_path = BTreeMap::new();
@@ -528,22 +574,43 @@ fn compute_safe_autofix_outputs(
         if !workspace_relative_path.ends_with(".copp") {
             continue;
         }
-        let candidate_text_edits = formatting_text_edits(source_text);
-        if candidate_text_edits.is_empty() {
+        let mut canonical_source_text = source_text.clone();
+        if let Some(candidate_phase_safe_autofix_edits) =
+            phase_safe_autofix_edits_by_workspace_relative_path.get(workspace_relative_path)
+        {
+            let merged_phase_safe_autofix_edits =
+                merge_text_edits(candidate_phase_safe_autofix_edits);
+            if !merged_phase_safe_autofix_edits
+                .accepted_text_edits
+                .is_empty()
+                && let Ok(updated_text) = apply_text_edits(
+                    &canonical_source_text,
+                    &merged_phase_safe_autofix_edits.accepted_text_edits,
+                )
+            {
+                canonical_source_text = updated_text;
+            }
+        }
+
+        let formatter_text_edits = formatting_text_edits(&canonical_source_text);
+        if !formatter_text_edits.is_empty()
+            && let Ok(formatted_text) =
+                apply_text_edits(&canonical_source_text, &formatter_text_edits)
+        {
+            canonical_source_text = formatted_text;
+        }
+
+        if canonical_source_text == *source_text {
             continue;
         }
-        let merged_text_edits = merge_text_edits(&candidate_text_edits);
-        if merged_text_edits.accepted_text_edits.is_empty() {
-            continue;
-        }
-        let Ok(canonical_source_text) =
-            apply_text_edits(source_text, &merged_text_edits.accepted_text_edits)
-        else {
-            continue;
-        };
+
         safe_autofix_edits_by_workspace_relative_path.insert(
             workspace_relative_path.clone(),
-            merged_text_edits.accepted_text_edits,
+            vec![TextEdit {
+                start_byte_offset: 0,
+                end_byte_offset: source_text.len(),
+                replacement_text: canonical_source_text.clone(),
+            }],
         );
         canonical_source_override_by_workspace_relative_path
             .insert(workspace_relative_path.clone(), canonical_source_text);
@@ -553,6 +620,19 @@ fn compute_safe_autofix_outputs(
         safe_autofix_edits_by_workspace_relative_path,
         canonical_source_override_by_workspace_relative_path,
     )
+}
+
+fn append_safe_autofix_edits_for_file(
+    safe_autofix_edits_by_workspace_relative_path: &mut BTreeMap<String, Vec<TextEdit>>,
+    workspace_relative_path: &str,
+    safe_autofixes: &[SafeAutofix],
+) {
+    let file_safe_autofix_edits = safe_autofix_edits_by_workspace_relative_path
+        .entry(workspace_relative_path.to_string())
+        .or_default();
+    for safe_autofix in safe_autofixes {
+        file_safe_autofix_edits.extend(safe_autofix.text_edits.iter().cloned());
+    }
 }
 
 fn resolve_workspace_root(

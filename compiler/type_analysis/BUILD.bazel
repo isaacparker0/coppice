@@ -16,6 +16,7 @@ rust_library(
     visibility = ["//:__subpackages__"],
     deps = [
         "//compiler/diagnostics",
+        "//compiler/fix_edits",
         "//compiler/packages",
         "//compiler/phase_results",
         "//compiler/semantic_program",
