@@ -1,3 +1,0 @@
-lib.copp:13:26: error: type mismatch: expected Named, got User
-      named: Named := User { value: "Ada" }
-                           ^

@@ -1,0 +1,3 @@
+lib.copp:2:13: error: cannot call value of type int64
+      return (1)(2)
+              ^

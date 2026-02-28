@@ -1,3 +1,0 @@
-lib.copp:5:6: error: duplicate type 'User'
-  type User :: struct {
-       ^

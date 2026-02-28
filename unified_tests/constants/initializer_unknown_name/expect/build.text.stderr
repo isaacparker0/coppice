@@ -1,0 +1,3 @@
+lib.copp:1:18: error: unknown name 'MISSING'
+  BROKEN: int64 := MISSING
+                   ^

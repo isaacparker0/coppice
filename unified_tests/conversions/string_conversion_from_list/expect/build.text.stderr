@@ -1,0 +1,3 @@
+lib.copp:3:19: error: cannot convert List[int64] to string
+      return string(values)
+                    ^

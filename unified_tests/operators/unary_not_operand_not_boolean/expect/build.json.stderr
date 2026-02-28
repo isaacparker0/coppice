@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "not operator requires boolean operand",
+            "span": {
+                "start": 43,
+                "end": 44,
+                "line": 2,
+                "column": 16
+            }
+        }
+    ]
+}

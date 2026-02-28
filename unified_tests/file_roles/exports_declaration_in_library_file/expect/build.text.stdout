@@ -1,3 +1,0 @@
-lib.copp:1:1: error: exports declarations are only allowed in PACKAGE.copp
-  exports {}
-  ^

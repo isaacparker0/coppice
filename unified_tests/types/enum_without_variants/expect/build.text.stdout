@@ -1,3 +1,0 @@
-lib.copp:2:1: error: enum declaration must include at least one variant
-  }
-  ^

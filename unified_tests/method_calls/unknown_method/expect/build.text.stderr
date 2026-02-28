@@ -1,0 +1,3 @@
+lib.copp:7:17: error: unknown method 'User.missing'
+      return user.missing()
+                  ^

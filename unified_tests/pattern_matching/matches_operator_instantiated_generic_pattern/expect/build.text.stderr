@@ -1,0 +1,3 @@
+lib.copp:6:26: error: match patterns must not include type arguments
+      return value matches Box[int64]
+                           ^

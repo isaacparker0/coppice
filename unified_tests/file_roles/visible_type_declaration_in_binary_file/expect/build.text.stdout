@@ -1,3 +1,0 @@
-main.bin.copp:5:14: error: visible declarations are not allowed in .bin.copp files
-  visible type Helper :: struct {
-               ^

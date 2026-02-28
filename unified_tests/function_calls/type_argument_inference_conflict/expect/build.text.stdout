@@ -1,3 +1,0 @@
-lib.copp:9:5: error: cannot infer consistent type arguments for generic function 'pair' (conflicting inferences for: T)
-      pair(1, true)
-      ^

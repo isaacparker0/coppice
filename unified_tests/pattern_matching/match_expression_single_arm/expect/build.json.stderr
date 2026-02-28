@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "match must have at least two arms",
+            "span": {
+                "start": 49,
+                "end": 87,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

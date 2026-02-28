@@ -1,3 +1,0 @@
-lib.copp:5:22: error: implemented type 'NotInterface' must be an interface declaration
-  type User implements NotInterface :: struct {
-                       ^

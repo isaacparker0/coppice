@@ -1,3 +1,0 @@
-lib.copp:2:12: error: match must have at least two arms
-      return match value {
-             ^

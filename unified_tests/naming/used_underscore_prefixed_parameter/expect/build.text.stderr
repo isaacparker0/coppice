@@ -1,0 +1,3 @@
+lib.copp:1:15: error: bindings prefixed with '_' must be unused: '_value' is used
+  function demo(_value: int64) -> int64 {
+                ^

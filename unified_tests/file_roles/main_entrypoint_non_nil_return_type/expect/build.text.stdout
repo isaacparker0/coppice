@@ -1,3 +1,0 @@
-main.bin.copp:1:20: error: main in .bin.copp must return nil
-  function main() -> int64 {
-                     ^

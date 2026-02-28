@@ -1,0 +1,3 @@
+lib.copp:3:5: error: duplicate binding 'x'
+      x := 2
+      ^

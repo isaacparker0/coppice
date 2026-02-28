@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "constants require an explicit type annotation",
+            "span": {
+                "start": 7,
+                "end": 9,
+                "line": 1,
+                "column": 8
+            }
+        }
+    ]
+}

@@ -1,0 +1,3 @@
+lib.copp:2:5: error: cannot assign to immutable binding 'value'
+      value = value + 1
+      ^

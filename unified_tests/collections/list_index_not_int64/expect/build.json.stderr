@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "list index must be int64",
+            "span": {
+                "start": 68,
+                "end": 72,
+                "line": 3,
+                "column": 19
+            }
+        }
+    ]
+}

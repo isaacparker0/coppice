@@ -1,3 +1,0 @@
-PACKAGE.copp:1:1: error: PACKAGE.copp may only contain exports declarations
-  function helper() -> nil {
-  ^

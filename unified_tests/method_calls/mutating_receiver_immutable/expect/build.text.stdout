@@ -1,3 +1,0 @@
-lib.copp:11:17: error: cannot call mutating method 'User.bump' on immutable binding 'user'
-      return user.bump(1)
-                  ^

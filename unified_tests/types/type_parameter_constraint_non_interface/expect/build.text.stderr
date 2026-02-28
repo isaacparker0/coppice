@@ -1,0 +1,3 @@
+lib.copp:1:13: error: constraint for type parameter 'T' must be an interface type
+  type Box[T: int64] :: struct {
+              ^

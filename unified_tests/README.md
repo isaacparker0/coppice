@@ -103,7 +103,8 @@ For `build` runs:
 
 - required: `<stem>.text.stdout`
 - required: `<stem>.json.stdout`
-- required: `<stem>.stderr`
+- required: `<stem>.text.stderr`
+- required: `<stem>.json.stderr`
 - required: `<stem>.artifacts`
 - required: `<stem>.exit`
 - optional: `<stem>.text.exit`

@@ -1,3 +1,0 @@
-lib.copp:1:6: error: enum type 'Outcome' cannot declare type parameters
-  type Outcome[T] :: enum {
-       ^

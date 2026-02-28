@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "argument 1 to 'bump' must be int64, got boolean",
+            "span": {
+                "start": 349,
+                "end": 353,
+                "line": 14,
+                "column": 29
+            }
+        }
+    ]
+}

@@ -1,3 +1,0 @@
-lib.copp:2:19: error: cannot convert string to string
-      return string("ok")
-                    ^

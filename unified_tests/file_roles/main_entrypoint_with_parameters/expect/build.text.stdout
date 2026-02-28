@@ -1,3 +1,0 @@
-main.bin.copp:1:10: error: main in .bin.copp must not declare parameters
-  function main(value: int64) -> nil {
-           ^

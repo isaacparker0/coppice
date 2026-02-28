@@ -1,3 +1,0 @@
-lib.copp:5:22: error: type 'User' method 'toString' does not match interface 'Printable'
-  type User implements Printable :: struct {
-                       ^

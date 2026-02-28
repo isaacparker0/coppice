@@ -1,0 +1,3 @@
+lib.copp:2:10: error: unterminated string literal
+      x := "abc
+           ^

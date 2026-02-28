@@ -1,0 +1,3 @@
+lib.copp:3:9: error: assignment type mismatch: expected int64, got boolean
+      x = true
+          ^

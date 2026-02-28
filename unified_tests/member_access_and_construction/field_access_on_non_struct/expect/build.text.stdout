@@ -1,3 +1,0 @@
-lib.copp:3:14: error: cannot access field 'y' on non-struct type int64
-      return x.y
-               ^

@@ -1,0 +1,3 @@
+lib.copp:2:9: error: unknown type 'foo'
+      id: foo,
+          ^

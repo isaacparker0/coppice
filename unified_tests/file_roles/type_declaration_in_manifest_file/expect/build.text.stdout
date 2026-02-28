@@ -1,3 +1,0 @@
-PACKAGE.copp:1:6: error: PACKAGE.copp may only contain exports declarations
-  type Token :: struct {
-       ^

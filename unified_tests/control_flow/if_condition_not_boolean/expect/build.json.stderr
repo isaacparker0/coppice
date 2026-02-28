@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "if condition must be boolean",
+            "span": {
+                "start": 33,
+                "end": 34,
+                "line": 2,
+                "column": 8
+            }
+        }
+    ]
+}

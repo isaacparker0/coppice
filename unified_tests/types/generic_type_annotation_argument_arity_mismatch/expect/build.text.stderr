@@ -1,0 +1,3 @@
+lib.copp:6:10: error: type 'Box' expects 1 type arguments, got 0
+      box: Box := Box[int64] { value: 1 }
+           ^

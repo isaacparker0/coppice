@@ -1,3 +1,0 @@
-lib.test.copp:1:14: error: visible declarations are not allowed in .test.copp files
-  visible type Helper :: struct {
-               ^

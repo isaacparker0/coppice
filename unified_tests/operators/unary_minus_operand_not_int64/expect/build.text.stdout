@@ -1,3 +1,0 @@
-lib.copp:2:13: error: unary minus requires int64 operand
-      return -true
-              ^

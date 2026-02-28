@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "type mismatch: expected Named, got User",
+            "span": {
+                "start": 224,
+                "end": 245,
+                "line": 13,
+                "column": 26
+            }
+        }
+    ]
+}

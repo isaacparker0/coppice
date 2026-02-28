@@ -1,3 +1,0 @@
-lib.copp:3:17: error: indexed assignment type mismatch: expected int64, got boolean
-      values[1] = true
-                  ^

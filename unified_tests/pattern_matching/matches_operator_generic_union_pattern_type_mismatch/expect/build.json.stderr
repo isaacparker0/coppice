@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "matches pattern type 'string' is not in target type",
+            "span": {
+                "start": 98,
+                "end": 104,
+                "line": 4,
+                "column": 26
+            }
+        }
+    ]
+}

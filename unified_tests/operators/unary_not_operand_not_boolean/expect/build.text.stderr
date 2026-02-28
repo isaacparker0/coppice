@@ -1,0 +1,3 @@
+lib.copp:2:16: error: not operator requires boolean operand
+      return not 1
+                 ^

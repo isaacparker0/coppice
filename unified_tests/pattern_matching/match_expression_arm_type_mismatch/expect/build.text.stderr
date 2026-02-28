@@ -1,0 +1,3 @@
+lib.copp:7:19: error: match arm type mismatch: expected int64, got string
+          string => "nope"
+                    ^

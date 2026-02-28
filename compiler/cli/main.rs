@@ -183,7 +183,7 @@ fn run_build(
                         } else if let Some(error) = &strict_policy_error {
                             render_compiler_failure_text(path, error);
                         } else if let Some(success_message) = build_result.success_message {
-                            println!("{success_message}");
+                            eprintln!("{success_message}");
                         }
                     }
                     ReportFormat::Json => {
@@ -193,7 +193,7 @@ fn run_build(
                             safe_fixes: safe_autofixes_by_path,
                             error: strict_policy_error,
                         };
-                        print_json_output(&output);
+                        print_json_output_to_stderr(&output);
                     }
                 }
                 if has_diagnostics || strict_policy_failure {
@@ -211,7 +211,7 @@ fn run_build(
                         safe_fixes: safe_autofixes_by_path,
                         error: None,
                     };
-                    print_json_output(&output);
+                    print_json_output_to_stderr(&output);
                 }
             }
         }
@@ -227,7 +227,7 @@ fn run_build(
                         safe_fixes: safe_autofixes_by_path,
                         error: Some(error),
                     };
-                    print_json_output(&output);
+                    print_json_output_to_stderr(&output);
                 }
             }
             process::exit(1);
@@ -235,12 +235,12 @@ fn run_build(
     }
 }
 
-fn print_json_output<T: Serialize>(output: &T) {
+fn print_json_output_to_stderr<T: Serialize>(output: &T) {
     let mut bytes = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
     let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, formatter);
     output.serialize(&mut serializer).unwrap();
-    println!("{}", String::from_utf8(bytes).unwrap());
+    eprintln!("{}", String::from_utf8(bytes).unwrap());
 }
 
 fn render_safe_fix_warning() {
@@ -282,15 +282,15 @@ fn render_diagnostics_text(
         let line = diagnostic.span.line;
         let column = diagnostic.span.column;
         let line_text = source.lines().nth(line - 1).unwrap_or("");
-        println!(
+        eprintln!(
             "{path}:{line}:{column}: error: {message}",
             path = diagnostic.path,
             message = diagnostic.message
         );
-        println!("  {line_text}");
+        eprintln!("  {line_text}");
         if !line_text.is_empty() {
             let caret = " ".repeat(column.saturating_sub(1));
-            println!("  {caret}^");
+            eprintln!("  {caret}^");
         }
     }
 }

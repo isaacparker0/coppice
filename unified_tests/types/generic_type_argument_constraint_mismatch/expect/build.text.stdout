@@ -1,3 +1,0 @@
-lib.copp:17:12: error: type argument 'User' does not satisfy constraint 'Named' for type parameter 'T' on 'Box'
-      box := Box[User] { value: User { value: "text" } }
-             ^

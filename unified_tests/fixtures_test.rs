@@ -57,6 +57,17 @@ fn run_case(
         "case.test has no run blocks for {}",
         case_path.display()
     );
+    match mode {
+        SnapshotFixtureRunMode::Check => {
+            assert_no_unexpected_expectation_files(&case_directory, case_path, &run_blocks);
+        }
+        SnapshotFixtureRunMode::Update {
+            workspace_directory,
+        } => {
+            let source_case_directory = workspace_directory.join(case_path);
+            remove_unexpected_expectation_files(&source_case_directory, case_path, &run_blocks);
+        }
+    }
 
     let temp_case_directory = env::temp_dir().join(format!(
         "coppice_fixture_case_{}_{}",
@@ -84,8 +95,131 @@ fn run_case(
             mode,
         );
     }
-
     let _ = fs::remove_dir_all(&temp_case_directory);
+}
+
+fn assert_no_unexpected_expectation_files(
+    case_directory: &Path,
+    case_path: &Path,
+    run_blocks: &[RunBlock],
+) {
+    let allowed_relative_paths = allowed_expectation_relative_paths(run_blocks, case_path);
+    let mut unexpected_relative_paths =
+        unexpected_expectation_relative_paths(case_directory, case_path, &allowed_relative_paths);
+    unexpected_relative_paths.sort();
+    assert!(
+        unexpected_relative_paths.is_empty(),
+        "unexpected files in {}: {}\nremove stale expectation files or update case.test labels/stems",
+        case_path.display(),
+        unexpected_relative_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
+fn remove_unexpected_expectation_files(
+    source_case_directory: &Path,
+    case_path: &Path,
+    run_blocks: &[RunBlock],
+) {
+    let allowed_relative_paths = allowed_expectation_relative_paths(run_blocks, case_path);
+    let unexpected_relative_paths = unexpected_expectation_relative_paths(
+        source_case_directory,
+        case_path,
+        &allowed_relative_paths,
+    );
+    for unexpected_relative_path in unexpected_relative_paths {
+        let full_path = source_case_directory.join(&unexpected_relative_path);
+        let metadata = fs::symlink_metadata(&full_path).unwrap_or_else(|error| {
+            panic!(
+                "failed to stat stale expectation '{}' in {}: {error}",
+                unexpected_relative_path.display(),
+                case_path.display()
+            )
+        });
+        if metadata.file_type().is_dir() {
+            fs::remove_dir_all(&full_path).unwrap_or_else(|error| {
+                panic!(
+                    "failed to remove stale expectation directory '{}' in {}: {error}",
+                    unexpected_relative_path.display(),
+                    case_path.display()
+                )
+            });
+            continue;
+        }
+        fs::remove_file(&full_path).unwrap_or_else(|error| {
+            panic!(
+                "failed to remove stale expectation file '{}' in {}: {error}",
+                unexpected_relative_path.display(),
+                case_path.display()
+            )
+        });
+    }
+}
+
+fn allowed_expectation_relative_paths(
+    run_blocks: &[RunBlock],
+    case_path: &Path,
+) -> HashSet<PathBuf> {
+    let mut allowed_relative_paths = HashSet::new();
+    for (run_index, run_block) in run_blocks.iter().enumerate() {
+        let run_number = run_index + 1;
+        let run_command = parse_run_command(&run_block.command_name, case_path, run_number);
+        for output_key in output_keys_for_check(run_command) {
+            if output_key.kind == OutputKind::Exit && output_key.format != OutputFormat::None {
+                continue;
+            }
+            allowed_relative_paths.insert(expectation_relative_path(
+                &run_block.expectation_stem,
+                output_suffix_for_key(output_key),
+            ));
+        }
+        if run_command == RunCommand::Build {
+            allowed_relative_paths.insert(expectation_relative_path(
+                &run_block.expectation_stem,
+                "exit",
+            ));
+            allowed_relative_paths.insert(expectation_relative_path(
+                &run_block.expectation_stem,
+                "text.exit",
+            ));
+            allowed_relative_paths.insert(expectation_relative_path(
+                &run_block.expectation_stem,
+                "json.exit",
+            ));
+        }
+    }
+    allowed_relative_paths
+}
+
+fn unexpected_expectation_relative_paths(
+    case_directory: &Path,
+    case_path: &Path,
+    allowed_relative_paths: &HashSet<PathBuf>,
+) -> Vec<PathBuf> {
+    let expect_directory = case_directory.join("expect");
+    let read_dir = fs::read_dir(&expect_directory).unwrap_or_else(|error| {
+        panic!(
+            "failed to read expect directory for fixture case {}: {error}",
+            case_path.display()
+        )
+    });
+    let mut unexpected_relative_paths = Vec::new();
+    for entry in read_dir {
+        let entry = entry.unwrap_or_else(|error| {
+            panic!(
+                "failed to read entry in expect directory for fixture case {}: {error}",
+                case_path.display()
+            )
+        });
+        let entry_relative_path = PathBuf::from("expect").join(entry.file_name());
+        if !allowed_relative_paths.contains(&entry_relative_path) {
+            unexpected_relative_paths.push(entry_relative_path);
+        }
+    }
+    unexpected_relative_paths
 }
 
 fn assert_valid_case_slug(case_path: &Path) {
@@ -255,13 +389,6 @@ fn execute_run_and_collect_actual_outputs(
             case_path,
             run_number,
         );
-        assert_eq!(
-            text_run.stderr,
-            json_run.stderr,
-            "build stderr differs between text and json for run {} in {}",
-            run_number,
-            case_path.display()
-        );
         value_by_output_key.insert(
             OutputKey {
                 kind: OutputKind::Exit,
@@ -300,9 +427,16 @@ fn execute_run_and_collect_actual_outputs(
         value_by_output_key.insert(
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
             },
             OutputValue::Text(text_run.stderr),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
+            },
+            OutputValue::Text(json_run.stderr),
         );
     } else {
         let run_result = execute_command(
@@ -377,7 +511,11 @@ fn output_keys_for_check(run_command: RunCommand) -> Vec<OutputKey> {
             },
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
             },
             OutputKey {
                 kind: OutputKind::Artifacts,
@@ -436,7 +574,11 @@ fn output_keys_for_update(run_command: RunCommand) -> Vec<OutputKey> {
             },
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
             },
             OutputKey {
                 kind: OutputKind::Artifacts,
@@ -692,6 +834,8 @@ fn output_suffix_for_key(output_key: OutputKey) -> &'static str {
         (OutputKind::Stdout, OutputFormat::Text) => "text.stdout",
         (OutputKind::Stdout, OutputFormat::Json) => "json.stdout",
         (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Stderr, OutputFormat::Text) => "text.stderr",
+        (OutputKind::Stderr, OutputFormat::Json) => "json.stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifacts",
         _ => panic!("invalid output key combination for expectation suffix: {output_key:?}"),
     }
@@ -706,6 +850,8 @@ fn output_key_label(output_key: OutputKey) -> &'static str {
         (OutputKind::Stdout, OutputFormat::Text) => "text stdout",
         (OutputKind::Stdout, OutputFormat::Json) => "json stdout",
         (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Stderr, OutputFormat::Text) => "text stderr",
+        (OutputKind::Stderr, OutputFormat::Json) => "json stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifact list",
         _ => "output",
     }
