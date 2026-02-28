@@ -161,91 +161,91 @@ impl<'ast> AstVisitor<'ast> {
 
     /// Macro bodies are stored as TokenStream and not visited by syn's AST
     /// traversal.
-    fn extract_paths_from_expr(&mut self, expr: &syn::Expr) {
-        match expr {
-            syn::Expr::Path(expr_path) => {
-                if expr_path.path.segments.len() > 1 {
-                    self.add_import(expr_path.path.segments[0].ident.clone());
+    fn extract_paths_from_expression(&mut self, expression: &syn::Expr) {
+        match expression {
+            syn::Expr::Path(path_expression) => {
+                if path_expression.path.segments.len() > 1 {
+                    self.add_import(path_expression.path.segments[0].ident.clone());
                 }
             }
-            syn::Expr::Call(call) => {
-                self.extract_paths_from_expr(&call.func);
-                for arg in &call.args {
-                    self.extract_paths_from_expr(arg);
+            syn::Expr::Call(call_expression) => {
+                self.extract_paths_from_expression(&call_expression.func);
+                for arg in &call_expression.args {
+                    self.extract_paths_from_expression(arg);
                 }
             }
-            syn::Expr::MethodCall(method) => {
-                self.extract_paths_from_expr(&method.receiver);
-                for arg in &method.args {
-                    self.extract_paths_from_expr(arg);
+            syn::Expr::MethodCall(method_call_expression) => {
+                self.extract_paths_from_expression(&method_call_expression.receiver);
+                for arg in &method_call_expression.args {
+                    self.extract_paths_from_expression(arg);
                 }
             }
-            syn::Expr::Binary(binary) => {
-                self.extract_paths_from_expr(&binary.left);
-                self.extract_paths_from_expr(&binary.right);
+            syn::Expr::Binary(binary_expression) => {
+                self.extract_paths_from_expression(&binary_expression.left);
+                self.extract_paths_from_expression(&binary_expression.right);
             }
-            syn::Expr::Unary(unary) => {
-                self.extract_paths_from_expr(&unary.expr);
+            syn::Expr::Unary(unary_expression) => {
+                self.extract_paths_from_expression(&unary_expression.expr);
             }
-            syn::Expr::Reference(reference) => {
-                self.extract_paths_from_expr(&reference.expr);
+            syn::Expr::Reference(reference_expression) => {
+                self.extract_paths_from_expression(&reference_expression.expr);
             }
-            syn::Expr::Paren(parenthesis) => {
-                self.extract_paths_from_expr(&parenthesis.expr);
+            syn::Expr::Paren(parenthesis_expression) => {
+                self.extract_paths_from_expression(&parenthesis_expression.expr);
             }
-            syn::Expr::Field(field) => {
-                self.extract_paths_from_expr(&field.base);
+            syn::Expr::Field(field_expression) => {
+                self.extract_paths_from_expression(&field_expression.base);
             }
-            syn::Expr::Index(index) => {
-                self.extract_paths_from_expr(&index.expr);
-                self.extract_paths_from_expr(&index.index);
+            syn::Expr::Index(index_expression) => {
+                self.extract_paths_from_expression(&index_expression.expr);
+                self.extract_paths_from_expression(&index_expression.index);
             }
-            syn::Expr::Tuple(tuple) => {
-                for elem in &tuple.elems {
-                    self.extract_paths_from_expr(elem);
+            syn::Expr::Tuple(tuple_expression) => {
+                for elem in &tuple_expression.elems {
+                    self.extract_paths_from_expression(elem);
                 }
             }
-            syn::Expr::Array(array) => {
-                for elem in &array.elems {
-                    self.extract_paths_from_expr(elem);
+            syn::Expr::Array(array_expression) => {
+                for elem in &array_expression.elems {
+                    self.extract_paths_from_expression(elem);
                 }
             }
-            syn::Expr::Cast(cast) => {
-                self.extract_paths_from_expr(&cast.expr);
+            syn::Expr::Cast(cast_expression) => {
+                self.extract_paths_from_expression(&cast_expression.expr);
             }
-            syn::Expr::If(expr_if) => {
-                self.extract_paths_from_expr(&expr_if.cond);
-                for stmt in &expr_if.then_branch.stmts {
-                    if let syn::Stmt::Expr(e, _) = stmt {
-                        self.extract_paths_from_expr(e);
+            syn::Expr::If(if_expression) => {
+                self.extract_paths_from_expression(&if_expression.cond);
+                for statement in &if_expression.then_branch.stmts {
+                    if let syn::Stmt::Expr(e, _) = statement {
+                        self.extract_paths_from_expression(e);
                     }
                 }
-                if let Some((_, else_branch)) = &expr_if.else_branch {
-                    self.extract_paths_from_expr(else_branch);
+                if let Some((_, else_branch)) = &if_expression.else_branch {
+                    self.extract_paths_from_expression(else_branch);
                 }
             }
-            syn::Expr::Match(expr_match) => {
-                self.extract_paths_from_expr(&expr_match.expr);
-                for arm in &expr_match.arms {
-                    self.extract_paths_from_expr(&arm.body);
+            syn::Expr::Match(match_expression) => {
+                self.extract_paths_from_expression(&match_expression.expr);
+                for arm in &match_expression.arms {
+                    self.extract_paths_from_expression(&arm.body);
                 }
             }
-            syn::Expr::Block(block) => {
-                for stmt in &block.block.stmts {
-                    if let syn::Stmt::Expr(e, _) = stmt {
-                        self.extract_paths_from_expr(e);
+            syn::Expr::Block(block_expression) => {
+                for statement in &block_expression.block.stmts {
+                    if let syn::Stmt::Expr(e, _) = statement {
+                        self.extract_paths_from_expression(e);
                     }
                 }
             }
-            syn::Expr::Closure(closure) => {
-                self.extract_paths_from_expr(&closure.body);
+            syn::Expr::Closure(closure_expression) => {
+                self.extract_paths_from_expression(&closure_expression.body);
             }
-            syn::Expr::Struct(expr_struct) => {
-                if expr_struct.path.segments.len() > 1 {
-                    self.add_import(expr_struct.path.segments[0].ident.clone());
+            syn::Expr::Struct(struct_expression) => {
+                if struct_expression.path.segments.len() > 1 {
+                    self.add_import(struct_expression.path.segments[0].ident.clone());
                 }
-                for field in &expr_struct.fields {
-                    self.extract_paths_from_expr(&field.expr);
+                for field in &struct_expression.fields {
+                    self.extract_paths_from_expression(&field.expr);
                 }
             }
             // Skip literals, breaks, continues, etc.; they don't contain paths.
@@ -434,8 +434,8 @@ impl<'ast> Visit<'ast> for AstVisitor<'ast> {
         if let Ok(args) =
             mac.parse_body_with(Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated)
         {
-            for expr in &args {
-                self.extract_paths_from_expr(expr);
+            for expression in &args {
+                self.extract_paths_from_expression(expression);
             }
         }
         // If parsing fails, the macro has custom syntax; skip it gracefully.

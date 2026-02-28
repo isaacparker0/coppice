@@ -103,7 +103,7 @@ begin a statement.
 - `if cond { ... }` — keyword
 
 A bare `-x` on a line computes a negation and discards it — the compiler rejects
-unused expressions. A bare `(expr)` is equally pointless. So there is no
+unused expressions. A bare `(expression)` is equally pointless. So there is no
 ambiguity: if the next line starts with something that isn't an identifier or
 keyword, it must be continuing the previous expression.
 

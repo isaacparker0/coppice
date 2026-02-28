@@ -2,11 +2,20 @@
 extend-ignore-re = [
   # Rust syn AST enum variant name.
   "Expr::Paren",
+  # Rust syn AST struct field.
+  "\\.expr",
 ]
+
+[default.extend-identifiers]
+# Rust syn AST type names.
+Expr = "Expr"
+Stmt = "Stmt"
 
 [default.extend-words]
 # Commonly used abbreviations, banned per styleguide.
 alnum = "alphanumeric"
+expr = "expression"
 paren = "parenthesis"
 prev = "previous"
+stmt = "statement"
 ty = "type"
