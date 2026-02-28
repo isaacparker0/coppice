@@ -1,0 +1,15 @@
+type Named :: interface {
+    function name(self) -> string,
+}
+
+type User implements Named :: struct {
+    value: string,
+    function name(self) -> string {
+        return self.value
+    },
+}
+
+function run() -> string {
+    named: Named := User { value: "Ada" }
+    return named.name()
+}
