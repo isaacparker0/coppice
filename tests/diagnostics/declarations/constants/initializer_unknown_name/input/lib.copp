@@ -1,5 +1,0 @@
-BROKEN: int64 := MISSING
-
-function foo() -> int64 {
-    return 1
-}

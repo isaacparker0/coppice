@@ -1,6 +1,0 @@
-FOO: int64 := 1
-FOO: int64 := 2
-
-function foo() -> int64 {
-    return FOO
-}

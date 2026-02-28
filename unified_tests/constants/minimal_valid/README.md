@@ -1,0 +1,1 @@
+Constant declarations are valid.

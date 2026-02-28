@@ -1,5 +1,0 @@
-API_VERSION: string := "v1"
-
-function version() -> string {
-    return API_VERSION
-}
