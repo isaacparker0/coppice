@@ -32,7 +32,7 @@ const WORKSPACE_MARKER_FILENAME: &str = "COPPICE_WORKSPACE";
 pub struct AnalyzedTargetSummary {
     pub diagnostics: Vec<RenderedDiagnostic>,
     pub source_by_path: BTreeMap<String, String>,
-    pub safe_autofixes: Vec<WorkspaceSafeAutofix>,
+    pub safe_autofix_edits_by_workspace_relative_path: BTreeMap<String, Vec<TextEdit>>,
 }
 
 pub struct AnalyzedTarget {
@@ -40,7 +40,7 @@ pub struct AnalyzedTarget {
     pub all_diagnostics_by_file: BTreeMap<PathBuf, Vec<RenderedDiagnostic>>,
     pub source_by_path: BTreeMap<String, String>,
     pub source_by_workspace_relative_path_in_scope: BTreeMap<String, String>,
-    pub safe_autofixes: Vec<WorkspaceSafeAutofix>,
+    pub safe_autofix_edits_by_workspace_relative_path: BTreeMap<String, Vec<TextEdit>>,
     pub canonical_source_override_by_workspace_relative_path: BTreeMap<String, String>,
     pub workspace_root: PathBuf,
     pub workspace: Workspace,
@@ -50,12 +50,6 @@ pub struct AnalyzedTarget {
     pub file_role_by_path: BTreeMap<PathBuf, FileRole>,
     pub resolved_imports: Vec<ResolvedImport>,
     pub resolved_declarations_by_path: BTreeMap<PathBuf, TypeResolvedDeclarations>,
-}
-
-#[derive(Clone, Debug)]
-pub struct WorkspaceSafeAutofix {
-    pub workspace_relative_path: String,
-    pub text_edits: Vec<TextEdit>,
 }
 
 struct ParsedUnit {
@@ -111,7 +105,8 @@ pub fn analyze_target_summary_with_workspace_root(
     Ok(AnalyzedTargetSummary {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
-        safe_autofixes: analyzed_target.safe_autofixes,
+        safe_autofix_edits_by_workspace_relative_path: analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path,
     })
 }
 
@@ -140,7 +135,8 @@ pub fn analyze_target_summary_with_workspace_root_and_overrides(
     Ok(AnalyzedTargetSummary {
         diagnostics: analyzed_target.diagnostics,
         source_by_path: analyzed_target.source_by_path,
-        safe_autofixes: analyzed_target.safe_autofixes,
+        safe_autofix_edits_by_workspace_relative_path: analyzed_target
+            .safe_autofix_edits_by_workspace_relative_path,
     })
 }
 
@@ -236,7 +232,8 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     let mut all_diagnostics_by_file = BTreeMap::<PathBuf, Vec<RenderedDiagnostic>>::new();
     let mut source_by_path = BTreeMap::new();
     let mut source_by_workspace_relative_path_in_scope = BTreeMap::new();
-    let mut phase_safe_autofixes = Vec::<WorkspaceSafeAutofix>::new();
+    let mut phase_safe_autofix_edits_by_workspace_relative_path =
+        BTreeMap::<String, Vec<TextEdit>>::new();
     let mut parsed_units = Vec::new();
     let mut package_path_by_file = BTreeMap::new();
     let mut file_role_by_path = BTreeMap::new();
@@ -318,7 +315,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             });
             if package_in_scope {
                 append_safe_autofix_edits_for_file(
-                    &mut phase_safe_autofixes,
+                    &mut phase_safe_autofix_edits_by_workspace_relative_path,
                     &workspace_relative_key,
                     &parse_safe_autofixes,
                 );
@@ -370,12 +367,12 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         }
         if parsed_unit_in_scope {
             append_safe_autofix_edits_for_file(
-                &mut phase_safe_autofixes,
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
                 &path_to_key(&parsed_unit.path),
                 &syntax_rules_result.safe_autofixes,
             );
             append_safe_autofix_edits_for_file(
-                &mut phase_safe_autofixes,
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
                 &path_to_key(&parsed_unit.path),
                 &file_role_rules_result.safe_autofixes,
             );
@@ -463,7 +460,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         }
         if parsed_unit_in_scope {
             append_safe_autofix_edits_for_file(
-                &mut phase_safe_autofixes,
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
                 &path_to_key(&parsed_unit.path),
                 &safe_autofixes,
             );
@@ -532,7 +529,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         }
         if parsed_unit_in_scope {
             append_safe_autofix_edits_for_file(
-                &mut phase_safe_autofixes,
+                &mut phase_safe_autofix_edits_by_workspace_relative_path,
                 &path_to_key(&parsed_unit.path),
                 &type_analysis_result.safe_autofixes,
             );
@@ -543,18 +540,20 @@ pub fn analyze_target_with_workspace_root_and_overrides(
     for diagnostics in all_diagnostics_by_file.values_mut() {
         sort_rendered_diagnostics(diagnostics);
     }
-    let (safe_autofixes, canonical_source_override_by_workspace_relative_path) =
-        compute_safe_autofix_outputs(
-            &source_by_workspace_relative_path_in_scope,
-            &phase_safe_autofixes,
-        );
+    let (
+        safe_autofix_edits_by_workspace_relative_path,
+        canonical_source_override_by_workspace_relative_path,
+    ) = compute_safe_autofix_outputs(
+        &source_by_workspace_relative_path_in_scope,
+        &phase_safe_autofix_edits_by_workspace_relative_path,
+    );
 
     Ok(AnalyzedTarget {
         diagnostics: rendered_diagnostics,
         all_diagnostics_by_file,
         source_by_path,
         source_by_workspace_relative_path_in_scope,
-        safe_autofixes,
+        safe_autofix_edits_by_workspace_relative_path,
         canonical_source_override_by_workspace_relative_path,
         workspace_root,
         workspace,
@@ -569,11 +568,9 @@ pub fn analyze_target_with_workspace_root_and_overrides(
 
 fn compute_safe_autofix_outputs(
     source_by_workspace_relative_path: &BTreeMap<String, String>,
-    phase_safe_autofixes: &[WorkspaceSafeAutofix],
-) -> (Vec<WorkspaceSafeAutofix>, BTreeMap<String, String>) {
-    let mut safe_autofixes = phase_safe_autofixes.to_vec();
-    let phase_safe_autofix_edits_by_workspace_relative_path =
-        group_text_edits_by_workspace_relative_path(phase_safe_autofixes);
+    phase_safe_autofix_edits_by_workspace_relative_path: &BTreeMap<String, Vec<TextEdit>>,
+) -> (BTreeMap<String, Vec<TextEdit>>, BTreeMap<String, String>) {
+    let mut safe_autofix_edits_by_workspace_relative_path = BTreeMap::new();
     let mut canonical_source_override_by_workspace_relative_path = BTreeMap::new();
 
     for (workspace_relative_path, source_text) in source_by_workspace_relative_path {
@@ -603,10 +600,6 @@ fn compute_safe_autofix_outputs(
             && let Ok(formatted_text) =
                 apply_text_edits(&canonical_source_text, &formatter_text_edits)
         {
-            safe_autofixes.push(WorkspaceSafeAutofix {
-                workspace_relative_path: workspace_relative_path.clone(),
-                text_edits: formatter_text_edits.clone(),
-            });
             canonical_source_text = formatted_text;
         }
 
@@ -614,41 +607,35 @@ fn compute_safe_autofix_outputs(
             continue;
         }
 
+        safe_autofix_edits_by_workspace_relative_path.insert(
+            workspace_relative_path.clone(),
+            vec![TextEdit {
+                start_byte_offset: 0,
+                end_byte_offset: source_text.len(),
+                replacement_text: canonical_source_text.clone(),
+            }],
+        );
         canonical_source_override_by_workspace_relative_path
             .insert(workspace_relative_path.clone(), canonical_source_text);
     }
 
     (
-        safe_autofixes,
+        safe_autofix_edits_by_workspace_relative_path,
         canonical_source_override_by_workspace_relative_path,
     )
 }
 
 fn append_safe_autofix_edits_for_file(
-    rendered_safe_autofixes: &mut Vec<WorkspaceSafeAutofix>,
+    safe_autofix_edits_by_workspace_relative_path: &mut BTreeMap<String, Vec<TextEdit>>,
     workspace_relative_path: &str,
     safe_autofixes: &[SafeAutofix],
 ) {
+    let file_safe_autofix_edits = safe_autofix_edits_by_workspace_relative_path
+        .entry(workspace_relative_path.to_string())
+        .or_default();
     for safe_autofix in safe_autofixes {
-        rendered_safe_autofixes.push(WorkspaceSafeAutofix {
-            workspace_relative_path: workspace_relative_path.to_string(),
-            text_edits: safe_autofix.text_edits.clone(),
-        });
+        file_safe_autofix_edits.extend(safe_autofix.text_edits.iter().cloned());
     }
-}
-
-#[must_use]
-pub fn group_text_edits_by_workspace_relative_path(
-    safe_autofixes: &[WorkspaceSafeAutofix],
-) -> BTreeMap<String, Vec<TextEdit>> {
-    let mut text_edits_by_workspace_relative_path = BTreeMap::<String, Vec<TextEdit>>::new();
-    for safe_autofix in safe_autofixes {
-        text_edits_by_workspace_relative_path
-            .entry(safe_autofix.workspace_relative_path.clone())
-            .or_default()
-            .extend(safe_autofix.text_edits.iter().cloned());
-    }
-    text_edits_by_workspace_relative_path
 }
 
 fn resolve_workspace_root(
