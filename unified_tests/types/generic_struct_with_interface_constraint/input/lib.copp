@@ -1,0 +1,7 @@
+type Boxable :: interface {
+    function score(self) -> int64,
+}
+
+type ConstrainedBox[T: Boxable] :: struct {
+    value: T,
+}

@@ -1,0 +1,3 @@
+visible function getId() -> int64 {
+    return 1
+}

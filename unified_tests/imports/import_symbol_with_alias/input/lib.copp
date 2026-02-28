@@ -1,0 +1,5 @@
+import workspace { Token as AuthToken }
+
+type AuthState :: struct {
+    token: AuthToken,
+}

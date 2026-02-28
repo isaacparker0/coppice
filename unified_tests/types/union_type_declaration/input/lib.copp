@@ -1,0 +1,5 @@
+type User :: struct {
+    id: int64,
+}
+
+type Outcome :: User | string

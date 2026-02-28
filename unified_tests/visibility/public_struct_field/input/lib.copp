@@ -1,0 +1,4 @@
+visible type User :: struct {
+    public name: string,
+    id: int64,
+}

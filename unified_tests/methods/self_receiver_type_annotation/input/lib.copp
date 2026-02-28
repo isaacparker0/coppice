@@ -1,0 +1,6 @@
+type User :: struct {
+    id: int64,
+    function idValue(self: User) -> int64 {
+        return self.id
+    },
+}
