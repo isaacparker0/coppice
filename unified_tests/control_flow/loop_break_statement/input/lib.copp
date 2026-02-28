@@ -1,0 +1,8 @@
+function stopAtOne() -> int64 {
+    mut x := 0
+    for {
+        x = x + 1
+        break
+    }
+    return x
+}

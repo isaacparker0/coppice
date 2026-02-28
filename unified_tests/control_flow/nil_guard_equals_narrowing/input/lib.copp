@@ -1,0 +1,7 @@
+function unwrapEquals(value: int64 | nil) -> int64 {
+    if value == nil {
+        return 0
+    } else {
+        return value
+    }
+}

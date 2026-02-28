@@ -1,0 +1,7 @@
+function unwrapNotEquals(value: int64 | nil) -> int64 {
+    if value != nil {
+        return value
+    } else {
+        return 0
+    }
+}
