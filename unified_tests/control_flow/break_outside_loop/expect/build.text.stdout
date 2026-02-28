@@ -1,3 +1,0 @@
-lib.copp:2:5: error: break can only be used inside a loop
-      break
-      ^

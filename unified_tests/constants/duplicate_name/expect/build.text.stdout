@@ -1,3 +1,0 @@
-lib.copp:2:1: error: duplicate constant 'FOO'
-  FOO: int64 := 2
-  ^

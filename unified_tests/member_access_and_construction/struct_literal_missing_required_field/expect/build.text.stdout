@@ -1,3 +1,0 @@
-lib.copp:4:10: error: missing field 'y' in Point literal
-      p := Point { x: 1 }
-           ^

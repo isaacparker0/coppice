@@ -1,0 +1,3 @@
+lib.copp:2:12: error: builtin conversion 'string' does not take type arguments
+      return string[int64](1)
+             ^

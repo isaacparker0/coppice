@@ -1,3 +1,0 @@
-main.bin.copp:1:10: error: main in .bin.copp must not declare type parameters
-  function main[T]() -> nil {
-           ^

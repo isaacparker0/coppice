@@ -1,3 +1,0 @@
-lib.copp:5:12: error: non-exhaustive match, missing: string
-      return match value {
-             ^

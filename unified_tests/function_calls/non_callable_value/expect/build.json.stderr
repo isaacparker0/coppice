@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot call value of type int64",
+            "span": {
+                "start": 38,
+                "end": 39,
+                "line": 2,
+                "column": 13
+            }
+        }
+    ]
+}

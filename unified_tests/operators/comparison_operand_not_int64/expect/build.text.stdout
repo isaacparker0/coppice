@@ -1,3 +1,0 @@
-lib.copp:2:12: error: comparison operators require int64 operands
-      return 1 < true
-             ^

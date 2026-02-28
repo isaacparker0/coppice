@@ -1,3 +1,0 @@
-lib.copp:1:8: error: constants require an explicit type annotation
-  BROKEN := 1
-         ^

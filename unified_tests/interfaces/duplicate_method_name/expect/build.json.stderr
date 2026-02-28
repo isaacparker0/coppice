@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "duplicate method 'Printable.toString'",
+            "span": {
+                "start": 82,
+                "end": 90,
+                "line": 3,
+                "column": 14
+            }
+        }
+    ]
+}

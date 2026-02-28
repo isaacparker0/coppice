@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "match patterns must not include type arguments",
+            "span": {
+                "start": 131,
+                "end": 141,
+                "line": 7,
+                "column": 9
+            }
+        }
+    ]
+}

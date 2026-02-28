@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "duplicate implements entry 'Printable'",
+            "span": {
+                "start": 104,
+                "end": 113,
+                "line": 5,
+                "column": 33
+            }
+        }
+    ]
+}

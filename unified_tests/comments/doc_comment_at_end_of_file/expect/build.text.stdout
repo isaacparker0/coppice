@@ -1,3 +1,0 @@
-lib.copp:4:1: error: doc comment must document a declaration
-  /// Trailing docs are invalid.
-  ^

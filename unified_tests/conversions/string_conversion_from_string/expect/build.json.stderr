@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot convert string to string",
+            "span": {
+                "start": 45,
+                "end": 49,
+                "line": 2,
+                "column": 19
+            }
+        }
+    ]
+}

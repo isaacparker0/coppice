@@ -1,0 +1,3 @@
+lib.copp:6:5: error: generic function 'make' requires 1 explicit type arguments
+      make()
+      ^

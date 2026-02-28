@@ -1,0 +1,3 @@
+lib.copp:14:28: error: expected 1 arguments, got 0
+      return incrementer.bump()
+                             ^

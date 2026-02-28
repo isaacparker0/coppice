@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot convert List[int64] to string",
+            "span": {
+                "start": 69,
+                "end": 75,
+                "line": 3,
+                "column": 19
+            }
+        }
+    ]
+}

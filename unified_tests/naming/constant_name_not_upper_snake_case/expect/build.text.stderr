@@ -1,0 +1,3 @@
+lib.copp:1:1: error: constant name must be UPPER_SNAKE_CASE
+  apiVersion: string := "v1"
+  ^

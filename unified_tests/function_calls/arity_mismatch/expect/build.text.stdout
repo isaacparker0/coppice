@@ -1,3 +1,0 @@
-lib.copp:6:15: error: expected 2 arguments, got 1
-      return add(1)
-                ^

@@ -1,3 +1,0 @@
-PACKAGE.copp:1:10: error: main is only allowed in .bin.copp files
-  function main() -> nil {
-           ^

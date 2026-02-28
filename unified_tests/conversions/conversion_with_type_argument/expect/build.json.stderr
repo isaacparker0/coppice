@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "builtin conversion 'string' does not take type arguments",
+            "span": {
+                "start": 38,
+                "end": 44,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

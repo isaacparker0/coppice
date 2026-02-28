@@ -1,3 +1,0 @@
-lib.copp:1:33: error: constraint for type parameter 'T' must be an interface type
-  function identityConstrained[T: int64](value: T) -> T {
-                                  ^

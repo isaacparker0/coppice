@@ -1,3 +1,0 @@
-lib.copp:1:22: error: unknown type 'Missing'
-  type User implements Missing :: struct {
-                       ^

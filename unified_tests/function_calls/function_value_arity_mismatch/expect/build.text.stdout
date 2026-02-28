@@ -1,3 +1,0 @@
-lib.copp:2:18: error: expected 1 arguments, got 2
-      return mapper(1, 2)
-                   ^

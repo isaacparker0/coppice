@@ -1,3 +1,0 @@
-lib.copp:2:8: error: if condition must be boolean
-      if 1 {
-         ^

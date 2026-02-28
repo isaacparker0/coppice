@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "matches pattern type 'boolean' is not in target type",
+            "span": {
+                "start": 74,
+                "end": 81,
+                "line": 2,
+                "column": 26
+            }
+        }
+    ]
+}

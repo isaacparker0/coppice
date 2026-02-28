@@ -1,3 +1,0 @@
-lib.copp:2:26: error: use '== nil' or '!= nil' instead of 'matches nil'
-      return value matches nil
-                           ^

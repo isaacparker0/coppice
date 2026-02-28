@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "cannot call method 'missing' on non-struct type int64",
+            "span": {
+                "start": 39,
+                "end": 46,
+                "line": 2,
+                "column": 14
+            }
+        }
+    ]
+}

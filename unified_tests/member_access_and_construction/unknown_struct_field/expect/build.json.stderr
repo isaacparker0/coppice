@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "unknown field 'y' on Point",
+            "span": {
+                "start": 98,
+                "end": 99,
+                "line": 5,
+                "column": 14
+            }
+        }
+    ]
+}

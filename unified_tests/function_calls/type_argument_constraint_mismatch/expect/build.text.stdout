@@ -1,3 +1,0 @@
-lib.copp:16:5: error: type argument 'User' does not satisfy constraint 'Printable' for type parameter 'T' on 'requirePrintable'
-      requirePrintable[User](User {})
-      ^

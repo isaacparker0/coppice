@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "file_role_rules",
+            "path": "main.bin.copp",
+            "message": "main in .bin.copp must return nil",
+            "span": {
+                "start": 19,
+                "end": 24,
+                "line": 1,
+                "column": 20
+            }
+        }
+    ]
+}

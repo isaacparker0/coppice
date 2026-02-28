@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "duplicate match arm for type 'int64'",
+            "span": {
+                "start": 140,
+                "end": 145,
+                "line": 7,
+                "column": 9
+            }
+        }
+    ]
+}

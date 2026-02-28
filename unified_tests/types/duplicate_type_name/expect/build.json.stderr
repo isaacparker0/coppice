@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "duplicate type 'User'",
+            "span": {
+                "start": 45,
+                "end": 81,
+                "line": 5,
+                "column": 6
+            }
+        }
+    ]
+}

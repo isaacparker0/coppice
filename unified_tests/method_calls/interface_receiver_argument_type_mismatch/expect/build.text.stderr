@@ -1,0 +1,3 @@
+lib.copp:14:29: error: argument 1 to 'bump' must be int64, got boolean
+      return incrementer.bump(true)
+                              ^

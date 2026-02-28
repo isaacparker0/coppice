@@ -255,13 +255,6 @@ fn execute_run_and_collect_actual_outputs(
             case_path,
             run_number,
         );
-        assert_eq!(
-            text_run.stderr,
-            json_run.stderr,
-            "build stderr differs between text and json for run {} in {}",
-            run_number,
-            case_path.display()
-        );
         value_by_output_key.insert(
             OutputKey {
                 kind: OutputKind::Exit,
@@ -300,9 +293,16 @@ fn execute_run_and_collect_actual_outputs(
         value_by_output_key.insert(
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
             },
             OutputValue::Text(text_run.stderr),
+        );
+        value_by_output_key.insert(
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
+            },
+            OutputValue::Text(json_run.stderr),
         );
     } else {
         let run_result = execute_command(
@@ -377,7 +377,11 @@ fn output_keys_for_check(run_command: RunCommand) -> Vec<OutputKey> {
             },
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
             },
             OutputKey {
                 kind: OutputKind::Artifacts,
@@ -436,7 +440,11 @@ fn output_keys_for_update(run_command: RunCommand) -> Vec<OutputKey> {
             },
             OutputKey {
                 kind: OutputKind::Stderr,
-                format: OutputFormat::None,
+                format: OutputFormat::Text,
+            },
+            OutputKey {
+                kind: OutputKind::Stderr,
+                format: OutputFormat::Json,
             },
             OutputKey {
                 kind: OutputKind::Artifacts,
@@ -692,6 +700,8 @@ fn output_suffix_for_key(output_key: OutputKey) -> &'static str {
         (OutputKind::Stdout, OutputFormat::Text) => "text.stdout",
         (OutputKind::Stdout, OutputFormat::Json) => "json.stdout",
         (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Stderr, OutputFormat::Text) => "text.stderr",
+        (OutputKind::Stderr, OutputFormat::Json) => "json.stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifacts",
         _ => panic!("invalid output key combination for expectation suffix: {output_key:?}"),
     }
@@ -706,6 +716,8 @@ fn output_key_label(output_key: OutputKey) -> &'static str {
         (OutputKind::Stdout, OutputFormat::Text) => "text stdout",
         (OutputKind::Stdout, OutputFormat::Json) => "json stdout",
         (OutputKind::Stderr, OutputFormat::None) => "stderr",
+        (OutputKind::Stderr, OutputFormat::Text) => "text stderr",
+        (OutputKind::Stderr, OutputFormat::Json) => "json stderr",
         (OutputKind::Artifacts, OutputFormat::None) => "artifact list",
         _ => "output",
     }

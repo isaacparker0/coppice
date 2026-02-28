@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "bindings prefixed with '_' must be unused: '_value' is used",
+            "span": {
+                "start": 31,
+                "end": 37,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

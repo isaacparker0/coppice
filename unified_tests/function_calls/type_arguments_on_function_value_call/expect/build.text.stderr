@@ -1,0 +1,3 @@
+lib.copp:2:25: error: type arguments are only allowed on direct function calls
+      return mapper[int64](1)
+                          ^

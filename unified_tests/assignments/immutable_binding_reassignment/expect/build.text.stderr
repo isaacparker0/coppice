@@ -1,0 +1,3 @@
+lib.copp:3:5: error: cannot assign to immutable binding 'x'
+      x = 2
+      ^

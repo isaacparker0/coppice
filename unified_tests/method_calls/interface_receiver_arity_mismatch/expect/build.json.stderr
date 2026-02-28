@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "expected 1 arguments, got 0",
+            "span": {
+                "start": 332,
+                "end": 350,
+                "line": 14,
+                "column": 28
+            }
+        }
+    ]
+}

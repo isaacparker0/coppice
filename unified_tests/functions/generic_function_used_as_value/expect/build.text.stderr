@@ -1,0 +1,3 @@
+lib.copp:6:12: error: generic function 'identity' cannot be used as a value
+      return identity
+             ^

@@ -1,3 +1,0 @@
-lib.copp:2:12: error: operator '+' requires operands of the same type
-      return "a" + 1
-             ^

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "use 'matches' for single-pattern boolean checks",
+            "span": {
+                "start": 60,
+                "end": 125,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

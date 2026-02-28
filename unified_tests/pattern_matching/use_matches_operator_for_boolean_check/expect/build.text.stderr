@@ -1,0 +1,3 @@
+lib.copp:2:12: error: use 'matches' for single-pattern boolean checks
+      return match value {
+             ^

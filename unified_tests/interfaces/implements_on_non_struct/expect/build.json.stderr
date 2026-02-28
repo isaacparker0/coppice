@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "only struct types can declare implements clauses; 'Outcome' is not a struct",
+            "span": {
+                "start": 96,
+                "end": 105,
+                "line": 5,
+                "column": 25
+            }
+        }
+    ]
+}

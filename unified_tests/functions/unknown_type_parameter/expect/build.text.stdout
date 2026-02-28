@@ -1,3 +1,0 @@
-lib.copp:1:29: error: unknown type 'U'
-  function identity[T](value: U) -> T {
-                              ^

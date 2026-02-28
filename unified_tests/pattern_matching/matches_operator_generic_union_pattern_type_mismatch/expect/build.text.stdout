@@ -1,3 +1,0 @@
-lib.copp:4:26: error: matches pattern type 'string' is not in target type
-      return value matches string
-                           ^

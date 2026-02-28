@@ -1,3 +1,0 @@
-lib.copp:3:14: error: duplicate method 'Printable.toString'
-      function toString(self) -> string,
-               ^

@@ -1,3 +1,0 @@
-lib.copp:2:5: error: doc comment must document a declaration
-      /// Block-level docs are invalid.
-      ^

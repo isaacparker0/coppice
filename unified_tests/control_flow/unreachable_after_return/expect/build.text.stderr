@@ -1,0 +1,3 @@
+lib.copp:3:5: error: unreachable code
+      return 2
+      ^

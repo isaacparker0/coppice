@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "expression statements must be calls",
+            "span": {
+                "start": 30,
+                "end": 35,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

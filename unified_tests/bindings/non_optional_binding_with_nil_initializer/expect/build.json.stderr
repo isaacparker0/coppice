@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "type mismatch: expected int64, got nil",
+            "span": {
+                "start": 47,
+                "end": 50,
+                "line": 2,
+                "column": 22
+            }
+        }
+    ]
+}
