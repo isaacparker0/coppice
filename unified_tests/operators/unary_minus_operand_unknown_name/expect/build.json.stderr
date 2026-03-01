@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "unknown name 'missing'",
+            "span": {
+                "start": 38,
+                "end": 45,
+                "line": 2,
+                "column": 13
+            }
+        }
+    ]
+}

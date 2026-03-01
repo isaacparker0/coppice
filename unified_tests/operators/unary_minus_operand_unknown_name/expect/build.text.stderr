@@ -1,0 +1,3 @@
+lib.copp:2:13: error: unknown name 'missing'
+      return -missing
+              ^
