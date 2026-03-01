@@ -1,1 +1,2 @@
-Boolean operators with an unknown-name operand report the unknown name.
+Boolean expressions with an unknown-name operand report the unknown name without
+an additional operator diagnostic.
