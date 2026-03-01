@@ -384,6 +384,22 @@ impl TypeChecker<'_> {
                         call_target.clone(),
                     );
                 }
+                if matches!(
+                    resolved_target.call_target,
+                    Some(TypeAnnotatedCallTarget::BuiltinFunction { ref function_name })
+                        if function_name == "assert"
+                ) && matches!(
+                    arguments.first(),
+                    Some(SemanticExpression::BooleanLiteral { value: false, .. })
+                ) {
+                    self.error(
+                        "assert condition is always false; use abort(\"...\") for unrecoverable failures",
+                        arguments
+                            .first()
+                            .map_or_else(|| span.clone(), ExpressionSpan::span),
+                    );
+                    return Type::Unknown;
+                }
                 if !resolved_target.resolved_type_arguments.is_empty() {
                     let resolved_type_arguments = resolved_target
                         .resolved_type_arguments

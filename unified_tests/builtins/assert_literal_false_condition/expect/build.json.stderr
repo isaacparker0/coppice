@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "main.bin.copp",
+            "message": "assert condition is always false; use abort(\"...\") for unrecoverable failures",
+            "span": {
+                "start": 36,
+                "end": 41,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

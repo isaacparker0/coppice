@@ -1,0 +1,3 @@
+main.bin.copp:2:12: error: assert condition is always false; use abort("...") for unrecoverable failures
+      assert(false)
+             ^
