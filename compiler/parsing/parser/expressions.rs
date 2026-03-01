@@ -427,6 +427,11 @@ impl Parser {
                 kind: SyntaxNameReferenceKind::Builtin,
                 span: token.span,
             }),
+            TokenKind::Keyword(Keyword::Assert) => Ok(SyntaxExpression::NameReference {
+                name: "assert".to_string(),
+                kind: SyntaxNameReferenceKind::Builtin,
+                span: token.span,
+            }),
             TokenKind::Keyword(Keyword::Print) => Ok(SyntaxExpression::NameReference {
                 name: "print".to_string(),
                 kind: SyntaxNameReferenceKind::Builtin,

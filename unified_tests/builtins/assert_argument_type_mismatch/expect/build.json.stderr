@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "type_analysis",
+            "path": "lib.copp",
+            "message": "argument 1 to 'assert' must be boolean, got int64",
+            "span": {
+                "start": 35,
+                "end": 36,
+                "line": 2,
+                "column": 12
+            }
+        }
+    ]
+}

@@ -1,0 +1,5 @@
+function main() -> nil {
+    assert(false)
+    print("unreachable")
+    return
+}

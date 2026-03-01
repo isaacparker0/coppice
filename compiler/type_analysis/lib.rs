@@ -2812,6 +2812,17 @@ fn builtin_functions() -> HashMap<String, FunctionInfo> {
         },
     );
     functions.insert(
+        "assert".to_string(),
+        FunctionInfo {
+            type_parameters: Vec::new(),
+            parameter_types: vec![Type::Boolean],
+            return_type: Type::Nil,
+            call_target: TypeAnnotatedCallTarget::BuiltinFunction {
+                function_name: "assert".to_string(),
+            },
+        },
+    );
+    functions.insert(
         "print".to_string(),
         FunctionInfo {
             type_parameters: Vec::new(),

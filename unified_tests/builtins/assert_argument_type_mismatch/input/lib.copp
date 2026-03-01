@@ -1,0 +1,4 @@
+function run() -> nil {
+    assert(1)
+    return
+}

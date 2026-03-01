@@ -16,7 +16,9 @@ use compiler__executable_program::{
     ExecutableTypeReference, ExecutableUnaryOperator,
 };
 use compiler__reports::CompilerFailure;
-use compiler__runtime_interface::{ABORT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT};
+use compiler__runtime_interface::{
+    ABORT_FUNCTION_CONTRACT, ASSERT_FUNCTION_CONTRACT, PRINT_FUNCTION_CONTRACT,
+};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     AbiParam, Block, BlockArg, InstBuilder, MemFlags, Signature, TrapCode, Value, types,
@@ -1786,6 +1788,70 @@ fn compile_call_expression(
                         value: None,
                         type_reference: ExecutableTypeReference::Never,
                         terminates: true,
+                    });
+                }
+                if function_name == ASSERT_FUNCTION_CONTRACT.language_name {
+                    if arguments.len() != 1 {
+                        return Err(build_failed(
+                            "assert(...) requires exactly one argument".to_string(),
+                            None,
+                        ));
+                    }
+                    let argument = compile_expression(
+                        state,
+                        function_builder,
+                        compilation_context,
+                        &arguments[0],
+                    )?;
+                    if argument.terminates {
+                        return Ok(argument);
+                    }
+                    if argument.type_reference != ExecutableTypeReference::Boolean {
+                        return Err(build_failed(
+                            "assert(...) requires boolean argument".to_string(),
+                            None,
+                        ));
+                    }
+                    let condition_value = argument.value.ok_or_else(|| {
+                        build_failed(
+                            "assert argument produced no runtime value".to_string(),
+                            None,
+                        )
+                    })?;
+                    let zero = function_builder.ins().iconst(types::I8, 0);
+                    let condition_is_true =
+                        function_builder
+                            .ins()
+                            .icmp(IntCC::NotEqual, condition_value, zero);
+
+                    let pass_block = function_builder.create_block();
+                    let fail_block = function_builder.create_block();
+                    let merge_block = function_builder.create_block();
+                    function_builder.ins().brif(
+                        condition_is_true,
+                        pass_block,
+                        &[],
+                        fail_block,
+                        &[],
+                    );
+
+                    function_builder.switch_to_block(fail_block);
+                    let message_pointer =
+                        intern_string_literal(state, function_builder, "assertion failed")?;
+                    emit_write_string_with_newline(state, function_builder, 2, message_pointer)?;
+                    emit_exit_call(state, function_builder, 1);
+                    function_builder.seal_block(fail_block);
+
+                    function_builder.switch_to_block(pass_block);
+                    function_builder.ins().jump(merge_block, &[]);
+                    function_builder.seal_block(pass_block);
+
+                    function_builder.switch_to_block(merge_block);
+                    function_builder.seal_block(merge_block);
+                    return Ok(TypedValue {
+                        value: None,
+                        type_reference: ExecutableTypeReference::Nil,
+                        terminates: false,
                     });
                 }
 

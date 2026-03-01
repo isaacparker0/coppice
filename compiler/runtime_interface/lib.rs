@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RuntimeType {
+    Boolean,
     Nil,
     Never,
     String,
@@ -27,4 +28,11 @@ pub const ABORT_FUNCTION_CONTRACT: RuntimeFunctionContract = RuntimeFunctionCont
     lowered_symbol_name: "coppice_runtime_abort",
     parameter_types: &[RuntimeType::String],
     return_type: RuntimeType::Never,
+};
+
+pub const ASSERT_FUNCTION_CONTRACT: RuntimeFunctionContract = RuntimeFunctionContract {
+    language_name: "assert",
+    lowered_symbol_name: "coppice_runtime_assert",
+    parameter_types: &[RuntimeType::Boolean],
+    return_type: RuntimeType::Nil,
 };

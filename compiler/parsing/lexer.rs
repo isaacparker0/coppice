@@ -6,6 +6,7 @@ pub(crate) enum Keyword {
     Abort,
     And,
     As,
+    Assert,
     Break,
     Continue,
     Else,
@@ -39,6 +40,7 @@ impl Keyword {
             Keyword::Abort => "abort",
             Keyword::And => "and",
             Keyword::As => "as",
+            Keyword::Assert => "assert",
             Keyword::Break => "break",
             Keyword::Continue => "continue",
             Keyword::Else => "else",
@@ -586,6 +588,7 @@ impl<'a> Lexer<'a> {
             "import" => TokenKind::Keyword(Keyword::Import),
             "interface" => TokenKind::Keyword(Keyword::Interface),
             "as" => TokenKind::Keyword(Keyword::As),
+            "assert" => TokenKind::Keyword(Keyword::Assert),
             "match" => TokenKind::Keyword(Keyword::Match),
             "and" => TokenKind::Keyword(Keyword::And),
             "or" => TokenKind::Keyword(Keyword::Or),
@@ -790,6 +793,7 @@ fn is_statement_start(kind: &TokenKind) -> bool {
             | TokenKind::Keyword(
                 Keyword::Return
                     | Keyword::Abort
+                    | Keyword::Assert
                     | Keyword::Break
                     | Keyword::Continue
                     | Keyword::If

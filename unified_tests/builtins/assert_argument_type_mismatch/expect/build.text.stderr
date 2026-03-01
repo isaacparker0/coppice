@@ -1,0 +1,3 @@
+lib.copp:2:12: error: argument 1 to 'assert' must be boolean, got int64
+      assert(1)
+             ^
