@@ -218,6 +218,9 @@ fn build_imported_bindings_by_file(
         nominal_type_id_by_lookup_key(symbol_id_by_lookup_key, typed_symbol_by_id);
 
     for resolved_import in resolved_imports {
+        let imported_for_file = imported_by_file
+            .entry(resolved_import.source_path.clone())
+            .or_default();
         for binding in &resolved_import.bindings {
             let lookup_key = PublicSymbolLookupKey {
                 package_id: resolved_import.target_package_id,
@@ -250,16 +253,13 @@ fn build_imported_bindings_by_file(
                 }
             };
 
-            imported_by_file
-                .entry(resolved_import.source_path.clone())
-                .or_default()
-                .push(ImportedBinding {
-                    local_name: binding.local_name.clone(),
-                    imported_package_path: resolved_import.target_package_path.clone(),
-                    imported_symbol_name: binding.imported_name.clone(),
-                    span: binding.span.clone(),
-                    symbol,
-                });
+            imported_for_file.push(ImportedBinding {
+                local_name: binding.local_name.clone(),
+                imported_package_path: resolved_import.target_package_path.clone(),
+                imported_symbol_name: binding.imported_name.clone(),
+                span: binding.span.clone(),
+                symbol,
+            });
         }
     }
 
@@ -294,6 +294,11 @@ fn imported_type_declaration(
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> ImportedTypeDeclaration {
+    let in_scope_type_parameter_names = type_declaration
+        .type_parameters
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .collect::<Vec<_>>();
     let declared_nominal_type_id = NominalTypeId {
         package_id: target_package_id,
         symbol_name: type_declaration.name.clone(),
@@ -309,11 +314,7 @@ fn imported_type_declaration(
                             &field.type_name,
                             target_package_id,
                             nominal_type_id_by_lookup_key,
-                            &type_declaration
-                                .type_parameters
-                                .iter()
-                                .map(|parameter| parameter.name.as_str())
-                                .collect::<Vec<_>>(),
+                            &in_scope_type_parameter_names,
                         ),
                     )
                 })
@@ -331,11 +332,7 @@ fn imported_type_declaration(
                                 &parameter.type_name,
                                 target_package_id,
                                 nominal_type_id_by_lookup_key,
-                                &type_declaration
-                                    .type_parameters
-                                    .iter()
-                                    .map(|parameter| parameter.name.as_str())
-                                    .collect::<Vec<_>>(),
+                                &in_scope_type_parameter_names,
                             )
                         })
                         .collect(),
@@ -343,11 +340,7 @@ fn imported_type_declaration(
                         &method.return_type,
                         target_package_id,
                         nominal_type_id_by_lookup_key,
-                        &type_declaration
-                            .type_parameters
-                            .iter()
-                            .map(|parameter| parameter.name.as_str())
-                            .collect::<Vec<_>>(),
+                        &in_scope_type_parameter_names,
                     ),
                 })
                 .collect();
@@ -370,11 +363,7 @@ fn imported_type_declaration(
                                 &parameter.type_name,
                                 target_package_id,
                                 nominal_type_id_by_lookup_key,
-                                &type_declaration
-                                    .type_parameters
-                                    .iter()
-                                    .map(|parameter| parameter.name.as_str())
-                                    .collect::<Vec<_>>(),
+                                &in_scope_type_parameter_names,
                             )
                         })
                         .collect(),
@@ -382,11 +371,7 @@ fn imported_type_declaration(
                         &method.return_type,
                         target_package_id,
                         nominal_type_id_by_lookup_key,
-                        &type_declaration
-                            .type_parameters
-                            .iter()
-                            .map(|parameter| parameter.name.as_str())
-                            .collect::<Vec<_>>(),
+                        &in_scope_type_parameter_names,
                     ),
                 })
                 .collect(),
@@ -421,11 +406,7 @@ fn imported_type_declaration(
                         variant,
                         target_package_id,
                         nominal_type_id_by_lookup_key,
-                        &type_declaration
-                            .type_parameters
-                            .iter()
-                            .map(|parameter| parameter.name.as_str())
-                            .collect::<Vec<_>>(),
+                        &in_scope_type_parameter_names,
                     )
                 })
                 .collect(),
@@ -438,11 +419,7 @@ fn imported_type_declaration(
             &type_declaration.type_parameters,
             target_package_id,
             nominal_type_id_by_lookup_key,
-            &type_declaration
-                .type_parameters
-                .iter()
-                .map(|parameter| parameter.name.as_str())
-                .collect::<Vec<_>>(),
+            &in_scope_type_parameter_names,
         ),
         implemented_interfaces: type_declaration
             .implemented_interfaces
@@ -452,11 +429,7 @@ fn imported_type_declaration(
                     implemented_interface,
                     target_package_id,
                     nominal_type_id_by_lookup_key,
-                    &type_declaration
-                        .type_parameters
-                        .iter()
-                        .map(|parameter| parameter.name.as_str())
-                        .collect::<Vec<_>>(),
+                    &in_scope_type_parameter_names,
                 )
             })
             .collect(),
@@ -469,6 +442,11 @@ fn imported_function_signature(
     target_package_id: PackageId,
     nominal_type_id_by_lookup_key: &BTreeMap<PublicSymbolLookupKey, NominalTypeId>,
 ) -> TypedFunctionSignature {
+    let in_scope_type_parameter_names = function_declaration
+        .type_parameters
+        .iter()
+        .map(|parameter| parameter.name.as_str())
+        .collect::<Vec<_>>();
     let parameter_types = function_declaration
         .parameters
         .iter()
@@ -477,11 +455,7 @@ fn imported_function_signature(
                 &parameter.type_name,
                 target_package_id,
                 nominal_type_id_by_lookup_key,
-                &function_declaration
-                    .type_parameters
-                    .iter()
-                    .map(|parameter| parameter.name.as_str())
-                    .collect::<Vec<_>>(),
+                &in_scope_type_parameter_names,
             )
         })
         .collect();
@@ -491,22 +465,14 @@ fn imported_function_signature(
             &function_declaration.type_parameters,
             target_package_id,
             nominal_type_id_by_lookup_key,
-            &function_declaration
-                .type_parameters
-                .iter()
-                .map(|parameter| parameter.name.as_str())
-                .collect::<Vec<_>>(),
+            &in_scope_type_parameter_names,
         ),
         parameter_types,
         return_type: resolve_type_name_to_semantic_type(
             &function_declaration.return_type,
             target_package_id,
             nominal_type_id_by_lookup_key,
-            &function_declaration
-                .type_parameters
-                .iter()
-                .map(|parameter| parameter.name.as_str())
-                .collect::<Vec<_>>(),
+            &in_scope_type_parameter_names,
         ),
     }
 }

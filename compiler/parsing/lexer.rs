@@ -649,7 +649,7 @@ impl<'a> Lexer<'a> {
     ) -> Token {
         let message = message.into();
         self.lex_errors.push(LexError {
-            message: message.clone(),
+            message,
             span: Span {
                 start,
                 end: self.index,

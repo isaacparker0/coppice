@@ -61,15 +61,15 @@ pub fn build_target_with_workspace_root(
         autofix_policy_outcome,
         AutofixPolicyOutcome::FailInStrictMode { .. }
     ) {
+        let build_failure = build_failed_from_pending_safe_autofixes(
+            &safe_autofix_edit_count_by_workspace_relative_path,
+        );
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
-            build: Err(build_failed_from_pending_safe_autofixes(
-                &safe_autofix_edit_count_by_workspace_relative_path,
-            )),
+            build: Err(build_failure),
         };
     }
 
@@ -87,8 +87,7 @@ pub fn build_target_with_workspace_root(
                 return BuildTargetResult {
                     executable_path: None,
                     success_message: None,
-                    safe_autofix_edit_count_by_workspace_relative_path:
-                        safe_autofix_edit_count_by_workspace_relative_path.clone(),
+                    safe_autofix_edit_count_by_workspace_relative_path,
                     analysis_result: None,
                     build: Err(error),
                 };
@@ -110,8 +109,7 @@ pub fn build_target_with_workspace_root(
                 "analysis succeeded; package/library/test artifact generation is not implemented yet"
                     .to_string(),
             ),
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: Some(BuildAnalysisResult {
                 diagnostics: analyzed_target.diagnostics,
                 source_by_path: analyzed_target.source_by_path,
@@ -123,8 +121,7 @@ pub fn build_target_with_workspace_root(
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
             build: Err(build_failed_from_rendered_diagnostics(
                 &analyzed_target.diagnostics,
@@ -138,8 +135,7 @@ pub fn build_target_with_workspace_root(
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -155,8 +151,7 @@ pub fn build_target_with_workspace_root(
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -185,8 +180,7 @@ pub fn build_target_with_workspace_root(
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
             build: Err(build_failed_from_rendered_diagnostics(
                 &reachable_diagnostics,
@@ -218,8 +212,7 @@ pub fn build_target_with_workspace_root(
         return BuildTargetResult {
             executable_path: None,
             success_message: None,
-            safe_autofix_edit_count_by_workspace_relative_path:
-                safe_autofix_edit_count_by_workspace_relative_path.clone(),
+            safe_autofix_edit_count_by_workspace_relative_path,
             analysis_result: None,
             build: Err(CompilerFailure {
                 kind: CompilerFailureKind::BuildFailed,
@@ -259,8 +252,7 @@ pub fn build_target_with_workspace_root(
             return BuildTargetResult {
                 executable_path: None,
                 success_message: None,
-                safe_autofix_edit_count_by_workspace_relative_path:
-                    safe_autofix_edit_count_by_workspace_relative_path.clone(),
+                safe_autofix_edit_count_by_workspace_relative_path,
                 analysis_result: None,
                 build: Err(error),
             };
@@ -276,8 +268,7 @@ pub fn build_target_with_workspace_root(
             return BuildTargetResult {
                 executable_path: None,
                 success_message: None,
-                safe_autofix_edit_count_by_workspace_relative_path:
-                    safe_autofix_edit_count_by_workspace_relative_path.clone(),
+                safe_autofix_edit_count_by_workspace_relative_path,
                 analysis_result: None,
                 build: Err(error),
             };
@@ -374,7 +365,7 @@ fn package_dependency_closure(
     let mut visited_package_paths = BTreeSet::new();
     let mut package_paths_to_visit = vec![root_package_path.to_string()];
     while let Some(package_path) = package_paths_to_visit.pop() {
-        if !visited_package_paths.insert(package_path.clone()) {
+        if visited_package_paths.contains(package_path.as_str()) {
             continue;
         }
         if let Some(imported_package_paths) =
@@ -382,6 +373,7 @@ fn package_dependency_closure(
         {
             package_paths_to_visit.extend(imported_package_paths.iter().cloned());
         }
+        visited_package_paths.insert(package_path);
     }
 
     visited_package_paths

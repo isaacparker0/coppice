@@ -82,9 +82,10 @@ impl TypeChecker<'_> {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for (field_name, field_type) in fields {
-                        if !seen.insert(field_name.clone()) {
+                        if seen.contains(field_name.as_str()) {
                             continue;
                         }
+                        seen.insert(field_name.clone());
                         resolved_fields.push((field_name.clone(), field_type.clone()));
                     }
                     if let Some(info) = self.types.get_mut(&imported_binding.local_name) {
@@ -97,9 +98,10 @@ impl TypeChecker<'_> {
                     let mut resolved_methods = Vec::new();
                     let mut seen = HashSet::new();
                     for method in methods {
-                        if !seen.insert(method.name.clone()) {
+                        if seen.contains(method.name.as_str()) {
                             continue;
                         }
+                        seen.insert(method.name.clone());
                         resolved_methods.push(InterfaceMethodSignature {
                             name: method.name.clone(),
                             self_mutable: method.self_mutable,
@@ -299,7 +301,7 @@ impl TypeChecker<'_> {
                     let mut resolved_fields = Vec::new();
                     let mut seen = HashSet::new();
                     for field in fields {
-                        if !seen.insert(field.name.clone()) {
+                        if seen.contains(field.name.as_str()) {
                             self.error(
                                 format!(
                                     "duplicate field '{}' in '{}'",
@@ -309,6 +311,7 @@ impl TypeChecker<'_> {
                             );
                             continue;
                         }
+                        seen.insert(field.name.clone());
                         let field_type = self.resolve_type_name(&field.type_name);
                         resolved_fields.push((field.name.clone(), field_type));
                     }
@@ -323,7 +326,7 @@ impl TypeChecker<'_> {
                     let mut seen = HashSet::new();
                     for method in methods {
                         self.check_function_name(&method.name, &method.name_span);
-                        if !seen.insert(method.name.clone()) {
+                        if seen.contains(method.name.as_str()) {
                             self.error(
                                 format!(
                                     "duplicate method '{}.{}'",
@@ -333,6 +336,7 @@ impl TypeChecker<'_> {
                             );
                             continue;
                         }
+                        seen.insert(method.name.clone());
                         let return_type = self.resolve_type_name(&method.return_type);
                         let parameter_types = method
                             .parameters
@@ -365,13 +369,14 @@ impl TypeChecker<'_> {
                     let mut resolved_variants = Vec::new();
                     let mut seen = HashSet::new();
                     for variant in variants {
-                        if !seen.insert(variant.name.clone()) {
+                        if seen.contains(variant.name.as_str()) {
                             self.error(
                                 format!("duplicate enum variant '{}'", variant.name),
                                 variant.span.clone(),
                             );
                             continue;
                         }
+                        seen.insert(variant.name.clone());
                         resolved_variants.push(super::Type::Named(NominalTypeRef {
                             id: NominalTypeId {
                                 package_id: self.package_id,
@@ -404,13 +409,14 @@ impl TypeChecker<'_> {
                         }
                         let variant_type = self.resolve_type_name(variant);
                         let key = variant_type.display();
-                        if !seen.insert(key.clone()) {
+                        if seen.contains(key.as_str()) {
                             self.error(
                                 format!("duplicate union variant '{key}'"),
                                 variant.span.clone(),
                             );
                             continue;
                         }
+                        seen.insert(key);
                         resolved_variants.push(variant_type);
                     }
                     if let Some(info) = self.types.get_mut(&type_declaration.name) {
@@ -669,13 +675,14 @@ impl TypeChecker<'_> {
                 continue;
             }
             let interface_name = implemented_interface_type.display();
-            if !seen_interface_names.insert(interface_name.clone()) {
+            if seen_interface_names.contains(interface_name.as_str()) {
                 self.error(
                     format!("duplicate implements entry '{interface_name}'"),
                     diagnostic_span.clone(),
                 );
                 continue;
             }
+            seen_interface_names.insert(interface_name.clone());
 
             let Some(interface_type_id) =
                 Self::nominal_type_id_for_type(&implemented_interface_type)

@@ -69,7 +69,7 @@ impl Parser {
         let body = self.parse_block()?;
         Ok(SyntaxTestDeclaration {
             name,
-            name_span: name_span.clone(),
+            name_span,
             span: Span {
                 start: start.start,
                 end: body.span.end,

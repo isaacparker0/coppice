@@ -13,7 +13,7 @@ pub fn check_bindings(
         let mut imported_names = BTreeSet::new();
         if let Some(bindings) = bindings_by_file.get(file.path) {
             for binding in bindings {
-                if !imported_names.insert(binding.local_name.clone()) {
+                if imported_names.contains(binding.local_name.as_str()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
                         diagnostic: PhaseDiagnostic::new(
@@ -24,7 +24,9 @@ pub fn check_bindings(
                             binding.span.clone(),
                         ),
                     });
+                    continue;
                 }
+                imported_names.insert(binding.local_name.clone());
             }
         }
 

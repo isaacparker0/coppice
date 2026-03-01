@@ -156,7 +156,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
 
     let target_path = PathBuf::from(path);
     let absolute_target_path = if target_path.is_absolute() {
-        target_path.clone()
+        target_path
     } else if workspace_root_override.is_some() {
         workspace_root.join(&target_path)
     } else {
@@ -185,8 +185,6 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             details: Vec::new(),
         });
     }
-
-    let diagnostic_display_base = workspace_root.clone();
 
     if metadata.is_file()
         && find_owning_package_root(&workspace_root, &absolute_target_path).is_none()
@@ -275,11 +273,6 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                 })?
             };
             let rendered_path = display_path(&absolute_path);
-            source_by_path.insert(rendered_path.clone(), source.clone());
-            if package_in_scope {
-                source_by_workspace_relative_path_in_scope
-                    .insert(workspace_relative_key.clone(), source.clone());
-            }
             let parse_result = parse_file(&source, role);
             for diagnostic in &parse_result.diagnostics {
                 let rendered_diagnostic = render_diagnostic(
@@ -295,6 +288,11 @@ pub fn analyze_target_with_workspace_root_and_overrides(
                     package_in_scope,
                 );
             }
+            if package_in_scope {
+                source_by_workspace_relative_path_in_scope
+                    .insert(workspace_relative_key.clone(), source.clone());
+            }
+            source_by_path.insert(rendered_path, source);
             let PhaseOutput {
                 value: parsed_file,
                 diagnostics: _,
@@ -341,7 +339,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         for diagnostic in &syntax_rules_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::SyntaxRules,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                display_path(&workspace_root.join(&parsed_unit.path)),
                 diagnostic.clone(),
             );
             push_rendered_diagnostic(
@@ -355,7 +353,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         for diagnostic in &file_role_rules_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::FileRoleRules,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                display_path(&workspace_root.join(&parsed_unit.path)),
                 diagnostic.clone(),
             );
             push_rendered_diagnostic(
@@ -410,7 +408,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
             );
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::Resolution,
-                display_path(&diagnostic_display_base.join(&path)),
+                display_path(&workspace_root.join(&path)),
                 PhaseDiagnostic::new(message, span),
             );
             push_rendered_diagnostic(
@@ -445,7 +443,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         for diagnostic in diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::SemanticLowering,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                display_path(&workspace_root.join(&parsed_unit.path)),
                 diagnostic,
             );
             push_rendered_diagnostic(
@@ -517,7 +515,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
         for diagnostic in &type_analysis_result.diagnostics {
             let rendered_diagnostic = render_diagnostic(
                 DiagnosticPhase::TypeAnalysis,
-                display_path(&diagnostic_display_base.join(&parsed_unit.path)),
+                display_path(&workspace_root.join(&parsed_unit.path)),
                 diagnostic.clone(),
             );
             push_rendered_diagnostic(

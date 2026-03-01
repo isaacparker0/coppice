@@ -35,7 +35,7 @@ pub fn write_workspace_files(
     for file in files {
         let relative_path = normalize_workspace_relative_path(&file.path)?;
         let relative_path_key = relative_path.to_string_lossy().to_string();
-        if !written_paths.insert(relative_path_key.clone()) {
+        if written_paths.contains(&relative_path_key) {
             return Err(CompilerFailure {
                 kind: CompilerFailureKind::ReadSource,
                 message: format!("duplicate file path: {relative_path_key}"),
@@ -43,6 +43,7 @@ pub fn write_workspace_files(
                 details: Vec::new(),
             });
         }
+        written_paths.insert(relative_path_key);
 
         let absolute_path = session_directory.join(&relative_path);
         if let Some(parent_directory) = absolute_path.parent() {

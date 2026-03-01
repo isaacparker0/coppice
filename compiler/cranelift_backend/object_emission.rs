@@ -33,14 +33,18 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 #[derive(Clone)]
 struct FunctionRecord {
     id: FuncId,
-    declaration: ExecutableFunctionDeclaration,
+    parameter_types: Vec<ExecutableTypeReference>,
+    return_type: ExecutableTypeReference,
+    type_parameter_names: Vec<String>,
+    type_parameter_constraint_interface_reference_by_name:
+        BTreeMap<String, ExecutableInterfaceReference>,
 }
 
 #[derive(Clone)]
 struct MethodRecord {
     id: FuncId,
-    struct_reference: ExecutableStructReference,
-    declaration: ExecutableMethodDeclaration,
+    parameter_types: Vec<ExecutableTypeReference>,
+    return_type: ExecutableTypeReference,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -80,16 +84,16 @@ struct TypeParameterWitness {
     witness_table_pointer: Value,
 }
 
-pub(crate) struct CompilationState {
+pub(crate) struct CompilationState<'program> {
     module: ObjectModule,
     function_record_by_callable_reference: BTreeMap<ExecutableCallableReference, FunctionRecord>,
     method_record_by_key: BTreeMap<MethodKey, MethodRecord>,
     interface_declaration_by_reference:
-        BTreeMap<ExecutableInterfaceReference, ExecutableInterfaceDeclaration>,
+        BTreeMap<ExecutableInterfaceReference, &'program ExecutableInterfaceDeclaration>,
     constant_declaration_by_reference:
-        BTreeMap<ExecutableConstantReference, ExecutableConstantDeclaration>,
+        BTreeMap<ExecutableConstantReference, &'program ExecutableConstantDeclaration>,
     struct_declaration_by_reference:
-        BTreeMap<ExecutableStructReference, ExecutableStructDeclaration>,
+        BTreeMap<ExecutableStructReference, &'program ExecutableStructDeclaration>,
     external_runtime_functions: ExternalRuntimeFunctions,
 }
 
@@ -278,17 +282,17 @@ pub(crate) fn emit_object_bytes(program: &ExecutableProgram) -> Result<Vec<u8>, 
     let constant_declaration_by_reference = program
         .constant_declarations
         .iter()
-        .map(|declaration| (declaration.constant_reference.clone(), declaration.clone()))
+        .map(|declaration| (declaration.constant_reference.clone(), declaration))
         .collect();
     let struct_declaration_by_reference = program
         .struct_declarations
         .iter()
-        .map(|declaration| (declaration.struct_reference.clone(), declaration.clone()))
+        .map(|declaration| (declaration.struct_reference.clone(), declaration))
         .collect();
     let interface_declaration_by_reference = program
         .interface_declarations
         .iter()
-        .map(|declaration| (declaration.interface_reference.clone(), declaration.clone()))
+        .map(|declaration| (declaration.interface_reference.clone(), declaration))
         .collect();
 
     let mut state = CompilationState {
@@ -360,7 +364,16 @@ fn declare_program_functions(
             function_declaration.callable_reference.clone(),
             FunctionRecord {
                 id,
-                declaration: function_declaration.clone(),
+                parameter_types: function_declaration
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.type_reference.clone())
+                    .collect(),
+                return_type: function_declaration.return_type.clone(),
+                type_parameter_names: function_declaration.type_parameter_names.clone(),
+                type_parameter_constraint_interface_reference_by_name: function_declaration
+                    .type_parameter_constraint_interface_reference_by_name
+                    .clone(),
             },
         );
     }
@@ -397,8 +410,12 @@ fn declare_struct_methods(
                 key,
                 MethodRecord {
                     id,
-                    struct_reference: struct_declaration.struct_reference.clone(),
-                    declaration: method_declaration.clone(),
+                    parameter_types: method_declaration
+                        .parameters
+                        .iter()
+                        .map(|parameter| parameter.type_reference.clone())
+                        .collect(),
+                    return_type: method_declaration.return_type.clone(),
                 },
             );
         }
@@ -505,10 +522,10 @@ fn cranelift_type_for(type_reference: &ExecutableTypeReference) -> types::Type {
 }
 
 fn define_program_function(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_declaration: &ExecutableFunctionDeclaration,
 ) -> Result<(), CompilerFailure> {
-    let function_record = state
+    let function_id = state
         .function_record_by_callable_reference
         .get(&function_declaration.callable_reference)
         .ok_or_else(|| {
@@ -521,7 +538,7 @@ fn define_program_function(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut context = state.module.make_context();
     context.func.signature = build_signature_for_function(&mut state.module, function_declaration);
@@ -610,7 +627,7 @@ fn define_program_function(
 
     state
         .module
-        .define_function(function_record.id, &mut context)
+        .define_function(function_id, &mut context)
         .map_err(|error| {
             build_failed(
                 format!(
@@ -627,7 +644,7 @@ fn define_program_function(
 }
 
 fn define_struct_method(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     struct_declaration: &ExecutableStructDeclaration,
     method_declaration: &ExecutableMethodDeclaration,
 ) -> Result<(), CompilerFailure> {
@@ -635,7 +652,7 @@ fn define_struct_method(
         struct_reference: struct_declaration.struct_reference.clone(),
         method_name: method_declaration.name.clone(),
     };
-    let method_record = state
+    let method_id = state
         .method_record_by_key
         .get(&method_key)
         .ok_or_else(|| {
@@ -647,7 +664,7 @@ fn define_struct_method(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut context = state.module.make_context();
     context.func.signature =
@@ -739,12 +756,12 @@ fn define_struct_method(
 
     state
         .module
-        .define_function(method_record.id, &mut context)
+        .define_function(method_id, &mut context)
         .map_err(|error| {
             build_failed(
                 format!(
                     "failed to define method '{}::{}': {error}",
-                    method_record.struct_reference.symbol_name, method_declaration.name
+                    struct_declaration.struct_reference.symbol_name, method_declaration.name
                 ),
                 None,
             )
@@ -755,10 +772,10 @@ fn define_struct_method(
 }
 
 fn define_process_entrypoint(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     entrypoint_callable_reference: &ExecutableCallableReference,
 ) -> Result<(), CompilerFailure> {
-    let entrypoint_record = state
+    let entrypoint_id = state
         .function_record_by_callable_reference
         .get(entrypoint_callable_reference)
         .ok_or_else(|| {
@@ -771,7 +788,7 @@ fn define_process_entrypoint(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut signature = state.module.make_signature();
     signature.returns.push(AbiParam::new(types::I32));
@@ -794,7 +811,7 @@ fn define_process_entrypoint(
 
         let entrypoint = state
             .module
-            .declare_func_in_func(entrypoint_record.id, function_builder.func);
+            .declare_func_in_func(entrypoint_id, function_builder.func);
         let _ = function_builder.ins().call(entrypoint, &[]);
 
         let zero = function_builder.ins().iconst(types::I32, 0);
@@ -812,7 +829,7 @@ fn define_process_entrypoint(
 }
 
 fn compile_statements(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     statements: &[ExecutableStatement],
@@ -842,17 +859,19 @@ fn compile_statements(
             }
             ExecutableStatement::Assign { target, value } => match target {
                 ExecutableAssignTarget::Name { name } => {
-                    let local_value = compilation_context
-                        .local_value_by_name
-                        .get(name)
-                        .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?
-                        .clone();
+                    let (local_variable, local_type_reference) = {
+                        let local_value = compilation_context
+                            .local_value_by_name
+                            .get(name)
+                            .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?;
+                        (local_value.variable, local_value.type_reference.clone())
+                    };
                     let assigned_value =
                         compile_expression(state, function_builder, compilation_context, value)?;
                     if assigned_value.terminates {
                         return Ok(true);
                     }
-                    if local_value.type_reference != assigned_value.type_reference {
+                    if local_type_reference != assigned_value.type_reference {
                         return Err(build_failed(
                             format!("assignment type mismatch for local '{name}'"),
                             None,
@@ -864,7 +883,7 @@ fn compile_statements(
                             None,
                         ));
                     };
-                    function_builder.def_var(local_value.variable, value);
+                    function_builder.def_var(local_variable, value);
                 }
                 ExecutableAssignTarget::Index { target, index } => {
                     compile_index_assign_statement(
@@ -1083,7 +1102,7 @@ fn compile_statements(
 }
 
 fn compile_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     expression: &ExecutableExpression,
@@ -1145,7 +1164,7 @@ fn compile_expression(
                 let constant_declaration = state
                     .constant_declaration_by_reference
                     .get(constant_reference)
-                    .cloned()
+                    .copied()
                     .ok_or_else(|| {
                         build_failed(
                             format!(
@@ -1203,7 +1222,7 @@ fn compile_expression(
                             None,
                         )
                     })?;
-                if !function_record.declaration.type_parameter_names.is_empty() {
+                if !function_record.type_parameter_names.is_empty() {
                     return Err(build_failed(
                         format!(
                             "generic function '{}::{}' cannot be used as a runtime function value",
@@ -1219,13 +1238,8 @@ fn compile_expression(
                     .ins()
                     .func_addr(types::I64, function_reference);
                 let function_type_reference = ExecutableTypeReference::Function {
-                    parameter_types: function_record
-                        .declaration
-                        .parameters
-                        .iter()
-                        .map(|parameter| parameter.type_reference.clone())
-                        .collect(),
-                    return_type: Box::new(function_record.declaration.return_type.clone()),
+                    parameter_types: function_record.parameter_types.clone(),
+                    return_type: Box::new(function_record.return_type.clone()),
                 };
                 return Ok(TypedValue {
                     value: runtime_value_for_expected_type(
@@ -1370,7 +1384,7 @@ fn compile_expression(
 }
 
 fn compile_binary_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     operator: ExecutableBinaryOperator,
@@ -1656,7 +1670,7 @@ fn compile_binary_expression(
 }
 
 fn concatenate_strings(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     left_pointer: Value,
     right_pointer: Value,
@@ -1707,7 +1721,7 @@ fn concatenate_strings(
 }
 
 fn compile_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     callee: &ExecutableExpression,
@@ -1882,18 +1896,22 @@ fn compile_call_expression(
                             ),
                             None,
                         )
-                    })?
-                    .clone();
-                let declared_parameter_types = function_record
-                    .declaration
-                    .parameters
-                    .iter()
-                    .map(|parameter| parameter.type_reference.clone())
-                    .collect::<Vec<_>>();
-                let declared_return_type = function_record.declaration.return_type.clone();
+                    })?;
+                let function_id = function_record.id;
+                let declared_parameter_types = function_record.parameter_types.clone();
+                let declared_return_type = function_record.return_type.clone();
+                let type_parameter_names = function_record.type_parameter_names.clone();
+                let type_parameter_constraint_interface_reference_by_name =
+                    if type_parameter_names.is_empty() {
+                        BTreeMap::new()
+                    } else {
+                        function_record
+                            .type_parameter_constraint_interface_reference_by_name
+                            .clone()
+                    };
                 let (instantiated_parameter_types, instantiated_return_type) =
                     instantiate_generic_signature(
-                        &function_record.declaration.type_parameter_names,
+                        &type_parameter_names,
                         &declared_parameter_types,
                         &declared_return_type,
                         type_arguments,
@@ -1951,16 +1969,12 @@ fn compile_call_expression(
                     )?;
                     argument_values.push(lowered_argument);
                 }
-                for (type_parameter_index, type_parameter_name) in function_record
-                    .declaration
-                    .type_parameter_names
-                    .iter()
-                    .enumerate()
+                for (type_parameter_index, type_parameter_name) in
+                    type_parameter_names.iter().enumerate()
                 {
-                    let Some(interface_reference) = function_record
-                        .declaration
-                        .type_parameter_constraint_interface_reference_by_name
-                        .get(type_parameter_name)
+                    let Some(interface_reference) =
+                        type_parameter_constraint_interface_reference_by_name
+                            .get(type_parameter_name)
                     else {
                         continue;
                     };
@@ -1986,20 +2000,19 @@ fn compile_call_expression(
 
                 let callee = state
                     .module
-                    .declare_func_in_func(function_record.id, function_builder.func);
+                    .declare_func_in_func(function_id, function_builder.func);
                 let call = function_builder.ins().call(callee, &argument_values);
 
                 if matches!(
                     instantiated_return_type,
                     ExecutableTypeReference::Nil | ExecutableTypeReference::Never
                 ) {
+                    let return_terminates =
+                        matches!(&instantiated_return_type, ExecutableTypeReference::Never);
                     Ok(TypedValue {
                         value: None,
-                        type_reference: instantiated_return_type.clone(),
-                        terminates: matches!(
-                            instantiated_return_type,
-                            ExecutableTypeReference::Never
-                        ),
+                        type_reference: instantiated_return_type,
+                        terminates: return_terminates,
                     })
                 } else {
                     let results = function_builder.inst_results(call);
@@ -2038,7 +2051,7 @@ fn compile_call_expression(
 }
 
 fn runtime_call_argument_for_declared_parameter_type(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     argument_value: Option<Value>,
     argument_type: &ExecutableTypeReference,
@@ -2093,7 +2106,7 @@ fn runtime_call_result_for_instantiated_return_type(
 }
 
 fn compile_function_value_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     callee: &ExecutableExpression,
@@ -2208,7 +2221,7 @@ fn compile_function_value_call_expression(
 }
 
 fn compile_builtin_conversion_call(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     function_name: &str,
@@ -2286,7 +2299,7 @@ fn compile_builtin_conversion_call(
 }
 
 fn compile_index_access_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     target: &ExecutableExpression,
@@ -2398,7 +2411,7 @@ fn compile_index_access_expression(
 }
 
 fn compile_index_assign_statement(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     target: &ExecutableExpression,
@@ -2526,7 +2539,7 @@ fn compile_index_assign_statement(
 }
 
 fn compile_struct_literal_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     struct_reference: &ExecutableStructReference,
@@ -2536,6 +2549,7 @@ fn compile_struct_literal_expression(
     let struct_declaration = state
         .struct_declaration_by_reference
         .get(struct_reference)
+        .copied()
         .ok_or_else(|| {
             build_failed(
                 format!(
@@ -2544,10 +2558,9 @@ fn compile_struct_literal_expression(
                 ),
                 None,
             )
-        })?
-        .clone();
+        })?;
     let type_substitutions_by_type_parameter_name =
-        type_substitutions_for_struct_type(&struct_declaration, type_reference)?;
+        type_substitutions_for_struct_type(struct_declaration, type_reference)?;
 
     let allocated_pointer = allocate_heap_bytes(
         state,
@@ -2629,7 +2642,7 @@ fn compile_struct_literal_expression(
 }
 
 fn compile_list_literal_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     elements: &[ExecutableExpression],
@@ -2718,7 +2731,7 @@ fn compile_list_literal_expression(
 }
 
 fn compile_field_access_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     target: &ExecutableExpression,
@@ -2792,7 +2805,7 @@ fn compile_field_access_expression(
 }
 
 fn compile_method_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     callee: &ExecutableExpression,
@@ -2828,12 +2841,11 @@ fn compile_method_call_expression(
     if let Ok((struct_declaration, type_substitutions_by_type_parameter_name)) =
         resolve_struct_type_details(state, &compiled_receiver.type_reference)
     {
-        let struct_declaration = struct_declaration.clone();
         return compile_struct_method_call_expression(
             state,
             function_builder,
             compilation_context,
-            &struct_declaration,
+            struct_declaration,
             &type_substitutions_by_type_parameter_name,
             &compiled_receiver,
             method_name,
@@ -2844,12 +2856,11 @@ fn compile_method_call_expression(
     let interface_declaration_result =
         resolve_interface_declaration_by_type_reference(state, &compiled_receiver.type_reference);
     if let Ok(interface_declaration) = interface_declaration_result {
-        let interface_declaration = interface_declaration.clone();
         return compile_interface_method_call_expression(
             state,
             function_builder,
             compilation_context,
-            &interface_declaration,
+            interface_declaration,
             &compiled_receiver,
             method_name,
             arguments,
@@ -2880,7 +2891,7 @@ fn compile_method_call_expression(
 }
 
 fn compile_type_parameter_method_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     type_parameter_name: &str,
@@ -2903,13 +2914,12 @@ fn compile_type_parameter_method_call_expression(
     let interface_declaration = resolve_interface_declaration_by_reference(
         state,
         &type_parameter_witness.interface_reference,
-    )?
-    .clone();
+    )?;
     compile_interface_method_call_through_vtable(
         state,
         function_builder,
         compilation_context,
-        &interface_declaration,
+        interface_declaration,
         type_parameter_witness.witness_table_pointer,
         compiled_receiver.value.ok_or_else(|| {
             build_failed(
@@ -2923,7 +2933,7 @@ fn compile_type_parameter_method_call_expression(
 }
 
 fn compile_struct_method_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     struct_declaration: &ExecutableStructDeclaration,
@@ -2950,13 +2960,13 @@ fn compile_struct_method_call_expression(
         })?
         .clone();
 
-    if method_record.declaration.parameters.len() != arguments.len() {
+    if method_record.parameter_types.len() != arguments.len() {
         return Err(build_failed(
             format!(
                 "method '{}.{}' expected {} argument(s), got {}",
                 struct_declaration.name,
                 method_name,
-                method_record.declaration.parameters.len(),
+                method_record.parameter_types.len(),
                 arguments.len()
             ),
             None,
@@ -2970,8 +2980,7 @@ fn compile_struct_method_call_expression(
             None,
         )
     })?);
-    for (parameter, argument_expression) in
-        method_record.declaration.parameters.iter().zip(arguments)
+    for (parameter_type, argument_expression) in method_record.parameter_types.iter().zip(arguments)
     {
         let compiled_argument = compile_expression(
             state,
@@ -2982,10 +2991,8 @@ fn compile_struct_method_call_expression(
         if compiled_argument.terminates {
             return Ok(compiled_argument);
         }
-        let expected_type = substitute_type_reference(
-            &parameter.type_reference,
-            type_substitutions_by_type_parameter_name,
-        );
+        let expected_type =
+            substitute_type_reference(parameter_type, type_substitutions_by_type_parameter_name);
         if !is_type_assignable(state, &compiled_argument.type_reference, &expected_type) {
             return Err(build_failed(
                 format!(
@@ -3018,17 +3025,18 @@ fn compile_struct_method_call_expression(
         .declare_func_in_func(method_record.id, function_builder.func);
     let call = function_builder.ins().call(callee, &call_values);
     let return_type = substitute_type_reference(
-        &method_record.declaration.return_type,
+        &method_record.return_type,
         type_substitutions_by_type_parameter_name,
     );
     if matches!(
         return_type,
         ExecutableTypeReference::Nil | ExecutableTypeReference::Never
     ) {
+        let return_terminates = matches!(&return_type, ExecutableTypeReference::Never);
         Ok(TypedValue {
             value: None,
-            type_reference: return_type.clone(),
-            terminates: matches!(return_type, ExecutableTypeReference::Never),
+            type_reference: return_type,
+            terminates: return_terminates,
         })
     } else {
         Ok(TypedValue {
@@ -3040,7 +3048,7 @@ fn compile_struct_method_call_expression(
 }
 
 fn compile_interface_method_call_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     interface_declaration: &ExecutableInterfaceDeclaration,
@@ -3079,7 +3087,7 @@ fn compile_interface_method_call_expression(
 }
 
 fn compile_interface_method_call_through_vtable(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     interface_declaration: &ExecutableInterfaceDeclaration,
@@ -3216,7 +3224,7 @@ fn compile_interface_method_call_through_vtable(
 }
 
 fn compile_matches_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     value_expression: &ExecutableExpression,
@@ -3254,7 +3262,7 @@ fn compile_matches_expression(
 }
 
 fn compile_match_expression(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     target_expression: &ExecutableExpression,
@@ -3396,7 +3404,7 @@ fn emit_match_arm_condition(
 }
 
 fn bind_match_pattern_local(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     compilation_context: &mut FunctionCompilationContext,
     target: &TypedValue,
@@ -3444,7 +3452,7 @@ fn bind_match_pattern_local(
 }
 
 fn runtime_value_for_expected_type(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     value: Option<Value>,
     actual_type: &ExecutableTypeReference,
@@ -3479,8 +3487,6 @@ fn runtime_value_for_expected_type(
         && let Ok((struct_declaration, _)) = resolve_struct_type_details(state, actual_type)
         && struct_implements_interface(struct_declaration, interface_declaration)
     {
-        let interface_declaration = interface_declaration.clone();
-        let struct_declaration = struct_declaration.clone();
         let data_pointer = value.ok_or_else(|| {
             build_failed(
                 "value expected for struct-to-interface conversion".to_string(),
@@ -3491,8 +3497,8 @@ fn runtime_value_for_expected_type(
             state,
             function_builder,
             data_pointer,
-            &struct_declaration,
-            &interface_declaration,
+            struct_declaration,
+            interface_declaration,
         )?;
         return Ok(Some(interface_value_pointer));
     }
@@ -3501,7 +3507,7 @@ fn runtime_value_for_expected_type(
 }
 
 fn comparable_type_reference_for_equality(
-    state: &CompilationState,
+    state: &CompilationState<'_>,
     left_type_reference: &ExecutableTypeReference,
     right_type_reference: &ExecutableTypeReference,
 ) -> Option<ExecutableTypeReference> {
@@ -3515,7 +3521,7 @@ fn comparable_type_reference_for_equality(
 }
 
 fn box_union_value(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     raw_value: Value,
     raw_type: &ExecutableTypeReference,
@@ -3635,7 +3641,7 @@ fn type_reference_matches_pattern_type(
 }
 
 fn is_type_assignable(
-    state: &CompilationState,
+    state: &CompilationState<'_>,
     actual_type: &ExecutableTypeReference,
     expected_type: &ExecutableTypeReference,
 ) -> bool {
@@ -3744,12 +3750,12 @@ fn instantiate_generic_signature(
     ))
 }
 
-fn resolve_struct_type_details<'state>(
-    state: &'state CompilationState,
+fn resolve_struct_type_details<'program>(
+    state: &CompilationState<'program>,
     type_reference: &ExecutableTypeReference,
 ) -> Result<
     (
-        &'state ExecutableStructDeclaration,
+        &'program ExecutableStructDeclaration,
         BTreeMap<String, ExecutableTypeReference>,
     ),
     CompilerFailure,
@@ -3775,6 +3781,7 @@ fn resolve_struct_type_details<'state>(
                     .values()
                     .find(|declaration| declaration.name == *name)
             }
+            .copied()
             .ok_or_else(|| build_failed(format!("unknown struct type '{name}'"), None))?;
             Ok((struct_declaration, BTreeMap::new()))
         }
@@ -3800,6 +3807,7 @@ fn resolve_struct_type_details<'state>(
                         .values()
                         .find(|declaration| declaration.name == *base_name)
                 }
+                .copied()
                 .ok_or_else(|| build_failed(format!("unknown struct type '{base_name}'"), None))?;
             let type_substitutions_by_type_parameter_name =
                 type_substitutions_for_struct_type(struct_declaration, type_reference)?;
@@ -3829,10 +3837,10 @@ fn resolve_struct_type_details<'state>(
     }
 }
 
-fn resolve_interface_declaration_by_type_reference<'state>(
-    state: &'state CompilationState,
+fn resolve_interface_declaration_by_type_reference<'program>(
+    state: &CompilationState<'program>,
     type_reference: &ExecutableTypeReference,
-) -> Result<&'state ExecutableInterfaceDeclaration, CompilerFailure> {
+) -> Result<&'program ExecutableInterfaceDeclaration, CompilerFailure> {
     let (ExecutableTypeReference::NominalType {
         nominal_type_reference: Some(interface_reference),
         ..
@@ -3856,6 +3864,7 @@ fn resolve_interface_declaration_by_type_reference<'state>(
             package_path: interface_reference.package_path.clone(),
             symbol_name: interface_reference.symbol_name.clone(),
         })
+        .copied()
         .ok_or_else(|| {
             build_failed(
                 format!(
@@ -3867,13 +3876,14 @@ fn resolve_interface_declaration_by_type_reference<'state>(
         })
 }
 
-fn resolve_interface_declaration_by_reference<'state>(
-    state: &'state CompilationState,
+fn resolve_interface_declaration_by_reference<'program>(
+    state: &CompilationState<'program>,
     interface_reference: &ExecutableInterfaceReference,
-) -> Result<&'state ExecutableInterfaceDeclaration, CompilerFailure> {
+) -> Result<&'program ExecutableInterfaceDeclaration, CompilerFailure> {
     state
         .interface_declaration_by_reference
         .get(interface_reference)
+        .copied()
         .ok_or_else(|| {
             build_failed(
                 format!(
@@ -3901,7 +3911,7 @@ fn struct_implements_interface(
 }
 
 fn box_interface_value(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     data_pointer: Value,
     struct_declaration: &ExecutableStructDeclaration,
@@ -3932,7 +3942,7 @@ fn box_interface_value(
 }
 
 fn build_interface_vtable(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     struct_declaration: &ExecutableStructDeclaration,
     interface_declaration: &ExecutableInterfaceDeclaration,
@@ -3985,13 +3995,13 @@ fn build_interface_vtable(
 }
 
 fn build_witness_table_for_constraint(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     type_argument: &ExecutableTypeReference,
     interface_reference: &ExecutableInterfaceReference,
 ) -> Result<Value, CompilerFailure> {
     let interface_declaration =
-        resolve_interface_declaration_by_reference(state, interface_reference)?.clone();
+        resolve_interface_declaration_by_reference(state, interface_reference)?;
     let (struct_declaration, _) =
         resolve_struct_type_details(state, type_argument).map_err(|_| {
             build_failed(
@@ -4002,8 +4012,7 @@ fn build_witness_table_for_constraint(
                 None,
             )
         })?;
-    let struct_declaration = struct_declaration.clone();
-    if !struct_implements_interface(&struct_declaration, &interface_declaration) {
+    if !struct_implements_interface(struct_declaration, interface_declaration) {
         return Err(build_failed(
             format!(
                 "type '{}' does not implement required interface '{}'",
@@ -4015,8 +4024,8 @@ fn build_witness_table_for_constraint(
     build_interface_vtable(
         state,
         function_builder,
-        &struct_declaration,
-        &interface_declaration,
+        struct_declaration,
+        interface_declaration,
     )
 }
 
@@ -4199,7 +4208,7 @@ fn enum_variant_tag(enum_variant_reference: &ExecutableEnumVariantReference) -> 
 }
 
 pub(crate) fn allocate_heap_bytes(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     byte_count: i64,
 ) -> Result<Value, CompilerFailure> {
@@ -4212,7 +4221,7 @@ pub(crate) fn allocate_heap_bytes(
 }
 
 fn emit_write_string_with_newline(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     file_descriptor: i32,
     string_pointer: Value,
@@ -4227,7 +4236,7 @@ fn emit_write_string_with_newline(
 }
 
 fn emit_exit_call(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     exit_code: i32,
 ) {
@@ -4240,7 +4249,7 @@ fn emit_exit_call(
 }
 
 fn intern_string_literal(
-    state: &mut CompilationState,
+    state: &mut CompilationState<'_>,
     function_builder: &mut FunctionBuilder<'_>,
     value: &str,
 ) -> Result<Value, CompilerFailure> {

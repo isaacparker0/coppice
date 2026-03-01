@@ -116,7 +116,7 @@ impl Parser {
                 {
                     return Err(ParseError::InvalidConstruct {
                         kind: InvalidConstructKind::PatternTypeArgumentsNotSupported,
-                        span: type_name.span.clone(),
+                        span: type_name.span,
                     });
                 }
                 let span = Span {
@@ -305,7 +305,7 @@ impl Parser {
 
     pub(super) fn parse_unary(&mut self) -> ParseResult<SyntaxExpression> {
         if self.peek_is_keyword(Keyword::Not) {
-            let operator_span = self.advance().span.clone();
+            let operator_span = self.advance().span;
             let expression = self.parse_unary()?;
             let span = Span {
                 start: operator_span.start,
@@ -320,7 +320,7 @@ impl Parser {
             });
         }
         if self.peek_is_symbol(Symbol::Minus) {
-            let operator_span = self.advance().span.clone();
+            let operator_span = self.advance().span;
             let expression = self.parse_unary()?;
             let span = Span {
                 start: operator_span.start,
@@ -582,7 +582,7 @@ impl Parser {
             {
                 return Err(ParseError::InvalidConstruct {
                     kind: InvalidConstructKind::PatternTypeArgumentsNotSupported,
-                    span: type_name.span.clone(),
+                    span: type_name.span,
                 });
             }
             let span = Span {
