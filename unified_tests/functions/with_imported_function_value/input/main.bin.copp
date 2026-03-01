@@ -6,5 +6,5 @@ function apply(value: int64, mapper: function(int64) -> int64) -> int64 {
 
 function main() -> nil {
     print(string(apply(7, plusTwo)))
-    return nil
+    return
 }

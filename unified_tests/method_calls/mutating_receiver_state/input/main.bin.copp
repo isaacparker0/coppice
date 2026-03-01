@@ -15,5 +15,5 @@ function main() -> nil {
     mut counter := Counter { value: 1 }
     counter = counter.next()
     print(counter.describe())
-    return nil
+    return
 }

@@ -465,12 +465,11 @@ fn lower_statement(
                 expression: executable_expression,
             }
         }
-        TypeAnnotatedStatement::Return { value, .. } => {
-            let executable_expression = lower_expression(value, type_parameter_names, diagnostics);
-            ExecutableStatement::Return {
-                value: executable_expression,
-            }
-        }
+        TypeAnnotatedStatement::Return { value, .. } => ExecutableStatement::Return {
+            value: value
+                .as_ref()
+                .map(|value| lower_expression(value, type_parameter_names, diagnostics)),
+        },
     }
 }
 

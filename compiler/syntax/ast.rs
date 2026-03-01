@@ -207,7 +207,7 @@ pub enum SyntaxStatement {
         span: Span,
     },
     Return {
-        value: SyntaxExpression,
+        value: Option<SyntaxExpression>,
         span: Span,
     },
     Break {

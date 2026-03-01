@@ -2,6 +2,6 @@ visible type Box[T] :: struct {
     value: T,
     function set(mut self, value: T) -> nil {
         self = Box[T] { value: value }
-        return nil
+        return
     },
 }

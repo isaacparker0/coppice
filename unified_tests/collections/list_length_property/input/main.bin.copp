@@ -1,5 +1,5 @@
 function main() -> nil {
     values := [1, 2, 3]
     print(string(values.length))
-    return nil
+    return
 }

@@ -2,5 +2,5 @@ function main() -> nil {
     print(string(123))
     print(string(-45))
     print(string(0))
-    return nil
+    return
 }

@@ -2,9 +2,9 @@
     "ok": false,
     "diagnostics": [
         {
-            "phase": "parsing",
+            "phase": "type_analysis",
             "path": "lib.copp",
-            "message": "expected expression",
+            "message": "return statement requires a value of type int64",
             "span": {
                 "start": 31,
                 "end": 37,

@@ -1,4 +1,4 @@
 visible function run() -> nil {
     missing()
-    return nil
+    return
 }

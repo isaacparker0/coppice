@@ -334,7 +334,9 @@ fn lower_statement(
             span: span.clone(),
         },
         syntax::SyntaxStatement::Return { value, span } => semantic::SemanticStatement::Return {
-            value: lower_expression(value, context),
+            value: value
+                .as_ref()
+                .map(|expression| lower_expression(expression, context)),
             span: span.clone(),
         },
         syntax::SyntaxStatement::Break { span } => {

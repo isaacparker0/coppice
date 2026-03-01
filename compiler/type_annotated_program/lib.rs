@@ -169,7 +169,7 @@ pub enum TypeAnnotatedStatement {
         span: Span,
     },
     Return {
-        value: TypeAnnotatedExpression,
+        value: Option<TypeAnnotatedExpression>,
         span: Span,
     },
 }

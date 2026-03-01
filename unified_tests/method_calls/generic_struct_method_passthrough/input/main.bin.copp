@@ -12,5 +12,5 @@ type Box[T] :: struct {
 function main() -> nil {
     boxed := Box[string] { value: "method generic ok" }
     print(boxed.passthrough())
-    return nil
+    return
 }

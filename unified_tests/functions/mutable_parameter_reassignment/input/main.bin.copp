@@ -5,5 +5,5 @@ function addTwo(mut value: int64) -> int64 {
 
 function main() -> nil {
     print(string(addTwo(8)))
-    return nil
+    return
 }

@@ -9,5 +9,5 @@ function describe(ready: boolean) -> string {
 function main() -> nil {
     print(describe(true))
     print(describe(false))
-    return nil
+    return
 }

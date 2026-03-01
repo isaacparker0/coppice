@@ -1,3 +1,4 @@
 function run() -> string | nil {
-    return nil
+    value: string | nil := nil
+    return value
 }

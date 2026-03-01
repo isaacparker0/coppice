@@ -9,5 +9,5 @@ function plusOne(value: int64) -> int64 {
 function main() -> nil {
     localMapper: function(int64) -> int64 := plusOne
     print(string(apply(7, localMapper)))
-    return nil
+    return
 }

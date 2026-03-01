@@ -7,5 +7,5 @@ function main() -> nil {
         }
         print("tick")
     }
-    return nil
+    return
 }

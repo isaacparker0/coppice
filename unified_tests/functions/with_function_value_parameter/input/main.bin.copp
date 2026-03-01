@@ -8,5 +8,5 @@ function plusOne(value: int64) -> int64 {
 
 function main() -> nil {
     print(string(apply(7, plusOne)))
-    return nil
+    return
 }

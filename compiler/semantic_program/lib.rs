@@ -156,7 +156,7 @@ pub enum SemanticStatement {
         span: Span,
     },
     Return {
-        value: SemanticExpression,
+        value: Option<SemanticExpression>,
         span: Span,
     },
     Break {

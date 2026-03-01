@@ -7,7 +7,7 @@
             "message": "visible declarations are not allowed in .test.copp files",
             "span": {
                 "start": 43,
-                "end": 83,
+                "end": 79,
                 "line": 3,
                 "column": 9
             }

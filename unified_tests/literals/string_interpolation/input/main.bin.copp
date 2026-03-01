@@ -1,5 +1,5 @@
 function main() -> nil {
     name := "world"
     print("hello {name}")
-    return nil
+    return
 }

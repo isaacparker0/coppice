@@ -8,5 +8,5 @@ function describe(value: int64 | string) -> string {
 function main() -> nil {
     print(describe(7))
     print(describe("ok"))
-    return nil
+    return
 }

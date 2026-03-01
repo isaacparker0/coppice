@@ -7,7 +7,7 @@
             "message": "PACKAGE.copp may only contain exports declarations",
             "span": {
                 "start": 0,
-                "end": 43,
+                "end": 39,
                 "line": 1,
                 "column": 1
             }

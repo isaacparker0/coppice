@@ -3,5 +3,5 @@ import workspace/auth { Box }
 function run() -> nil {
     mut box := Box[int64] { value: 1 }
     box.set(true)
-    return nil
+    return
 }

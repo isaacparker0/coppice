@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use compiler__fix_edits::TextEdit;
+use compiler__safe_autofix::SafeAutofix;
 use compiler__semantic_program::{
     SemanticAssignTarget, SemanticBlock, SemanticExpression, SemanticFunctionDeclaration,
     SemanticMethodDeclaration, SemanticStatement, SemanticTypeDeclaration,
@@ -335,19 +337,39 @@ impl TypeChecker<'_> {
                     fallthrough_narrowing: None,
                 }
             }
-            SemanticStatement::Return { value, span: _ } => {
-                let value_type = self.check_expression(value);
-                if self.current_return_type != Type::Unknown
-                    && value_type != Type::Unknown
-                    && !self.is_assignable(&value_type, &self.current_return_type)
-                {
+            SemanticStatement::Return { value, span } => {
+                if let Some(value) = value {
+                    if self.current_return_type == Type::Nil
+                        && matches!(value, SemanticExpression::NilLiteral { .. })
+                    {
+                        self.error("use 'return' instead of 'return nil'", value.span());
+                        self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
+                            start_byte_offset: span.end,
+                            end_byte_offset: value.span().end,
+                            replacement_text: String::new(),
+                        }));
+                    }
+                    let value_type = self.check_expression(value);
+                    if self.current_return_type != Type::Unknown
+                        && value_type != Type::Unknown
+                        && !self.is_assignable(&value_type, &self.current_return_type)
+                    {
+                        self.error(
+                            format!(
+                                "return type mismatch: expected {}, got {}",
+                                self.current_return_type.display(),
+                                value_type.display()
+                            ),
+                            value.span(),
+                        );
+                    }
+                } else if !matches!(self.current_return_type, Type::Nil | Type::Unknown) {
                     self.error(
                         format!(
-                            "return type mismatch: expected {}, got {}",
-                            self.current_return_type.display(),
-                            value_type.display()
+                            "return statement requires a value of type {}",
+                            self.current_return_type.display()
                         ),
-                        value.span(),
+                        span.clone(),
                     );
                 }
                 StatementOutcome {

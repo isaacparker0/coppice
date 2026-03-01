@@ -7,5 +7,5 @@ type Word :: struct {
 
 function main() -> nil {
     print(Word { text: "inline" }.textValue())
-    return nil
+    return
 }
