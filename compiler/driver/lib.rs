@@ -52,12 +52,8 @@ pub fn build_target_with_workspace_root(
         };
 
     let safe_autofix_edit_count_by_workspace_relative_path = analyzed_target
-        .safe_autofix_edits_by_workspace_relative_path
-        .iter()
-        .map(|(workspace_relative_path, text_edits)| {
-            (workspace_relative_path.clone(), text_edits.len())
-        })
-        .collect::<BTreeMap<_, _>>();
+        .safe_autofix_edit_count_by_workspace_relative_path
+        .clone();
     let autofix_policy_outcome =
         evaluate_safe_autofix_policy(strict, &safe_autofix_edit_count_by_workspace_relative_path);
 
