@@ -156,7 +156,7 @@ pub fn analyze_target_with_workspace_root_and_overrides(
 
     let target_path = PathBuf::from(path);
     let absolute_target_path = if target_path.is_absolute() {
-        target_path.clone()
+        target_path
     } else if workspace_root_override.is_some() {
         workspace_root.join(&target_path)
     } else {

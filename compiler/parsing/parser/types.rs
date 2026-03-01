@@ -33,9 +33,10 @@ impl Parser {
     pub(super) fn parse_union_type_declaration(&mut self) -> ParseResult<Vec<SyntaxTypeName>> {
         let mut variants = Vec::new();
         let first_segment = self.parse_type_name_member()?;
+        let first_segment_span = first_segment.span.clone();
         variants.push(SyntaxTypeName {
-            names: vec![first_segment.clone()],
-            span: first_segment.span.clone(),
+            names: vec![first_segment],
+            span: first_segment_span,
         });
         while self.peek_is_symbol(Symbol::Pipe) {
             self.advance();
