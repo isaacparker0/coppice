@@ -111,7 +111,10 @@ Rationale:
 
 ```
 visible function authenticate(username: string, password: string) -> Session | AuthError {
-    user := find_user(username)?
+    user := match find_user(username) {
+        value: User => value
+        e: AuthError => return e
+    }
     if not password.verify(user.hash) {
         return AuthError { message: "invalid credentials" }
     }
@@ -464,7 +467,11 @@ function find_user(id: u64) -> User | nil {
     ...
 }
 
-user := find_user(42) ?? return
+user_or_nil := find_user(42)
+if user_or_nil == nil {
+    return
+}
+user := user_or_nil
 ```
 
 `T | nil` is the optional form. Control-flow narrowing eliminates the need for
@@ -595,12 +602,15 @@ Errors are values, expressed as union return types.
 
 ```
 visible function read_file(path: string) -> string | IOError {
-    data := fs.read(path)?      // propagate on error
-    return data.to_string()
+    data := match fs.read(path) {
+        content: string => content
+        e: IOError => return e
+    }
+    return data
 }
 ```
 
-`?` propagates errors. Exhaustive `match` handles them.
+Recoverable paths are expressed explicitly with `match` and `return`.
 
 ```
 match read_file("config.toml") {
@@ -815,12 +825,12 @@ auth/
 group Token.parse {
     test "handles valid JWT" {
         token := parse("abc.def.ghi")
-        assert token.header == "abc"
+        assert(token.header == "abc")
     }
 
     test "rejects malformed input" {
         result := parse("garbage")
-        assert result matches ParseError
+        assert(result matches ParseError)
     }
 }
 
@@ -828,7 +838,7 @@ group Token.validate {
     test "accepts unexpired token" {
         token := make_test_token(ttl: 3600)
         status := token.validate()
-        assert status matches OK
+        assert(status matches OK)
     }
 }
 ```
@@ -844,10 +854,10 @@ One assertion primitive: `assert`. The compiler introspects the expression to
 produce detailed failure messages.
 
 ```
-assert user.age > 18
+assert(user.age > 18)
 
 // Failure output:
-//   assert user.age > 18
+//   assert(user.age > 18)
 //          |        |
 //          15       18
 ```
@@ -872,7 +882,7 @@ import testutil/auth { make_token }
 
 test "token contains user id" {
     token := make_token(42)
-    assert token.user_id == 42
+    assert(token.user_id == 42)
 }
 ```
 
@@ -893,7 +903,7 @@ platform/auth/token.test.copp
     FAIL rejects expired token (1ms)
 
   FAIL: "rejects expired token"
-    assert status matches TokenExpired
+    assert(status matches TokenExpired)
            |      |
            OK     TokenExpired
     at: token.test.copp:28
@@ -934,7 +944,6 @@ No syntax alternatives. No feature overlaps.
 - One null value: `nil`.
 - One generic syntax: `[T]`.
 - One optional form: `T | nil`.
-- One error propagation: `?`.
 - One fatal unrecoverable failure construct: `abort(...)`.
 - One union branching form: `match`.
 - One union boolean membership check: `matches`.
@@ -951,6 +960,7 @@ No syntax alternatives. No feature overlaps.
 - No semicolons (grammar doesn't have them).
 - No exceptions / `throw` / `try-catch`.
 - No `panic` keyword (use `abort(...)`).
+- No error-propagation operator sugar (`?`); use explicit `match` + `return`.
 - No `null` AND `undefined` (one `nil`).
 - No operator overloading (or very limited).
 - No variadic arguments (pass a list).
@@ -1315,7 +1325,7 @@ dogfooding is a means, not an end.
 
 | Influence      | What's borrowed                                                                  |
 | -------------- | -------------------------------------------------------------------------------- |
-| **Rust**       | Safety guarantees, `?` error propagation, exhaustive matching, `mut`             |
+| **Rust**       | Safety guarantees, exhaustive matching, `mut`                                    |
 | **Go**         | Compilation speed, `for` as only loop, package = directory, enforced formatting  |
 | **TypeScript** | Union-heavy modeling and control-flow narrowing (influence, not direct adoption) |
 | **Swift**      | Witness table generics, ARC memory model, value semantics                        |
