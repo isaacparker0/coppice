@@ -1,0 +1,3 @@
+lib.copp:1:14: error: expected symbol
+  functionTYPO run() -> nil {
+               ^

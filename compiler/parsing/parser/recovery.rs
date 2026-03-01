@@ -80,22 +80,39 @@ impl Parser {
     }
 
     pub(super) fn synchronize(&mut self) {
+        let mut brace_depth = 0usize;
         while !self.at_eof() {
-            if self.peek_is_keyword(Keyword::Import)
-                || self.peek_is_keyword(Keyword::Exports)
-                || self.peek_is_keyword(Keyword::Type)
-                || self.peek_is_keyword(Keyword::Function)
-                || self.peek_is_keyword(Keyword::Group)
-                || self.peek_is_keyword(Keyword::Test)
-            {
-                return;
+            if self.peek_is_symbol(Symbol::LeftBrace) {
+                brace_depth = brace_depth.saturating_add(1);
+                self.advance();
+                continue;
             }
-            if self.peek_is_identifier()
-                && (self.peek_second_is_symbol(Symbol::Assign)
-                    || self.peek_second_is_symbol(Symbol::DoubleColon))
-            {
-                return;
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                if brace_depth > 0 {
+                    brace_depth = brace_depth.saturating_sub(1);
+                }
+                self.advance();
+                continue;
             }
+
+            if brace_depth == 0 {
+                if self.peek_is_keyword(Keyword::Import)
+                    || self.peek_is_keyword(Keyword::Exports)
+                    || self.peek_is_keyword(Keyword::Type)
+                    || self.peek_is_keyword(Keyword::Function)
+                    || self.peek_is_keyword(Keyword::Group)
+                    || self.peek_is_keyword(Keyword::Test)
+                {
+                    return;
+                }
+                if self.peek_is_identifier()
+                    && (self.peek_second_is_symbol(Symbol::Assign)
+                        || self.peek_second_is_symbol(Symbol::DoubleColon))
+                {
+                    return;
+                }
+            }
+
             self.advance();
         }
     }

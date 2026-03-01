@@ -1,0 +1,4 @@
+functionTYPO run() -> nil {
+    value := 1
+    return
+}
