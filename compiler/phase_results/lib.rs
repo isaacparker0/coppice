@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic, SafeAutofix};
+use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
+use compiler__safe_autofix::SafeAutofix;
 
 pub struct PhaseOutput<T> {
     pub value: T,

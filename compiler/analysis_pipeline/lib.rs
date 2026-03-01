@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic, SafeAutofix};
+use compiler__diagnostics::{FileScopedDiagnostic, PhaseDiagnostic};
 use compiler__file_role_rules as file_role_rules;
 use compiler__fix_edits::{TextEdit, apply_text_edits, merge_text_edits};
 use compiler__package_symbols::{
@@ -17,6 +17,7 @@ use compiler__reports::{
     RenderedDiagnostic,
 };
 use compiler__resolution as resolution;
+use compiler__safe_autofix::SafeAutofix;
 use compiler__semantic_lowering::lower_parsed_file;
 use compiler__semantic_program::SemanticFile;
 use compiler__source::{FileRole, compare_paths, path_to_key};

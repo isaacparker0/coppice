@@ -19,6 +19,7 @@ rust_library(
         "//compiler/fix_edits",
         "//compiler/packages",
         "//compiler/phase_results",
+        "//compiler/safe_autofix",
         "//compiler/semantic_program",
         "//compiler/semantic_types",
         "//compiler/source",

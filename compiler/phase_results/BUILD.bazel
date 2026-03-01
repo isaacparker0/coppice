@@ -5,7 +5,10 @@ rust_library(
     name = "phase_results",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
-    deps = ["//compiler/diagnostics"],
+    deps = [
+        "//compiler/diagnostics",
+        "//compiler/safe_autofix",
+    ],
 )
 
 dependency_enforcement_test(

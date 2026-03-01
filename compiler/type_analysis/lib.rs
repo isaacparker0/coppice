@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
-use compiler__diagnostics::{PhaseDiagnostic, SafeAutofix};
+use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
+use compiler__safe_autofix::SafeAutofix;
 use compiler__semantic_program::{
     SemanticAssignTarget, SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration,
     SemanticExpression, SemanticExpressionId, SemanticFile, SemanticFunctionDeclaration,

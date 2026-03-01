@@ -5,10 +5,7 @@ rust_library(
     name = "diagnostics",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
-    deps = [
-        "//compiler/fix_edits",
-        "//compiler/source",
-    ],
+    deps = ["//compiler/source"],
 )
 
 dependency_enforcement_test(
@@ -19,10 +16,12 @@ dependency_enforcement_test(
         "//compiler/driver",
         "//compiler/exports",
         "//compiler/file_role_rules",
+        "//compiler/fix_edits",
         "//compiler/package_graph",
         "//compiler/package_symbols",
         "//compiler/packages",
         "//compiler/parsing",
+        "//compiler/safe_autofix",
         "//compiler/symbols",
         "//compiler/syntax",
         "//compiler/semantic_types",

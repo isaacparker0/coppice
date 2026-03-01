@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use compiler__diagnostics::SafeAutofix;
 use compiler__fix_edits::TextEdit;
+use compiler__safe_autofix::SafeAutofix;
 use compiler__semantic_program::{
     SemanticBinaryOperator, SemanticExpression, SemanticMatchArm, SemanticMatchPattern,
     SemanticStructLiteralField, SemanticTypeName, SemanticUnaryOperator,
