@@ -1071,6 +1071,7 @@ fn compile_statements(
                     };
                     function_builder.ins().return_(&[value]);
                 }
+
                 return Ok(true);
             }
         }

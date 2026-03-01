@@ -535,22 +535,15 @@ impl TypeChecker<'_> {
                         expression,
                     ) = part
                     {
-                        if let SemanticExpression::StringLiteral { value, .. } = expression {
-                            self.error(
-                                "string interpolation expression must not be a string literal",
-                                expression.span(),
-                            );
-                            if let Some((start_byte_offset, end_byte_offset)) =
+                        if let SemanticExpression::StringLiteral { value, .. } = expression
+                            && let Some((start_byte_offset, end_byte_offset)) =
                                 self.enclosing_interpolation_expression_range(&expression.span())
-                            {
-                                self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
-                                    start_byte_offset,
-                                    end_byte_offset,
-                                    replacement_text: escape_string_interpolation_literal_text(
-                                        value,
-                                    ),
-                                }));
-                            }
+                        {
+                            self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
+                                start_byte_offset,
+                                end_byte_offset,
+                                replacement_text: escape_string_interpolation_literal_text(value),
+                            }));
                         }
                         let expression_type = self.check_expression(expression);
                         if expression_type != Type::String && expression_type != Type::Unknown {

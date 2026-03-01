@@ -342,7 +342,6 @@ impl TypeChecker<'_> {
                     if self.current_return_type == Type::Nil
                         && matches!(value, SemanticExpression::NilLiteral { .. })
                     {
-                        self.error("use 'return' instead of 'return nil'", value.span());
                         self.push_safe_autofix(SafeAutofix::from_text_edit(TextEdit {
                             start_byte_offset: span.end,
                             end_byte_offset: value.span().end,
