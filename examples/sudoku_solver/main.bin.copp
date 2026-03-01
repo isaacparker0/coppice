@@ -76,7 +76,7 @@ function printBoard(board: List[List[int64]]) -> nil {
         row = row + 1
     }
 
-    return nil
+    return
 }
 
 function main() -> nil {
@@ -99,5 +99,5 @@ function main() -> nil {
         print("sudoku has no solution")
     }
 
-    return nil
+    return
 }
