@@ -5,5 +5,5 @@ type User :: struct {
 function main() -> nil {
     user := User { name: "alice" }
     print(user.name)
-    return nil
+    return
 }

@@ -6,8 +6,8 @@
             "path": "lib.copp",
             "message": "import declarations must appear before top-level declarations",
             "span": {
-                "start": 45,
-                "end": 79,
+                "start": 41,
+                "end": 75,
                 "line": 5,
                 "column": 1
             }

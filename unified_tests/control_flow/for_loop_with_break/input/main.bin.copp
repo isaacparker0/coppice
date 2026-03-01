@@ -8,5 +8,5 @@ function main() -> nil {
         print("tick")
     }
     print("done")
-    return nil
+    return
 }

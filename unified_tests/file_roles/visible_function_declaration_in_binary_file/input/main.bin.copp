@@ -1,7 +1,7 @@
 function main() -> nil {
-    return nil
+    return
 }
 
 visible function helper() -> nil {
-    return nil
+    return
 }

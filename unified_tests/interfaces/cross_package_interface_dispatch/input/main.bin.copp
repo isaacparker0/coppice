@@ -12,5 +12,5 @@ function renderB(value: BPrintable) -> string {
 function main() -> nil {
     print(renderA(AUser { name: "Ada" }))
     print(renderB(BUser { name: "Ben" }))
-    return nil
+    return
 }

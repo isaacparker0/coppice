@@ -6,8 +6,8 @@
             "path": "main.bin.copp",
             "message": "visible declarations are not allowed in .bin.copp files",
             "span": {
-                "start": 56,
-                "end": 94,
+                "start": 52,
+                "end": 90,
                 "line": 5,
                 "column": 14
             }

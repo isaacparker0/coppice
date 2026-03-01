@@ -721,14 +721,19 @@ fn type_annotated_statement_from_semantic_statement(
             span: span.clone(),
         },
         SemanticStatement::Return { value, span } => TypeAnnotatedStatement::Return {
-            value: type_annotated_expression_from_semantic_expression(
-                value,
-                resolved_type_by_expression_id,
-                call_target_by_expression_id,
-                resolved_type_argument_types_by_expression_id,
-                struct_reference_by_expression_id,
-                enum_variant_reference_by_expression_id,
-                constant_reference_by_expression_id,
+            value: value.as_ref().map_or_else(
+                || TypeAnnotatedExpression::NilLiteral { span: span.clone() },
+                |value| {
+                    type_annotated_expression_from_semantic_expression(
+                        value,
+                        resolved_type_by_expression_id,
+                        call_target_by_expression_id,
+                        resolved_type_argument_types_by_expression_id,
+                        struct_reference_by_expression_id,
+                        enum_variant_reference_by_expression_id,
+                        constant_reference_by_expression_id,
+                    )
+                },
             ),
             span: span.clone(),
         },

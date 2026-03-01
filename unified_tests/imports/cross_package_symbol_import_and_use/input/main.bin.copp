@@ -3,5 +3,5 @@ import workspace/lib { GREETING, greet }
 function main() -> nil {
     print(GREETING)
     print(greet())
-    return nil
+    return
 }

@@ -1,4 +1,4 @@
 BROKEN := 1
 visible function run() -> nil {
-    return nil
+    return
 }

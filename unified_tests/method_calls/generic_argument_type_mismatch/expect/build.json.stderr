@@ -6,8 +6,8 @@
             "path": "lib.copp",
             "message": "argument 1 to 'set' must be int64, got boolean",
             "span": {
-                "start": 227,
-                "end": 231,
+                "start": 223,
+                "end": 227,
                 "line": 11,
                 "column": 13
             }

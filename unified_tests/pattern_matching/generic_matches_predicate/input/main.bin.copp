@@ -13,5 +13,5 @@ function main() -> nil {
     } else {
         print("generic app false")
     }
-    return nil
+    return
 }

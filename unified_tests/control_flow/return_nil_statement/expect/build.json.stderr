@@ -1,0 +1,10 @@
+{
+    "ok": true,
+    "diagnostics": [],
+    "safe_fixes": [
+        {
+            "path": "lib.copp",
+            "edit_count": 1
+        }
+    ]
+}

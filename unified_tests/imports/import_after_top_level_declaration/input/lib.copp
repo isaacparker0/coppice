@@ -1,5 +1,5 @@
 function helper() -> nil {
-    return nil
+    return
 }
 
 import workspace/platform/auth { Token }

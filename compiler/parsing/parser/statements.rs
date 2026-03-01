@@ -1,4 +1,4 @@
-use crate::lexer::{Keyword, Symbol};
+use crate::lexer::{Keyword, Symbol, TokenKind};
 use compiler__source::Span;
 use compiler__syntax::{
     SyntaxAssignTarget, SyntaxBlock, SyntaxBlockItem, SyntaxExpression, SyntaxStatement,
@@ -41,7 +41,11 @@ impl Parser {
     pub(super) fn parse_statement(&mut self) -> ParseResult<SyntaxStatement> {
         if self.peek_is_keyword(Keyword::Return) {
             let span = self.expect_keyword(Keyword::Return)?;
-            let value = self.parse_expression()?;
+            let value = if self.can_start_return_expression() {
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
             return Ok(SyntaxStatement::Return { value, span });
         }
         if self.peek_is_keyword(Keyword::Break) {
@@ -216,5 +220,14 @@ impl Parser {
         let value = self.parse_expression()?;
         let span = value.span();
         Ok(SyntaxStatement::Expression { value, span })
+    }
+
+    fn can_start_return_expression(&self) -> bool {
+        !matches!(
+            self.peek().kind,
+            TokenKind::StatementTerminator
+                | TokenKind::EndOfFile
+                | TokenKind::Symbol(Symbol::RightBrace)
+        )
     }
 }

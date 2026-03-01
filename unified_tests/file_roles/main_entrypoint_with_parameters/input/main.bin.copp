@@ -1,4 +1,4 @@
 function main(value: int64) -> nil {
     _value := value
-    return nil
+    return
 }

@@ -2,5 +2,5 @@ import workspace/auth { make }
 
 function run() -> nil {
     make()
-    return nil
+    return
 }

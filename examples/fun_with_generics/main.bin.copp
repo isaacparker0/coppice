@@ -72,5 +72,5 @@ function main() -> nil {
     mapped := mapFirst(zip("type", 9), addBang)
     print("mapFirst: " + mapped.first + ", " + string(mapped.second))
 
-    return nil
+    return
 }

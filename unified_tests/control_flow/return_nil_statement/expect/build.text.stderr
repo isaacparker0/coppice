@@ -1,0 +1,3 @@
+warning: safe autofixes available; will fail in strict mode
+run 'coppice fix' to apply
+analysis succeeded; package/library/test artifact generation is not implemented yet

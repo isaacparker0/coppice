@@ -4,5 +4,5 @@ function make[T]() -> T {
 
 function run() -> nil {
     make()
-    return nil
+    return
 }

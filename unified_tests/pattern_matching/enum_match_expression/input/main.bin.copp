@@ -10,5 +10,5 @@ function main() -> nil {
         Direction.South => "south"
     }
     print(label)
-    return nil
+    return
 }

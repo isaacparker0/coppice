@@ -16,5 +16,5 @@ function passthrough[T: Printable](value: T) -> T {
 function main() -> nil {
     print(passthrough[User](User { name: "Ari" }).toString())
     print(passthrough(User { name: "Ava" }).toString())
-    return nil
+    return
 }

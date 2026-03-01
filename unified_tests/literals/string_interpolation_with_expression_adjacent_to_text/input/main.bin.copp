@@ -1,5 +1,5 @@
 function main() -> nil {
     x := "val"
     print("[{x}]")
-    return nil
+    return
 }

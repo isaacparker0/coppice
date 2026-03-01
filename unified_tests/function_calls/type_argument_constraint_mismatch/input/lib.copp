@@ -14,5 +14,5 @@ function requirePrintable[T: Printable](value: T) -> T {
 
 function run() -> nil {
     requirePrintable[User](User {})
-    return nil
+    return
 }
