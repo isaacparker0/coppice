@@ -723,10 +723,35 @@ impl<'a> Lexer<'a> {
     }
 }
 
+/// Rewrite raw newline tokens into explicit `StatementTerminator` tokens.
+///
+/// This enables semicolon-free statement termination while still allowing
+/// natural multi-line expression formatting (for example dot- or operator-led
+/// continuation lines).
+///
+/// A newline becomes a statement terminator when all of the following are
+/// true:
+/// - We are not inside parentheses/brackets or string interpolation delimiters.
+/// - The previous significant token is a terminator trigger (an identifier,
+///   literal, `)`, `}`, or control-flow keyword like `return`/`break`).
+/// - The next token can start a statement (an identifier or a statement
+///   keyword).
+///
+/// This is unambiguous because the grammar only permits identifiers and
+/// statement keywords at statement start, and the "would-be ambiguous"
+/// standalone forms are invalid anyway: parenthesized expression statements are
+/// disallowed (use `expression(args)`, not `(expression)(args)`), and
+/// standalone unary expressions are rejected as unused/no-op. So after a
+/// newline, leading `(`, operators, and unary `-` are continuation, not
+/// statement start.
+///
+/// Examples:
+/// - `foo()\n(bar)` parses as `foo()(bar)`, not `foo(); (bar)`.
+/// - `x\n- y` parses as `x - y`, not `x; -y`.
 fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token> {
     let mut output = Vec::with_capacity(tokens.len());
     let mut saw_newline = false;
-    let mut parenthesis_depth = 0usize;
+    let mut open_non_block_paired_delimiter_depth = 0usize;
     let mut previous_significant_token: Option<Token> = None;
 
     for token in tokens {
@@ -736,7 +761,7 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
         }
 
         if saw_newline {
-            if parenthesis_depth == 0
+            if open_non_block_paired_delimiter_depth == 0
                 && let Some(previous_token) = previous_significant_token.as_ref()
                 && is_statement_terminator_trigger(&previous_token.kind)
                 && is_statement_start(&token.kind)
@@ -750,7 +775,10 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
             saw_newline = false;
         }
 
-        update_parenthesis_depth(&token.kind, &mut parenthesis_depth);
+        update_open_non_block_paired_delimiter_depth(
+            &token.kind,
+            &mut open_non_block_paired_delimiter_depth,
+        );
         if !matches!(
             token.kind,
             TokenKind::StatementTerminator | TokenKind::EndOfFile
@@ -763,15 +791,20 @@ fn normalize_newlines_to_statement_terminators(tokens: Vec<Token>) -> Vec<Token>
     output
 }
 
-fn update_parenthesis_depth(kind: &TokenKind, parenthesis_depth: &mut usize) {
+fn update_open_non_block_paired_delimiter_depth(
+    kind: &TokenKind,
+    open_non_block_paired_delimiter_depth: &mut usize,
+) {
     match kind {
         TokenKind::Symbol(Symbol::LeftParenthesis | Symbol::LeftBracket)
         | TokenKind::StringInterpolationStart(_) => {
-            *parenthesis_depth = parenthesis_depth.saturating_add(1);
+            *open_non_block_paired_delimiter_depth =
+                open_non_block_paired_delimiter_depth.saturating_add(1);
         }
         TokenKind::Symbol(Symbol::RightParenthesis | Symbol::RightBracket)
         | TokenKind::StringInterpolationEnd(_) => {
-            *parenthesis_depth = parenthesis_depth.saturating_sub(1);
+            *open_non_block_paired_delimiter_depth =
+                open_non_block_paired_delimiter_depth.saturating_sub(1);
         }
         _ => {}
     }
