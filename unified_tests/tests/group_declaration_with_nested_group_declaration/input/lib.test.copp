@@ -1,0 +1,7 @@
+group "Outer" {
+    group "Inner" {
+        test "nested" {
+            return
+        }
+    }
+}

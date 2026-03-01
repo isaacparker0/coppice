@@ -14,6 +14,7 @@ pub(crate) enum Keyword {
     Exports,
     For,
     Function,
+    Group,
     If,
     Implements,
     Import,
@@ -28,6 +29,7 @@ pub(crate) enum Keyword {
     Public,
     Return,
     Struct,
+    Test,
     Type,
     Visible,
     // keep-sorted end
@@ -48,6 +50,7 @@ impl Keyword {
             Keyword::Exports => "exports",
             Keyword::For => "for",
             Keyword::Function => "function",
+            Keyword::Group => "group",
             Keyword::If => "if",
             Keyword::Implements => "implements",
             Keyword::Import => "import",
@@ -62,6 +65,7 @@ impl Keyword {
             Keyword::Public => "public",
             Keyword::Return => "return",
             Keyword::Struct => "struct",
+            Keyword::Test => "test",
             Keyword::Type => "type",
             Keyword::Visible => "visible",
             // keep-sorted end
@@ -582,6 +586,7 @@ impl<'a> Lexer<'a> {
             "if" => TokenKind::Keyword(Keyword::If),
             "for" => TokenKind::Keyword(Keyword::For),
             "implements" => TokenKind::Keyword(Keyword::Implements),
+            "group" => TokenKind::Keyword(Keyword::Group),
             "else" => TokenKind::Keyword(Keyword::Else),
             "enum" => TokenKind::Keyword(Keyword::Enum),
             "exports" => TokenKind::Keyword(Keyword::Exports),
@@ -597,6 +602,7 @@ impl<'a> Lexer<'a> {
             "nil" => TokenKind::Keyword(Keyword::Nil),
             "mut" => TokenKind::Keyword(Keyword::Mut),
             "struct" => TokenKind::Keyword(Keyword::Struct),
+            "test" => TokenKind::Keyword(Keyword::Test),
             "matches" => TokenKind::Keyword(Keyword::Matches),
             "true" => TokenKind::BooleanLiteral(true),
             "false" => TokenKind::BooleanLiteral(false),
@@ -798,9 +804,11 @@ fn is_statement_start(kind: &TokenKind) -> bool {
                     | Keyword::Continue
                     | Keyword::If
                     | Keyword::For
+                    | Keyword::Group
                     | Keyword::Mut
                     | Keyword::Match
                     | Keyword::Print
+                    | Keyword::Test
                     | Keyword::Exports
                     | Keyword::Import
             )

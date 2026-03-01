@@ -55,6 +55,24 @@ pub enum SyntaxDeclaration {
     Type(SyntaxTypeDeclaration),
     Constant(SyntaxConstantDeclaration),
     Function(SyntaxFunctionDeclaration),
+    Group(SyntaxTestGroupDeclaration),
+    Test(SyntaxTestDeclaration),
+}
+
+#[derive(Clone, Debug)]
+pub struct SyntaxTestGroupDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub tests: Vec<SyntaxTestDeclaration>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub struct SyntaxTestDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub body: SyntaxBlock,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]

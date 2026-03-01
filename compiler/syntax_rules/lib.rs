@@ -69,7 +69,9 @@ fn check_import_order(file: &SyntaxParsedFile, violations: &mut Vec<SyntaxRuleVi
             SyntaxDeclaration::Exports(_)
             | SyntaxDeclaration::Type(_)
             | SyntaxDeclaration::Constant(_)
-            | SyntaxDeclaration::Function(_) => {
+            | SyntaxDeclaration::Function(_)
+            | SyntaxDeclaration::Group(_)
+            | SyntaxDeclaration::Test(_) => {
                 saw_non_import_declaration = true;
             }
         }
@@ -94,6 +96,14 @@ fn check_doc_comment_placement(file: &SyntaxParsedFile, violations: &mut Vec<Syn
             }
             SyntaxDeclaration::Function(function_declaration) => {
                 check_block_doc_comments(&function_declaration.body, violations);
+            }
+            SyntaxDeclaration::Group(group_declaration) => {
+                for test_declaration in &group_declaration.tests {
+                    check_block_doc_comments(&test_declaration.body, violations);
+                }
+            }
+            SyntaxDeclaration::Test(test_declaration) => {
+                check_block_doc_comments(&test_declaration.body, violations);
             }
             SyntaxDeclaration::Import(_)
             | SyntaxDeclaration::Exports(_)
@@ -123,6 +133,8 @@ fn check_file_item_doc_comments(
             SyntaxDeclaration::Type(type_declaration) => type_declaration.span.line,
             SyntaxDeclaration::Constant(constant_declaration) => constant_declaration.span.line,
             SyntaxDeclaration::Function(function_declaration) => function_declaration.span.line,
+            SyntaxDeclaration::Group(group_declaration) => group_declaration.span.line,
+            SyntaxDeclaration::Test(test_declaration) => test_declaration.span.line,
         };
         if declaration_line != doc_comment.end_line + 1 {
             violations.push(SyntaxRuleViolation {

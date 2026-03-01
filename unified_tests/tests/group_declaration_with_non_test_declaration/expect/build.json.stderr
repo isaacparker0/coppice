@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.test.copp",
+            "message": "expected test declaration",
+            "span": {
+                "start": 21,
+                "end": 29,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

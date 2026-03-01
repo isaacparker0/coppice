@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.test.copp",
+            "message": "nested test groups are not allowed",
+            "span": {
+                "start": 20,
+                "end": 25,
+                "line": 2,
+                "column": 5
+            }
+        }
+    ]
+}

@@ -1,0 +1,6 @@
+group "Parser" {
+    test "accepts expression" {
+        assert(true)
+        return
+    }
+}

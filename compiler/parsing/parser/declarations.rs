@@ -3,13 +3,83 @@ use compiler__source::Span;
 use compiler__syntax::{
     SyntaxConstantDeclaration, SyntaxFieldDeclaration, SyntaxFunctionDeclaration,
     SyntaxInterfaceMethodDeclaration, SyntaxMemberVisibility, SyntaxMethodDeclaration,
-    SyntaxParameterDeclaration, SyntaxStructMemberItem, SyntaxTopLevelVisibility,
-    SyntaxTypeDeclaration, SyntaxTypeDeclarationKind, SyntaxTypeName,
+    SyntaxParameterDeclaration, SyntaxStructMemberItem, SyntaxTestDeclaration,
+    SyntaxTestGroupDeclaration, SyntaxTopLevelVisibility, SyntaxTypeDeclaration,
+    SyntaxTypeDeclarationKind, SyntaxTypeName,
 };
 
 use super::{ExpressionSpan, InvalidConstructKind, ParseError, ParseResult, Parser, RecoveredKind};
 
 impl Parser {
+    pub(super) fn parse_test_group_declaration(
+        &mut self,
+    ) -> ParseResult<SyntaxTestGroupDeclaration> {
+        let start = self.expect_keyword(Keyword::Group)?;
+        let (name, name_span) = self.expect_string_literal()?;
+        self.expect_symbol(Symbol::LeftBrace)?;
+        let mut tests = Vec::new();
+        self.skip_statement_terminators();
+        while !self.peek_is_symbol(Symbol::RightBrace) && !self.at_eof() {
+            if self.peek_is_keyword(Keyword::Group) {
+                let span = self.peek_span();
+                self.advance();
+                self.defer_parse_error(ParseError::Recovered {
+                    kind: RecoveredKind::NestedTestGroupsNotSupported,
+                    span,
+                });
+                self.synchronize_test_group_item();
+                self.skip_statement_terminators();
+                continue;
+            }
+            if self.peek_is_keyword(Keyword::Test) {
+                match self.parse_test_declaration() {
+                    Ok(test_declaration) => tests.push(test_declaration),
+                    Err(error) => {
+                        self.report_parse_error(&error);
+                        self.synchronize_test_group_item();
+                    }
+                }
+                self.skip_statement_terminators();
+                continue;
+            }
+            self.defer_parse_error(ParseError::Recovered {
+                kind: RecoveredKind::ExpectedTestDeclaration,
+                span: self.peek_span(),
+            });
+            self.synchronize_test_group_item();
+            self.skip_statement_terminators();
+        }
+        let end = self.expect_symbol(Symbol::RightBrace)?;
+        Ok(SyntaxTestGroupDeclaration {
+            name,
+            name_span,
+            tests,
+            span: Span {
+                start: start.start,
+                end: end.end,
+                line: start.line,
+                column: start.column,
+            },
+        })
+    }
+
+    pub(super) fn parse_test_declaration(&mut self) -> ParseResult<SyntaxTestDeclaration> {
+        let start = self.expect_keyword(Keyword::Test)?;
+        let (name, name_span) = self.expect_string_literal()?;
+        let body = self.parse_block()?;
+        Ok(SyntaxTestDeclaration {
+            name,
+            name_span: name_span.clone(),
+            span: Span {
+                start: start.start,
+                end: body.span.end,
+                line: start.line,
+                column: start.column,
+            },
+            body,
+        })
+    }
+
     pub(super) fn parse_type_declaration(
         &mut self,
         visibility: SyntaxTopLevelVisibility,

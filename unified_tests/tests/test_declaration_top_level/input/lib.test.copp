@@ -1,0 +1,4 @@
+test "top level" {
+    assert(true)
+    return
+}

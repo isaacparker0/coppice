@@ -1,0 +1,3 @@
+main.bin.copp:1:1: error: test declarations are only allowed in .test.copp files
+  test "t" {}
+  ^

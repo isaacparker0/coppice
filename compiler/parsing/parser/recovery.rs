@@ -19,6 +19,17 @@ impl Parser {
         }
     }
 
+    pub(super) fn expect_string_literal(&mut self) -> ParseResult<(String, Span)> {
+        let token = self.advance();
+        match token.kind {
+            TokenKind::StringLiteral(value) => Ok((value, token.span)),
+            _ => Err(ParseError::UnexpectedToken {
+                kind: UnexpectedTokenKind::ExpectedStringLiteral,
+                span: token.span,
+            }),
+        }
+    }
+
     pub(super) fn expect_type_name_part(&mut self) -> ParseResult<(String, Span)> {
         let token = self.advance();
         match token.kind {
@@ -74,6 +85,8 @@ impl Parser {
                 || self.peek_is_keyword(Keyword::Exports)
                 || self.peek_is_keyword(Keyword::Type)
                 || self.peek_is_keyword(Keyword::Function)
+                || self.peek_is_keyword(Keyword::Group)
+                || self.peek_is_keyword(Keyword::Test)
             {
                 return;
             }
@@ -104,6 +117,7 @@ impl Parser {
             }
             if self.peek_is_keyword(Keyword::Return)
                 || self.peek_is_keyword(Keyword::Abort)
+                || self.peek_is_keyword(Keyword::Assert)
                 || self.peek_is_keyword(Keyword::Break)
                 || self.peek_is_keyword(Keyword::Continue)
                 || self.peek_is_keyword(Keyword::If)
@@ -115,6 +129,33 @@ impl Parser {
             if matches!(self.peek().kind, TokenKind::StatementTerminator) {
                 self.advance();
                 return;
+            }
+            self.advance();
+        }
+    }
+
+    pub(super) fn synchronize_test_group_item(&mut self) {
+        let mut brace_depth = 0usize;
+        while !self.at_eof() {
+            if brace_depth == 0
+                && (self.peek_is_symbol(Symbol::RightBrace)
+                    || self.peek_is_keyword(Keyword::Test)
+                    || self.peek_is_keyword(Keyword::Group))
+            {
+                return;
+            }
+            if self.peek_is_symbol(Symbol::LeftBrace) {
+                brace_depth = brace_depth.saturating_add(1);
+                self.advance();
+                continue;
+            }
+            if self.peek_is_symbol(Symbol::RightBrace) {
+                if brace_depth == 0 {
+                    return;
+                }
+                brace_depth = brace_depth.saturating_sub(1);
+                self.advance();
+                continue;
             }
             self.advance();
         }

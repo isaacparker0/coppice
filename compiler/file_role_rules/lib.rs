@@ -23,6 +23,7 @@ use compiler__syntax::{
 pub fn check_file(file: &SyntaxParsedFile) -> PhaseOutput<()> {
     let mut diagnostics = Vec::new();
     check_exports_declaration_roles(file, &mut diagnostics);
+    check_test_declaration_roles(file, &mut diagnostics);
     check_visible_declaration_roles(file, &mut diagnostics);
     check_main_function_roles(file, &mut diagnostics);
 
@@ -48,6 +49,12 @@ fn check_exports_declaration_roles(
         if file.role == FileRole::PackageManifest
             && !matches!(declaration, SyntaxDeclaration::Exports(_))
         {
+            if matches!(
+                declaration,
+                SyntaxDeclaration::Group(_) | SyntaxDeclaration::Test(_)
+            ) {
+                continue;
+            }
             if is_main_function_declaration(declaration) {
                 // `main` has a dedicated role diagnostic.
                 continue;
@@ -66,6 +73,25 @@ fn check_exports_declaration_roles(
                 "exports declarations are only allowed in PACKAGE.copp",
                 declaration_span(declaration).clone(),
             ));
+        }
+    }
+}
+
+fn check_test_declaration_roles(file: &SyntaxParsedFile, diagnostics: &mut Vec<PhaseDiagnostic>) {
+    if file.role == FileRole::Test {
+        return;
+    }
+    for declaration in file.top_level_declarations() {
+        match declaration {
+            SyntaxDeclaration::Group(group_declaration) => diagnostics.push(PhaseDiagnostic::new(
+                "group declarations are only allowed in .test.copp files",
+                group_declaration.span.clone(),
+            )),
+            SyntaxDeclaration::Test(test_declaration) => diagnostics.push(PhaseDiagnostic::new(
+                "test declarations are only allowed in .test.copp files",
+                test_declaration.span.clone(),
+            )),
+            _ => {}
         }
     }
 }
@@ -208,5 +234,7 @@ fn declaration_span(declaration: &SyntaxDeclaration) -> &Span {
         SyntaxDeclaration::Type(type_declaration) => &type_declaration.span,
         SyntaxDeclaration::Constant(constant_declaration) => &constant_declaration.span,
         SyntaxDeclaration::Function(function_declaration) => &function_declaration.span,
+        SyntaxDeclaration::Group(group_declaration) => &group_declaration.span,
+        SyntaxDeclaration::Test(test_declaration) => &test_declaration.span,
     }
 }

@@ -91,6 +91,9 @@ pub fn top_level_symbol(declaration: &SyntaxDeclaration) -> Option<TopLevelSymbo
             visibility: function_declaration.visibility,
             name_span: function_declaration.name_span.clone(),
         }),
-        SyntaxDeclaration::Import(_) | SyntaxDeclaration::Exports(_) => None,
+        SyntaxDeclaration::Import(_)
+        | SyntaxDeclaration::Exports(_)
+        | SyntaxDeclaration::Group(_)
+        | SyntaxDeclaration::Test(_) => None,
     }
 }

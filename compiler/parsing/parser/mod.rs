@@ -18,6 +18,7 @@ mod types;
 #[derive(Clone, Debug)]
 pub(super) enum UnexpectedTokenKind {
     ExpectedIdentifier,
+    ExpectedStringLiteral,
     ReservedKeywordAsIdentifier { keyword: Keyword },
     ExpectedExpression,
 }
@@ -40,6 +41,8 @@ pub(super) enum RecoveredKind {
     ExpectedDeclarationAfterVisible,
     ExpectedTypeKeywordBeforeTypeDeclaration,
     ExpectedDeclaration,
+    ExpectedTestDeclaration,
+    NestedTestGroupsNotSupported,
     MethodReceiverSelfMustNotHaveTypeAnnotation,
     TypeParameterListMustNotBeEmpty,
     EnumDeclarationMustIncludeAtLeastOneVariant,
@@ -165,6 +168,14 @@ impl Parser {
             return self
                 .parse_type_declaration(SyntaxTopLevelVisibility::Private)
                 .map(SyntaxDeclaration::Type);
+        }
+        if self.peek_is_keyword(Keyword::Group) {
+            return self
+                .parse_test_group_declaration()
+                .map(SyntaxDeclaration::Group);
+        }
+        if self.peek_is_keyword(Keyword::Test) {
+            return self.parse_test_declaration().map(SyntaxDeclaration::Test);
         }
         if self.peek_is_keyword(Keyword::Import) {
             return self
@@ -336,6 +347,9 @@ impl Parser {
             ParseError::UnexpectedToken { kind, span } => {
                 let message = match kind {
                     UnexpectedTokenKind::ExpectedIdentifier => "expected identifier".to_string(),
+                    UnexpectedTokenKind::ExpectedStringLiteral => {
+                        "expected string literal".to_string()
+                    }
                     UnexpectedTokenKind::ReservedKeywordAsIdentifier { keyword } => format!(
                         "reserved keyword '{}' cannot be used as an identifier",
                         keyword.as_str()
@@ -376,6 +390,12 @@ impl Parser {
                         "expected keyword 'type' before type declaration".to_string()
                     }
                     RecoveredKind::ExpectedDeclaration => "expected declaration".to_string(),
+                    RecoveredKind::ExpectedTestDeclaration => {
+                        "expected test declaration".to_string()
+                    }
+                    RecoveredKind::NestedTestGroupsNotSupported => {
+                        "nested test groups are not allowed".to_string()
+                    }
                     RecoveredKind::MethodReceiverSelfMustNotHaveTypeAnnotation => {
                         "method receiver 'self' must not have a type annotation".to_string()
                     }

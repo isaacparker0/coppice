@@ -822,7 +822,7 @@ auth/
 ```
 // token.test.copp
 
-group Token.parse {
+group "Token.parse" {
     test "handles valid JWT" {
         token := parse("abc.def.ghi")
         assert(token.header == "abc")
@@ -834,7 +834,7 @@ group Token.parse {
     }
 }
 
-group Token.validate {
+group "Token.validate" {
     test "accepts unexpired token" {
         token := make_test_token(ttl: 3600)
         status := token.validate()

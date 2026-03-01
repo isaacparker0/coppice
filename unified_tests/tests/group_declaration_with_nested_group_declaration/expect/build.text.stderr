@@ -1,0 +1,3 @@
+lib.test.copp:2:5: error: nested test groups are not allowed
+      group "Inner" {
+      ^

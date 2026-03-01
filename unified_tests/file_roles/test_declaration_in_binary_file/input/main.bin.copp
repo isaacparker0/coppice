@@ -1,0 +1,5 @@
+test "t" {}
+
+function main() -> nil {
+    return
+}

@@ -1,0 +1,16 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "file_role_rules",
+            "path": "main.bin.copp",
+            "message": "test declarations are only allowed in .test.copp files",
+            "span": {
+                "start": 0,
+                "end": 11,
+                "line": 1,
+                "column": 1
+            }
+        }
+    ]
+}

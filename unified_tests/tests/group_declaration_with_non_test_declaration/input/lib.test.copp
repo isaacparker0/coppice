@@ -1,0 +1,5 @@
+group "Parser" {
+    function helper() -> nil {
+        return
+    }
+}

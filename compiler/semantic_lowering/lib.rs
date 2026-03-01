@@ -54,7 +54,10 @@ pub fn lower_parsed_file(
                     );
                     declarations.push(semantic::SemanticDeclaration::Function(lowered.clone()));
                 }
-                syntax::SyntaxDeclaration::Import(_) | syntax::SyntaxDeclaration::Exports(_) => {}
+                syntax::SyntaxDeclaration::Import(_)
+                | syntax::SyntaxDeclaration::Exports(_)
+                | syntax::SyntaxDeclaration::Group(_)
+                | syntax::SyntaxDeclaration::Test(_) => {}
             },
         }
     }
