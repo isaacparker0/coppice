@@ -701,11 +701,13 @@ impl TypeChecker<'_> {
 
             if pattern_type != Type::Unknown {
                 let pattern_key = pattern_type.display();
-                if !seen_patterns.insert(pattern_key.clone()) {
+                if seen_patterns.contains(pattern_key.as_str()) {
                     self.error(
                         format!("duplicate match arm for type '{pattern_key}'"),
                         arm.pattern.span(),
                     );
+                } else {
+                    seen_patterns.insert(pattern_key);
                 }
             }
 

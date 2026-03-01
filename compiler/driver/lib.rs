@@ -374,7 +374,7 @@ fn package_dependency_closure(
     let mut visited_package_paths = BTreeSet::new();
     let mut package_paths_to_visit = vec![root_package_path.to_string()];
     while let Some(package_path) = package_paths_to_visit.pop() {
-        if !visited_package_paths.insert(package_path.clone()) {
+        if visited_package_paths.contains(package_path.as_str()) {
             continue;
         }
         if let Some(imported_package_paths) =
@@ -382,6 +382,7 @@ fn package_dependency_closure(
         {
             package_paths_to_visit.extend(imported_package_paths.iter().cloned());
         }
+        visited_package_paths.insert(package_path);
     }
 
     visited_package_paths
