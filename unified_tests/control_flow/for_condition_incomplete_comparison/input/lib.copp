@@ -1,0 +1,4 @@
+function run() -> nil {
+    for 1 <= {
+    }
+}

@@ -151,6 +151,19 @@ impl Parser {
         }
     }
 
+    pub(super) fn synchronize_to_condition_block_start(&mut self) {
+        while !self.at_eof() {
+            if self.peek_is_symbol(Symbol::LeftBrace) || self.peek_is_symbol(Symbol::RightBrace) {
+                return;
+            }
+            if matches!(self.peek().kind, TokenKind::StatementTerminator) {
+                self.advance();
+                return;
+            }
+            self.advance();
+        }
+    }
+
     pub(super) fn synchronize_test_group_item(&mut self) {
         let mut brace_depth = 0usize;
         while !self.at_eof() {

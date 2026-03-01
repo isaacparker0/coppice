@@ -7,6 +7,46 @@ use compiler__syntax::{
 use super::{ExpressionSpan, ParseResult, Parser};
 
 impl Parser {
+    fn parse_condition_expression_with_recovery(&mut self) -> ParseResult<SyntaxExpression> {
+        let checkpoint = self.checkpoint();
+        match self.parse_expression() {
+            Ok(expression) => Ok(expression),
+            Err(error) => {
+                self.restore(checkpoint);
+                self.synchronize_to_condition_block_start();
+                Err(error)
+            }
+        }
+    }
+
+    fn consume_condition_block_after_recovery(&mut self) {
+        if !self.peek_is_symbol(Symbol::LeftBrace) {
+            return;
+        }
+        if let Err(error) = self.parse_block() {
+            self.report_parse_error(&error);
+        }
+    }
+
+    fn consume_optional_else_block_after_condition_recovery(&mut self) {
+        if !self.peek_is_keyword(Keyword::Else) {
+            return;
+        }
+        self.advance();
+        self.consume_condition_block_after_recovery();
+    }
+
+    fn parse_condition_block_with_recovery(&mut self) -> ParseResult<SyntaxBlock> {
+        match self.parse_block() {
+            Ok(block) => Ok(block),
+            Err(error) => {
+                self.synchronize_to_condition_block_start();
+                self.consume_condition_block_after_recovery();
+                Err(error)
+            }
+        }
+    }
+
     pub(super) fn parse_block(&mut self) -> ParseResult<SyntaxBlock> {
         let start = self.expect_symbol(Symbol::LeftBrace)?;
         let mut items = Vec::new();
@@ -58,11 +98,24 @@ impl Parser {
         }
         if self.peek_is_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
-            let condition = self.parse_expression()?;
-            let then_block = self.parse_block()?;
+            let condition = match self.parse_condition_expression_with_recovery() {
+                Ok(condition) => condition,
+                Err(error) => {
+                    self.consume_condition_block_after_recovery();
+                    self.consume_optional_else_block_after_condition_recovery();
+                    return Err(error);
+                }
+            };
+            let then_block = match self.parse_condition_block_with_recovery() {
+                Ok(block) => block,
+                Err(error) => {
+                    self.consume_optional_else_block_after_condition_recovery();
+                    return Err(error);
+                }
+            };
             let else_block = if self.peek_is_keyword(Keyword::Else) {
                 self.advance();
-                Some(self.parse_block()?)
+                Some(self.parse_condition_block_with_recovery()?)
             } else {
                 None
             };
@@ -87,9 +140,15 @@ impl Parser {
             let condition = if self.peek_is_symbol(Symbol::LeftBrace) {
                 None
             } else {
-                Some(self.parse_expression()?)
+                match self.parse_condition_expression_with_recovery() {
+                    Ok(condition) => Some(condition),
+                    Err(error) => {
+                        self.consume_condition_block_after_recovery();
+                        return Err(error);
+                    }
+                }
             };
-            let body = self.parse_block()?;
+            let body = self.parse_condition_block_with_recovery()?;
             let span = Span {
                 start: start.start,
                 end: body.span.end,
