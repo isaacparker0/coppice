@@ -38,7 +38,7 @@ pub fn build_exports(
 
             let package_symbols = symbols_by_package.get(file.package_path);
             for member in &exports.members {
-                let name = member.name.clone();
+                let name = &member.name;
                 if !exported_symbols.insert(name.clone()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
@@ -59,7 +59,7 @@ pub fn build_exports(
                     });
                     continue;
                 };
-                if !package_symbols.declared.contains(&name) {
+                if !package_symbols.declared.contains(name.as_str()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
                         diagnostic: PhaseDiagnostic::new(
@@ -69,7 +69,7 @@ pub fn build_exports(
                     });
                     continue;
                 }
-                if !package_symbols.package_visible.contains(&name) {
+                if !package_symbols.package_visible.contains(name.as_str()) {
                     diagnostics.push(PackageDiagnostic {
                         path: file.path.to_path_buf(),
                         diagnostic: PhaseDiagnostic::new(

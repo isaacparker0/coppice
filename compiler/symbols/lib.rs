@@ -55,7 +55,6 @@ pub fn collect_symbols(
             let Some(symbol) = top_level_symbol(declaration) else {
                 continue;
             };
-            package_symbols.declared.insert(symbol.name.clone());
             if symbol.visibility == SyntaxTopLevelVisibility::Visible
                 && !package_symbols.package_visible.insert(symbol.name.clone())
             {
@@ -67,6 +66,7 @@ pub fn collect_symbols(
                     ),
                 });
             }
+            package_symbols.declared.insert(symbol.name);
         }
     }
 
