@@ -181,7 +181,7 @@ pub enum ExecutableStatement {
         expression: ExecutableExpression,
     },
     Return {
-        value: Option<ExecutableExpression>,
+        value: ExecutableExpression,
     },
 }
 

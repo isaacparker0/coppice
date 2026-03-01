@@ -173,12 +173,9 @@ fn ensure_statement_supported(statement: &ExecutableStatement) -> Result<(), Com
         ExecutableStatement::Binding { initializer, .. }
         | ExecutableStatement::Expression {
             expression: initializer,
-        } => ensure_expression_supported(initializer),
-        ExecutableStatement::Return { value } => {
-            if let Some(value) = value {
-                ensure_expression_supported(value)?;
-            }
-            Ok(())
+        }
+        | ExecutableStatement::Return { value: initializer } => {
+            ensure_expression_supported(initializer)
         }
         ExecutableStatement::Assign { target, value } => {
             match target {
@@ -1039,57 +1036,41 @@ fn compile_statements(
                 }
             }
             ExecutableStatement::Return { value } => {
-                if let Some(value) = value {
-                    let typed_return =
-                        compile_expression(state, function_builder, compilation_context, value)?;
-                    if typed_return.terminates {
-                        return Ok(true);
-                    }
-                    if !is_type_assignable(
-                        state,
-                        &typed_return.type_reference,
-                        function_return_type,
-                    ) && typed_return.type_reference != ExecutableTypeReference::Never
-                    {
-                        return Err(build_failed(
-                            "return expression type mismatch".to_string(),
-                            None,
-                        ));
-                    }
+                let typed_return =
+                    compile_expression(state, function_builder, compilation_context, value)?;
+                if typed_return.terminates {
+                    return Ok(true);
+                }
+                if !is_type_assignable(state, &typed_return.type_reference, function_return_type)
+                    && typed_return.type_reference != ExecutableTypeReference::Never
+                {
+                    return Err(build_failed(
+                        "return expression type mismatch".to_string(),
+                        None,
+                    ));
+                }
 
-                    if matches!(
-                        function_return_type,
-                        ExecutableTypeReference::Nil | ExecutableTypeReference::Never
-                    ) {
-                        function_builder.ins().return_(&[]);
-                    } else {
-                        let return_value = runtime_value_for_expected_type(
-                            state,
-                            function_builder,
-                            typed_return.value,
-                            &typed_return.type_reference,
-                            function_return_type,
-                        )?;
-                        let Some(value) = return_value else {
-                            return Err(build_failed(
-                                "non-nil return produced no runtime value".to_string(),
-                                None,
-                            ));
-                        };
-                        function_builder.ins().return_(&[value]);
-                    }
-                } else if matches!(
+                if matches!(
                     function_return_type,
                     ExecutableTypeReference::Nil | ExecutableTypeReference::Never
                 ) {
                     function_builder.ins().return_(&[]);
                 } else {
-                    return Err(build_failed(
-                        "non-nil return statement must produce a runtime value".to_string(),
-                        None,
-                    ));
+                    let return_value = runtime_value_for_expected_type(
+                        state,
+                        function_builder,
+                        typed_return.value,
+                        &typed_return.type_reference,
+                        function_return_type,
+                    )?;
+                    let Some(value) = return_value else {
+                        return Err(build_failed(
+                            "non-nil return produced no runtime value".to_string(),
+                            None,
+                        ));
+                    };
+                    function_builder.ins().return_(&[value]);
                 }
-
                 return Ok(true);
             }
         }
