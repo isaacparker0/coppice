@@ -7,7 +7,7 @@
             "message": "top-level declaration 'Token' conflicts with imported name",
             "span": {
                 "start": 38,
-                "end": 56,
+                "end": 43,
                 "line": 3,
                 "column": 6
             }

@@ -19,7 +19,7 @@ pub struct PackageDiagnostic {
 pub struct TopLevelSymbol {
     pub name: String,
     pub visibility: SyntaxTopLevelVisibility,
-    pub span: Span,
+    pub name_span: Span,
 }
 
 #[derive(Default)]
@@ -63,7 +63,7 @@ pub fn collect_symbols(
                     path: file.path.to_path_buf(),
                     diagnostic: PhaseDiagnostic::new(
                         format!("duplicate package-visible symbol '{}'", symbol.name),
-                        symbol.span,
+                        symbol.name_span,
                     ),
                 });
             }
@@ -79,17 +79,17 @@ pub fn top_level_symbol(declaration: &SyntaxDeclaration) -> Option<TopLevelSymbo
         SyntaxDeclaration::Type(type_declaration) => Some(TopLevelSymbol {
             name: type_declaration.name.clone(),
             visibility: type_declaration.visibility,
-            span: type_declaration.span.clone(),
+            name_span: type_declaration.name_span.clone(),
         }),
         SyntaxDeclaration::Constant(constant_declaration) => Some(TopLevelSymbol {
             name: constant_declaration.name.clone(),
             visibility: constant_declaration.visibility,
-            span: constant_declaration.span.clone(),
+            name_span: constant_declaration.name_span.clone(),
         }),
         SyntaxDeclaration::Function(function_declaration) => Some(TopLevelSymbol {
             name: function_declaration.name.clone(),
             visibility: function_declaration.visibility,
-            span: function_declaration.span.clone(),
+            name_span: function_declaration.name_span.clone(),
         }),
         SyntaxDeclaration::Import(_) | SyntaxDeclaration::Exports(_) => None,
     }

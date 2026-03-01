@@ -40,7 +40,7 @@ pub fn check_bindings(
                             "top-level declaration '{}' conflicts with imported name",
                             symbol.name
                         ),
-                        symbol.span,
+                        symbol.name_span,
                     ),
                 });
             }
