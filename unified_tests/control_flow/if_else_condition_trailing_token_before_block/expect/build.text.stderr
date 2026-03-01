@@ -1,0 +1,3 @@
+lib.copp:2:15: error: expected symbol
+      if 1 <= 2 b {
+                ^

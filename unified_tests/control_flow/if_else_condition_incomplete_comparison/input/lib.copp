@@ -1,0 +1,5 @@
+function run() -> nil {
+    if 1 <= {
+    } else {
+    }
+}

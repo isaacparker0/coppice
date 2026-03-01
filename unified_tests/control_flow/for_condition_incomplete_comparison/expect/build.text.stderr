@@ -1,0 +1,3 @@
+lib.copp:2:14: error: expected expression
+      for 1 <= {
+               ^
