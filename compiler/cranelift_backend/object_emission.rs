@@ -33,14 +33,18 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 #[derive(Clone)]
 struct FunctionRecord {
     id: FuncId,
-    declaration: ExecutableFunctionDeclaration,
+    parameter_types: Vec<ExecutableTypeReference>,
+    return_type: ExecutableTypeReference,
+    type_parameter_names: Vec<String>,
+    type_parameter_constraint_interface_reference_by_name:
+        BTreeMap<String, ExecutableInterfaceReference>,
 }
 
 #[derive(Clone)]
 struct MethodRecord {
     id: FuncId,
-    struct_reference: ExecutableStructReference,
-    declaration: ExecutableMethodDeclaration,
+    parameter_types: Vec<ExecutableTypeReference>,
+    return_type: ExecutableTypeReference,
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -360,7 +364,16 @@ fn declare_program_functions(
             function_declaration.callable_reference.clone(),
             FunctionRecord {
                 id,
-                declaration: function_declaration.clone(),
+                parameter_types: function_declaration
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.type_reference.clone())
+                    .collect(),
+                return_type: function_declaration.return_type.clone(),
+                type_parameter_names: function_declaration.type_parameter_names.clone(),
+                type_parameter_constraint_interface_reference_by_name: function_declaration
+                    .type_parameter_constraint_interface_reference_by_name
+                    .clone(),
             },
         );
     }
@@ -397,8 +410,12 @@ fn declare_struct_methods(
                 key,
                 MethodRecord {
                     id,
-                    struct_reference: struct_declaration.struct_reference.clone(),
-                    declaration: method_declaration.clone(),
+                    parameter_types: method_declaration
+                        .parameters
+                        .iter()
+                        .map(|parameter| parameter.type_reference.clone())
+                        .collect(),
+                    return_type: method_declaration.return_type.clone(),
                 },
             );
         }
@@ -508,7 +525,7 @@ fn define_program_function(
     state: &mut CompilationState,
     function_declaration: &ExecutableFunctionDeclaration,
 ) -> Result<(), CompilerFailure> {
-    let function_record = state
+    let function_id = state
         .function_record_by_callable_reference
         .get(&function_declaration.callable_reference)
         .ok_or_else(|| {
@@ -521,7 +538,7 @@ fn define_program_function(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut context = state.module.make_context();
     context.func.signature = build_signature_for_function(&mut state.module, function_declaration);
@@ -610,7 +627,7 @@ fn define_program_function(
 
     state
         .module
-        .define_function(function_record.id, &mut context)
+        .define_function(function_id, &mut context)
         .map_err(|error| {
             build_failed(
                 format!(
@@ -635,7 +652,7 @@ fn define_struct_method(
         struct_reference: struct_declaration.struct_reference.clone(),
         method_name: method_declaration.name.clone(),
     };
-    let method_record = state
+    let method_id = state
         .method_record_by_key
         .get(&method_key)
         .ok_or_else(|| {
@@ -647,7 +664,7 @@ fn define_struct_method(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut context = state.module.make_context();
     context.func.signature =
@@ -739,12 +756,12 @@ fn define_struct_method(
 
     state
         .module
-        .define_function(method_record.id, &mut context)
+        .define_function(method_id, &mut context)
         .map_err(|error| {
             build_failed(
                 format!(
                     "failed to define method '{}::{}': {error}",
-                    method_record.struct_reference.symbol_name, method_declaration.name
+                    struct_declaration.struct_reference.symbol_name, method_declaration.name
                 ),
                 None,
             )
@@ -1203,7 +1220,7 @@ fn compile_expression(
                             None,
                         )
                     })?;
-                if !function_record.declaration.type_parameter_names.is_empty() {
+                if !function_record.type_parameter_names.is_empty() {
                     return Err(build_failed(
                         format!(
                             "generic function '{}::{}' cannot be used as a runtime function value",
@@ -1219,13 +1236,8 @@ fn compile_expression(
                     .ins()
                     .func_addr(types::I64, function_reference);
                 let function_type_reference = ExecutableTypeReference::Function {
-                    parameter_types: function_record
-                        .declaration
-                        .parameters
-                        .iter()
-                        .map(|parameter| parameter.type_reference.clone())
-                        .collect(),
-                    return_type: Box::new(function_record.declaration.return_type.clone()),
+                    parameter_types: function_record.parameter_types.clone(),
+                    return_type: Box::new(function_record.return_type.clone()),
                 };
                 return Ok(TypedValue {
                     value: runtime_value_for_expected_type(
@@ -1884,16 +1896,11 @@ fn compile_call_expression(
                         )
                     })?
                     .clone();
-                let declared_parameter_types = function_record
-                    .declaration
-                    .parameters
-                    .iter()
-                    .map(|parameter| parameter.type_reference.clone())
-                    .collect::<Vec<_>>();
-                let declared_return_type = function_record.declaration.return_type.clone();
+                let declared_parameter_types = function_record.parameter_types.clone();
+                let declared_return_type = function_record.return_type.clone();
                 let (instantiated_parameter_types, instantiated_return_type) =
                     instantiate_generic_signature(
-                        &function_record.declaration.type_parameter_names,
+                        &function_record.type_parameter_names,
                         &declared_parameter_types,
                         &declared_return_type,
                         type_arguments,
@@ -1951,14 +1958,10 @@ fn compile_call_expression(
                     )?;
                     argument_values.push(lowered_argument);
                 }
-                for (type_parameter_index, type_parameter_name) in function_record
-                    .declaration
-                    .type_parameter_names
-                    .iter()
-                    .enumerate()
+                for (type_parameter_index, type_parameter_name) in
+                    function_record.type_parameter_names.iter().enumerate()
                 {
                     let Some(interface_reference) = function_record
-                        .declaration
                         .type_parameter_constraint_interface_reference_by_name
                         .get(type_parameter_name)
                     else {
@@ -2950,13 +2953,13 @@ fn compile_struct_method_call_expression(
         })?
         .clone();
 
-    if method_record.declaration.parameters.len() != arguments.len() {
+    if method_record.parameter_types.len() != arguments.len() {
         return Err(build_failed(
             format!(
                 "method '{}.{}' expected {} argument(s), got {}",
                 struct_declaration.name,
                 method_name,
-                method_record.declaration.parameters.len(),
+                method_record.parameter_types.len(),
                 arguments.len()
             ),
             None,
@@ -2970,8 +2973,7 @@ fn compile_struct_method_call_expression(
             None,
         )
     })?);
-    for (parameter, argument_expression) in
-        method_record.declaration.parameters.iter().zip(arguments)
+    for (parameter_type, argument_expression) in method_record.parameter_types.iter().zip(arguments)
     {
         let compiled_argument = compile_expression(
             state,
@@ -2982,10 +2984,8 @@ fn compile_struct_method_call_expression(
         if compiled_argument.terminates {
             return Ok(compiled_argument);
         }
-        let expected_type = substitute_type_reference(
-            &parameter.type_reference,
-            type_substitutions_by_type_parameter_name,
-        );
+        let expected_type =
+            substitute_type_reference(parameter_type, type_substitutions_by_type_parameter_name);
         if !is_type_assignable(state, &compiled_argument.type_reference, &expected_type) {
             return Err(build_failed(
                 format!(
@@ -3018,7 +3018,7 @@ fn compile_struct_method_call_expression(
         .declare_func_in_func(method_record.id, function_builder.func);
     let call = function_builder.ins().call(callee, &call_values);
     let return_type = substitute_type_reference(
-        &method_record.declaration.return_type,
+        &method_record.return_type,
         type_substitutions_by_type_parameter_name,
     );
     if matches!(
