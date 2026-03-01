@@ -775,7 +775,7 @@ fn define_process_entrypoint(
     state: &mut CompilationState<'_>,
     entrypoint_callable_reference: &ExecutableCallableReference,
 ) -> Result<(), CompilerFailure> {
-    let entrypoint_record = state
+    let entrypoint_id = state
         .function_record_by_callable_reference
         .get(entrypoint_callable_reference)
         .ok_or_else(|| {
@@ -788,7 +788,7 @@ fn define_process_entrypoint(
                 None,
             )
         })?
-        .clone();
+        .id;
 
     let mut signature = state.module.make_signature();
     signature.returns.push(AbiParam::new(types::I32));
@@ -811,7 +811,7 @@ fn define_process_entrypoint(
 
         let entrypoint = state
             .module
-            .declare_func_in_func(entrypoint_record.id, function_builder.func);
+            .declare_func_in_func(entrypoint_id, function_builder.func);
         let _ = function_builder.ins().call(entrypoint, &[]);
 
         let zero = function_builder.ins().iconst(types::I32, 0);
@@ -859,17 +859,19 @@ fn compile_statements(
             }
             ExecutableStatement::Assign { target, value } => match target {
                 ExecutableAssignTarget::Name { name } => {
-                    let local_value = compilation_context
-                        .local_value_by_name
-                        .get(name)
-                        .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?
-                        .clone();
+                    let (local_variable, local_type_reference) = {
+                        let local_value = compilation_context
+                            .local_value_by_name
+                            .get(name)
+                            .ok_or_else(|| build_failed(format!("unknown local '{name}'"), None))?;
+                        (local_value.variable, local_value.type_reference.clone())
+                    };
                     let assigned_value =
                         compile_expression(state, function_builder, compilation_context, value)?;
                     if assigned_value.terminates {
                         return Ok(true);
                     }
-                    if local_value.type_reference != assigned_value.type_reference {
+                    if local_type_reference != assigned_value.type_reference {
                         return Err(build_failed(
                             format!("assignment type mismatch for local '{name}'"),
                             None,
@@ -881,7 +883,7 @@ fn compile_statements(
                             None,
                         ));
                     };
-                    function_builder.def_var(local_value.variable, value);
+                    function_builder.def_var(local_variable, value);
                 }
                 ExecutableAssignTarget::Index { target, index } => {
                     compile_index_assign_statement(
@@ -1894,13 +1896,22 @@ fn compile_call_expression(
                             ),
                             None,
                         )
-                    })?
-                    .clone();
+                    })?;
+                let function_id = function_record.id;
                 let declared_parameter_types = function_record.parameter_types.clone();
                 let declared_return_type = function_record.return_type.clone();
+                let type_parameter_names = function_record.type_parameter_names.clone();
+                let type_parameter_constraint_interface_reference_by_name =
+                    if type_parameter_names.is_empty() {
+                        BTreeMap::new()
+                    } else {
+                        function_record
+                            .type_parameter_constraint_interface_reference_by_name
+                            .clone()
+                    };
                 let (instantiated_parameter_types, instantiated_return_type) =
                     instantiate_generic_signature(
-                        &function_record.type_parameter_names,
+                        &type_parameter_names,
                         &declared_parameter_types,
                         &declared_return_type,
                         type_arguments,
@@ -1959,11 +1970,11 @@ fn compile_call_expression(
                     argument_values.push(lowered_argument);
                 }
                 for (type_parameter_index, type_parameter_name) in
-                    function_record.type_parameter_names.iter().enumerate()
+                    type_parameter_names.iter().enumerate()
                 {
-                    let Some(interface_reference) = function_record
-                        .type_parameter_constraint_interface_reference_by_name
-                        .get(type_parameter_name)
+                    let Some(interface_reference) =
+                        type_parameter_constraint_interface_reference_by_name
+                            .get(type_parameter_name)
                     else {
                         continue;
                     };
@@ -1989,20 +2000,19 @@ fn compile_call_expression(
 
                 let callee = state
                     .module
-                    .declare_func_in_func(function_record.id, function_builder.func);
+                    .declare_func_in_func(function_id, function_builder.func);
                 let call = function_builder.ins().call(callee, &argument_values);
 
                 if matches!(
                     instantiated_return_type,
                     ExecutableTypeReference::Nil | ExecutableTypeReference::Never
                 ) {
+                    let return_terminates =
+                        matches!(&instantiated_return_type, ExecutableTypeReference::Never);
                     Ok(TypedValue {
                         value: None,
-                        type_reference: instantiated_return_type.clone(),
-                        terminates: matches!(
-                            instantiated_return_type,
-                            ExecutableTypeReference::Never
-                        ),
+                        type_reference: instantiated_return_type,
+                        terminates: return_terminates,
                     })
                 } else {
                     let results = function_builder.inst_results(call);
@@ -3022,10 +3032,11 @@ fn compile_struct_method_call_expression(
         return_type,
         ExecutableTypeReference::Nil | ExecutableTypeReference::Never
     ) {
+        let return_terminates = matches!(&return_type, ExecutableTypeReference::Never);
         Ok(TypedValue {
             value: None,
-            type_reference: return_type.clone(),
-            terminates: matches!(return_type, ExecutableTypeReference::Never),
+            type_reference: return_type,
+            terminates: return_terminates,
         })
     } else {
         Ok(TypedValue {
