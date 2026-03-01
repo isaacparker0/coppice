@@ -2,39 +2,36 @@ load("//tools/bazel/aspects:dependency_enforcement.bzl", "dependency_enforcement
 load("//tools/bazel/macros:rust.bzl", "rust_library")
 
 rust_library(
-    name = "analysis_pipeline",
+    name = "safe_autofix",
     srcs = ["lib.rs"],
     visibility = ["//:__subpackages__"],
-    deps = [
+    deps = ["//compiler/fix_edits"],
+)
+
+dependency_enforcement_test(
+    name = "safe_autofix_forbidden_dependencies",
+    forbidden = [
+        "//compiler/cranelift_backend",
+        "//compiler/binding",
         "//compiler/diagnostics",
+        "//compiler/driver",
+        "//compiler/exports",
         "//compiler/file_role_rules",
-        "//compiler/fix_edits",
+        "//compiler/package_graph",
         "//compiler/package_symbols",
         "//compiler/packages",
         "//compiler/parsing",
         "//compiler/phase_results",
-        "//compiler/reports",
-        "//compiler/resolution",
-        "//compiler/safe_autofix",
         "//compiler/semantic_lowering",
         "//compiler/semantic_program",
+        "//compiler/semantic_types",
         "//compiler/source",
-        "//compiler/source_formatting",
+        "//compiler/symbols",
         "//compiler/syntax",
         "//compiler/syntax_rules",
         "//compiler/type_analysis",
-        "//compiler/type_annotated_program",
         "//compiler/visibility",
         "//compiler/workspace",
     ],
-)
-
-dependency_enforcement_test(
-    name = "analysis_pipeline_forbidden_dependencies",
-    forbidden = [
-        "//compiler/cranelift_backend",
-        "//compiler/executable_lowering",
-        "//compiler/runtime_interface",
-    ],
-    target = ":analysis_pipeline",
+    target = ":safe_autofix",
 )

@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use compiler__diagnostics::PhaseDiagnostic;
 use compiler__packages::PackageId;
 use compiler__phase_results::{PhaseOutput, PhaseStatus};
+use compiler__safe_autofix::SafeAutofix;
 use compiler__semantic_program::{
     SemanticAssignTarget, SemanticBinaryOperator, SemanticConstantDeclaration, SemanticDeclaration,
     SemanticExpression, SemanticExpressionId, SemanticFile, SemanticFunctionDeclaration,
@@ -72,16 +73,20 @@ struct ResolvedDeclarations {
 pub fn check_package_unit(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
 ) -> PhaseOutput<Result<TypeResolvedDeclarations, TypeAnalysisBlockingReason>> {
     let mut diagnostics = Vec::new();
+    let mut safe_autofixes = Vec::new();
     let summary = analyze_package_unit(
         package_id,
         package_path,
+        source_text,
         package_unit,
         imported_bindings,
         &mut diagnostics,
+        &mut safe_autofixes,
     );
     let status = if diagnostics.is_empty() {
         PhaseStatus::Ok
@@ -102,6 +107,7 @@ pub fn check_package_unit(
     PhaseOutput {
         value,
         diagnostics,
+        safe_autofixes,
         status,
     }
 }
@@ -1908,25 +1914,31 @@ fn type_annotated_resolved_type_argument_from_type(
 fn analyze_package_unit(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
 ) -> TypeAnalysisSummary {
     check_package_unit_declarations(
         package_id,
         package_path,
+        source_text,
         package_unit,
         imported_bindings,
         diagnostics,
+        safe_autofixes,
     )
 }
 
 fn check_package_unit_declarations(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     package_unit: &SemanticFile,
     imported_bindings: &[ImportedBinding],
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
 ) -> TypeAnalysisSummary {
     let mut type_declarations = Vec::new();
     let mut constant_declarations = Vec::new();
@@ -1948,7 +1960,9 @@ fn check_package_unit_declarations(
     let mut summary = check_declarations(
         package_id,
         package_path,
+        source_text,
         diagnostics,
+        safe_autofixes,
         &type_declarations,
         &constant_declarations,
         &function_declarations,
@@ -1963,14 +1977,22 @@ fn check_package_unit_declarations(
 fn check_declarations(
     package_id: PackageId,
     package_path: &str,
+    source_text: &str,
     diagnostics: &mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &mut Vec<SafeAutofix>,
     type_declarations: &[SemanticTypeDeclaration],
     constant_declarations: &[SemanticConstantDeclaration],
     function_declarations: &[SemanticFunctionDeclaration],
     imported_bindings: &[ImportedBinding],
 ) -> TypeAnalysisSummary {
-    let mut type_checker =
-        TypeChecker::new(package_id, package_path, imported_bindings, diagnostics);
+    let mut type_checker = TypeChecker::new(
+        package_id,
+        package_path,
+        source_text,
+        imported_bindings,
+        diagnostics,
+        safe_autofixes,
+    );
     type_checker.collect_imported_type_declarations();
     type_checker.collect_type_declarations(type_declarations);
     type_checker.collect_imported_function_signatures();
@@ -2069,6 +2091,7 @@ struct MethodKey {
 struct TypeChecker<'a> {
     package_id: PackageId,
     package_path: String,
+    source_text: &'a str,
     constants: HashMap<String, ConstantInfo>,
     types: HashMap<String, TypeInfo>,
     functions: HashMap<String, FunctionInfo>,
@@ -2078,6 +2101,7 @@ struct TypeChecker<'a> {
     scopes: Vec<HashMap<String, VariableInfo>>,
     type_parameter_scopes: Vec<HashMap<String, Span>>,
     diagnostics: &'a mut Vec<PhaseDiagnostic>,
+    safe_autofixes: &'a mut Vec<SafeAutofix>,
     current_return_type: Type,
     loop_depth: usize,
     resolved_type_by_expression_id: BTreeMap<SemanticExpressionId, Type>,
@@ -2119,8 +2143,10 @@ impl<'a> TypeChecker<'a> {
     fn new(
         package_id: PackageId,
         package_path: &str,
+        source_text: &'a str,
         imported_bindings: &[ImportedBinding],
         diagnostics: &'a mut Vec<PhaseDiagnostic>,
+        safe_autofixes: &'a mut Vec<SafeAutofix>,
     ) -> Self {
         let mut imported_binding_map = HashMap::new();
         for imported in imported_bindings {
@@ -2138,6 +2164,7 @@ impl<'a> TypeChecker<'a> {
         Self {
             package_id,
             package_path: package_path.to_string(),
+            source_text,
             constants: HashMap::new(),
             types: HashMap::new(),
             functions: builtin_functions(),
@@ -2147,6 +2174,7 @@ impl<'a> TypeChecker<'a> {
             scopes: Vec::new(),
             type_parameter_scopes: Vec::new(),
             diagnostics,
+            safe_autofixes,
             current_return_type: Type::Unknown,
             loop_depth: 0,
             resolved_type_by_expression_id: BTreeMap::new(),
@@ -2419,6 +2447,41 @@ impl<'a> TypeChecker<'a> {
 
     fn error(&mut self, message: impl Into<String>, span: Span) {
         self.diagnostics.push(PhaseDiagnostic::new(message, span));
+    }
+
+    fn push_safe_autofix(&mut self, safe_autofix: SafeAutofix) {
+        self.safe_autofixes.push(safe_autofix);
+    }
+
+    fn enclosing_interpolation_expression_range(
+        &self,
+        expression_span: &Span,
+    ) -> Option<(usize, usize)> {
+        if expression_span.start > expression_span.end
+            || expression_span.end > self.source_text.len()
+        {
+            return None;
+        }
+
+        let bytes = self.source_text.as_bytes();
+        let mut start = expression_span.start;
+        while start > 0 && bytes[start - 1].is_ascii_whitespace() {
+            start -= 1;
+        }
+        if start == 0 || bytes[start - 1] != b'{' {
+            return None;
+        }
+        let replacement_start = start - 1;
+
+        let mut end = expression_span.end;
+        while end < bytes.len() && bytes[end].is_ascii_whitespace() {
+            end += 1;
+        }
+        if end >= bytes.len() || bytes[end] != b'}' {
+            return None;
+        }
+        let replacement_end = end + 1;
+        Some((replacement_start, replacement_end))
     }
 
     fn push_type_parameters(&mut self, names_and_spans: &[(String, Span)]) {

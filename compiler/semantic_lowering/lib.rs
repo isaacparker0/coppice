@@ -65,6 +65,7 @@ pub fn lower_parsed_file(
             declarations,
         },
         diagnostics: Vec::new(),
+        safe_autofixes: Vec::new(),
         status: PhaseStatus::Ok,
     }
 }
