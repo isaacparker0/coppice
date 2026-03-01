@@ -1,9 +1,5 @@
 {
-    "brackets": [
-        ["{", "}"],
-        ["[", "]"],
-        ["(", ")"]
-    ],
+    "$schema": "https://json.schemastore.org/language-configuration.json",
     "autoClosingPairs": [
         {
             "open": "{",
@@ -22,6 +18,14 @@
             "close": "\""
         }
     ],
+    "brackets": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"]
+    ],
+    "comments": {
+        "lineComment": "//"
+    },
     "surroundingPairs": [
         ["{", "}"],
         ["[", "]"],
