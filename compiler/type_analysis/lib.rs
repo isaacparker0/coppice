@@ -2656,9 +2656,12 @@ impl<'a> TypeChecker<'a> {
                 continue;
             }
             if let Some(info) = self.types.get(name) {
-                let kind = info.kind.clone();
                 let nominal_type_id = info.nominal_type_id.clone();
                 let declared_type_parameters = info.type_parameters.clone();
+                let union_variants = match &info.kind {
+                    TypeKind::Union { variants } => Some(variants.clone()),
+                    TypeKind::Struct { .. } | TypeKind::Interface { .. } => None,
+                };
                 let type_parameter_count = declared_type_parameters.len();
                 if matches!(
                     self.imported_bindings.get(name),
@@ -2702,33 +2705,30 @@ impl<'a> TypeChecker<'a> {
                     id: nominal_type_id,
                     display_name: name.to_string(),
                 };
-                match kind {
-                    TypeKind::Struct { .. } | TypeKind::Interface { .. } => {
-                        if type_parameter_count == 0 {
-                            resolved.push(Type::Named(nominal));
-                        } else {
-                            resolved.push(Type::Applied {
-                                base: nominal,
-                                arguments: resolved_type_arguments,
-                            });
-                        }
+                let Some(variants) = union_variants else {
+                    if type_parameter_count == 0 {
+                        resolved.push(Type::Named(nominal));
+                    } else {
+                        resolved.push(Type::Applied {
+                            base: nominal,
+                            arguments: resolved_type_arguments,
+                        });
                     }
-                    TypeKind::Union { variants } => {
-                        if type_parameter_count == 0 {
-                            resolved.push(Self::normalize_union(variants));
-                        } else {
-                            let substitutions: HashMap<String, Type> = declared_type_parameters
-                                .iter()
-                                .map(|parameter| parameter.name.clone())
-                                .zip(resolved_type_arguments.iter().cloned())
-                                .collect();
-                            let instantiated_variants = variants
-                                .iter()
-                                .map(|variant| Self::instantiate_type(variant, &substitutions))
-                                .collect();
-                            resolved.push(Self::normalize_union(instantiated_variants));
-                        }
-                    }
+                    continue;
+                };
+                if type_parameter_count == 0 {
+                    resolved.push(Self::normalize_union(variants));
+                } else {
+                    let substitutions: HashMap<String, Type> = declared_type_parameters
+                        .iter()
+                        .map(|parameter| parameter.name.clone())
+                        .zip(resolved_type_arguments.iter().cloned())
+                        .collect();
+                    let instantiated_variants = variants
+                        .iter()
+                        .map(|variant| Self::instantiate_type(variant, &substitutions))
+                        .collect();
+                    resolved.push(Self::normalize_union(instantiated_variants));
                 }
                 continue;
             }
@@ -2769,8 +2769,11 @@ impl<'a> TypeChecker<'a> {
         let TypeKind::Union { variants } = &info.kind else {
             return None;
         };
-        let variants = variants.clone();
         let variant_display = format!("{enum_name}.{variant_name}");
+        let resolved_variant = variants
+            .iter()
+            .find(|variant| variant.display() == variant_display)
+            .cloned();
         if matches!(
             self.imported_bindings.get(enum_name),
             Some(ImportedBindingInfo {
@@ -2780,9 +2783,7 @@ impl<'a> TypeChecker<'a> {
         ) {
             self.mark_import_used(enum_name);
         }
-        variants
-            .into_iter()
-            .find(|variant| variant.display() == variant_display)
+        resolved_variant
     }
 
     fn check_unused_imports(&mut self) {
