@@ -22,7 +22,8 @@ pub fn check_cycles(resolved_imports: &[ResolvedImport], diagnostics: &mut Vec<P
 
     let source = &cycle[0];
     let target = &cycle[1];
-    let Some(import_site) = first_import_site_by_edge.get(&(source.clone(), target.clone())) else {
+    let import_edge = (source.clone(), target.clone());
+    let Some(import_site) = first_import_site_by_edge.get(&import_edge) else {
         return;
     };
 
@@ -65,26 +66,25 @@ fn import_adjacency_and_first_site_by_edge(
     let mut first_import_site_by_edge: ImportSiteByEdge = BTreeMap::new();
 
     for import in resolved_imports {
+        let source_package_path = import.source_package_path.clone();
+        let target_package_path = import.target_package_path.clone();
         adjacency_by_package
-            .entry(import.source_package_path.clone())
+            .entry(source_package_path.clone())
             .or_default();
         adjacency_by_package
-            .entry(import.target_package_path.clone())
+            .entry(target_package_path.clone())
             .or_default();
 
-        if import.source_package_path == import.target_package_path {
+        if source_package_path == target_package_path {
             continue;
         }
 
         adjacency_by_package
-            .entry(import.source_package_path.clone())
+            .entry(source_package_path.clone())
             .or_default()
-            .insert(import.target_package_path.clone());
+            .insert(target_package_path.clone());
         first_import_site_by_edge
-            .entry((
-                import.source_package_path.clone(),
-                import.target_package_path.clone(),
-            ))
+            .entry((source_package_path, target_package_path))
             .or_insert_with(|| ImportSite {
                 path: import.source_path.clone(),
                 span: import.import_span.clone(),

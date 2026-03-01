@@ -218,6 +218,9 @@ fn build_imported_bindings_by_file(
         nominal_type_id_by_lookup_key(symbol_id_by_lookup_key, typed_symbol_by_id);
 
     for resolved_import in resolved_imports {
+        let imported_for_file = imported_by_file
+            .entry(resolved_import.source_path.clone())
+            .or_default();
         for binding in &resolved_import.bindings {
             let lookup_key = PublicSymbolLookupKey {
                 package_id: resolved_import.target_package_id,
@@ -250,16 +253,13 @@ fn build_imported_bindings_by_file(
                 }
             };
 
-            imported_by_file
-                .entry(resolved_import.source_path.clone())
-                .or_default()
-                .push(ImportedBinding {
-                    local_name: binding.local_name.clone(),
-                    imported_package_path: resolved_import.target_package_path.clone(),
-                    imported_symbol_name: binding.imported_name.clone(),
-                    span: binding.span.clone(),
-                    symbol,
-                });
+            imported_for_file.push(ImportedBinding {
+                local_name: binding.local_name.clone(),
+                imported_package_path: resolved_import.target_package_path.clone(),
+                imported_symbol_name: binding.imported_name.clone(),
+                span: binding.span.clone(),
+                symbol,
+            });
         }
     }
 
