@@ -1,0 +1,3 @@
+function run() -> int64 {
+    return missing - 1
+}

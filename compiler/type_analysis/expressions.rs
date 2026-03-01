@@ -462,6 +462,9 @@ impl TypeChecker<'_> {
                     | SemanticBinaryOperator::Multiply
                     | SemanticBinaryOperator::Divide
                     | SemanticBinaryOperator::Modulo => {
+                        if left_type == Type::Unknown || right_type == Type::Unknown {
+                            return Type::Unknown;
+                        }
                         if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("arithmetic operators require int64 operands", left.span());
                             return Type::Unknown;
@@ -482,6 +485,9 @@ impl TypeChecker<'_> {
                     | SemanticBinaryOperator::LessThanOrEqual
                     | SemanticBinaryOperator::GreaterThan
                     | SemanticBinaryOperator::GreaterThanOrEqual => {
+                        if left_type == Type::Unknown || right_type == Type::Unknown {
+                            return Type::Unknown;
+                        }
                         if left_type != Type::Integer64 || right_type != Type::Integer64 {
                             self.error("comparison operators require int64 operands", left.span());
                             return Type::Unknown;
@@ -489,6 +495,9 @@ impl TypeChecker<'_> {
                         Type::Boolean
                     }
                     SemanticBinaryOperator::And | SemanticBinaryOperator::Or => {
+                        if left_type == Type::Unknown || right_type == Type::Unknown {
+                            return Type::Unknown;
+                        }
                         if left_type != Type::Boolean || right_type != Type::Boolean {
                             self.error("boolean operators require boolean operands", left.span());
                             return Type::Unknown;
