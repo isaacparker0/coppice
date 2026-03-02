@@ -11,17 +11,6 @@
                 "line": 5,
                 "column": 5
             }
-        },
-        {
-            "phase": "parsing",
-            "path": "lib.copp",
-            "message": "expected symbol",
-            "span": {
-                "start": 88,
-                "end": 88,
-                "line": 8,
-                "column": 1
-            }
         }
     ]
 }

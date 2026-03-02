@@ -30,15 +30,14 @@ impl Parser {
 
         loop {
             self.skip_statement_terminators();
-            match self.expect_identifier() {
-                Ok((name, span)) => members.push(SyntaxExportsMember { name, span }),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                    if self.peek_is_symbol(Symbol::RightBrace) {
-                        break;
-                    }
-                }
+            if let Some((name, span)) =
+                self.parse_list_item_with_recovery(Symbol::Comma, Symbol::RightBrace, |parser| {
+                    parser.expect_identifier()
+                })
+            {
+                members.push(SyntaxExportsMember { name, span });
+            } else if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
             }
 
             self.skip_statement_terminators();

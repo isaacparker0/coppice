@@ -4,6 +4,27 @@ use compiler__source::Span;
 use super::{MissingTokenKind, ParseError, ParseResult, Parser, UnexpectedTokenKind};
 
 impl Parser {
+    pub(super) fn parse_list_item_with_recovery<T, F>(
+        &mut self,
+        separator: Symbol,
+        end: Symbol,
+        parse_item: F,
+    ) -> Option<T>
+    where
+        F: FnOnce(&mut Parser) -> ParseResult<T>,
+    {
+        let checkpoint = self.checkpoint();
+        match parse_item(self) {
+            Ok(item) => Some(item),
+            Err(error) => {
+                self.restore(checkpoint);
+                self.report_parse_error(&error);
+                self.synchronize_list_item(separator, end);
+                None
+            }
+        }
+    }
+
     pub(super) fn expect_identifier(&mut self) -> ParseResult<(String, Span)> {
         let token = self.advance();
         match token.kind {
