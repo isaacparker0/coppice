@@ -1,6 +1,6 @@
 function describe(value: int64 | string) -> string {
     return match value {
-        int64 => "int"
+        int64 => "int",
         string => "string"
     }
 }

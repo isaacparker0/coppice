@@ -1,4 +1,16 @@
 {
-    "ok": true,
-    "diagnostics": []
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "expected ',' between match arms",
+            "span": {
+                "start": 101,
+                "end": 107,
+                "line": 5,
+                "column": 9
+            }
+        }
+    ]
 }

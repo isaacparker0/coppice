@@ -1,1 +1,3 @@
-analysis succeeded; package/library/test artifact generation is not implemented yet
+lib.copp:5:9: error: expected ',' between match arms
+          string => 2
+          ^

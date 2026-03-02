@@ -4,23 +4,12 @@
         {
             "phase": "parsing",
             "path": "lib.copp",
-            "message": "expected symbol",
+            "message": "expected expression",
             "span": {
-                "start": 97,
-                "end": 99,
+                "start": 90,
+                "end": 96,
                 "line": 5,
-                "column": 16
-            }
-        },
-        {
-            "phase": "parsing",
-            "path": "lib.copp",
-            "message": "expected declaration",
-            "span": {
-                "start": 114,
-                "end": 120,
-                "line": 7,
-                "column": 5
+                "column": 9
             }
         }
     ]

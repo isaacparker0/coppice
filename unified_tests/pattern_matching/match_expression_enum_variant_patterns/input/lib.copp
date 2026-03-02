@@ -5,7 +5,7 @@ type Direction :: enum {
 
 function label(value: Direction) -> string {
     return match value {
-        Direction.North => "north"
+        Direction.North => "north",
         Direction.South => "south"
     }
 }
