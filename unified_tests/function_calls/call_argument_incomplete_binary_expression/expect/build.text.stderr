@@ -1,0 +1,3 @@
+lib.copp:6:17: error: expected expression
+      _x := f(1 + )
+                  ^

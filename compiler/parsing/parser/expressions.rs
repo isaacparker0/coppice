@@ -345,15 +345,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            match self.parse_expression() {
-                Ok(argument) => arguments.push(argument),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
-                    if self.peek_is_symbol(Symbol::RightParenthesis) {
-                        break;
-                    }
-                }
+            if let Some(argument) = self.parse_list_item_with_recovery(
+                Symbol::Comma,
+                Symbol::RightParenthesis,
+                Parser::parse_expression,
+            ) {
+                arguments.push(argument);
+            } else if self.peek_is_symbol(Symbol::RightParenthesis) {
+                break;
             }
 
             self.skip_statement_terminators();
@@ -516,15 +515,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            match self.parse_match_arm() {
-                Ok(arm) => arms.push(arm),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                    if self.peek_is_symbol(Symbol::RightBrace) {
-                        break;
-                    }
-                }
+            if let Some(arm) = self.parse_list_item_with_recovery(
+                Symbol::Comma,
+                Symbol::RightBrace,
+                Parser::parse_match_arm,
+            ) {
+                arms.push(arm);
+            } else if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
             }
 
             self.skip_statement_terminators();
@@ -643,15 +641,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            match self.parse_struct_literal_field() {
-                Ok(field) => fields.push(field),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                    if self.peek_is_symbol(Symbol::RightBrace) {
-                        break;
-                    }
-                }
+            if let Some(field) = self.parse_list_item_with_recovery(
+                Symbol::Comma,
+                Symbol::RightBrace,
+                Parser::parse_struct_literal_field,
+            ) {
+                fields.push(field);
+            } else if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
             }
 
             self.skip_statement_terminators();
@@ -737,15 +734,14 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            match self.parse_expression() {
-                Ok(element) => elements.push(element),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBracket);
-                    if self.peek_is_symbol(Symbol::RightBracket) {
-                        break;
-                    }
-                }
+            if let Some(element) = self.parse_list_item_with_recovery(
+                Symbol::Comma,
+                Symbol::RightBracket,
+                Parser::parse_expression,
+            ) {
+                elements.push(element);
+            } else if self.peek_is_symbol(Symbol::RightBracket) {
+                break;
             }
 
             self.skip_statement_terminators();

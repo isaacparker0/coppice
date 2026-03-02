@@ -81,15 +81,14 @@ impl Parser {
         if !self.peek_is_symbol(Symbol::RightParenthesis) {
             loop {
                 self.skip_statement_terminators();
-                match self.parse_type_name() {
-                    Ok(parameter_type_name) => parameter_type_names.push(parameter_type_name),
-                    Err(error) => {
-                        self.report_parse_error(&error);
-                        self.synchronize_list_item(Symbol::Comma, Symbol::RightParenthesis);
-                        if self.peek_is_symbol(Symbol::RightParenthesis) {
-                            break;
-                        }
-                    }
+                if let Some(parameter_type_name) = self.parse_list_item_with_recovery(
+                    Symbol::Comma,
+                    Symbol::RightParenthesis,
+                    Parser::parse_type_name,
+                ) {
+                    parameter_type_names.push(parameter_type_name);
+                } else if self.peek_is_symbol(Symbol::RightParenthesis) {
+                    break;
                 }
                 self.skip_statement_terminators();
                 if self.peek_is_symbol(Symbol::Comma) {
@@ -130,16 +129,15 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            match self.parse_type_name() {
-                Ok(type_argument) => arguments.push(type_argument),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBracket);
-                    if self.peek_is_symbol(Symbol::RightBracket) {
-                        let right_bracket = self.expect_symbol(Symbol::RightBracket)?;
-                        return Ok((arguments, right_bracket));
-                    }
-                }
+            if let Some(type_argument) = self.parse_list_item_with_recovery(
+                Symbol::Comma,
+                Symbol::RightBracket,
+                Parser::parse_type_name,
+            ) {
+                arguments.push(type_argument);
+            } else if self.peek_is_symbol(Symbol::RightBracket) {
+                let right_bracket = self.expect_symbol(Symbol::RightBracket)?;
+                return Ok((arguments, right_bracket));
             }
             self.skip_statement_terminators();
             if self.peek_is_symbol(Symbol::Comma) {

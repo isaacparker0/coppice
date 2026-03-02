@@ -1,0 +1,5 @@
+type User :: struct {
+    function show(self, other:) -> string {
+        return "x"
+    }
+}

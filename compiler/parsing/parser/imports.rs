@@ -43,15 +43,14 @@ impl Parser {
 
         loop {
             self.skip_statement_terminators();
-            match self.parse_import_member() {
-                Ok(member) => members.push(member),
-                Err(error) => {
-                    self.report_parse_error(&error);
-                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
-                    if self.peek_is_symbol(Symbol::RightBrace) {
-                        break;
-                    }
-                }
+            if let Some(member) =
+                self.parse_list_item_with_recovery(Symbol::Comma, Symbol::RightBrace, |parser| {
+                    parser.parse_import_member()
+                })
+            {
+                members.push(member);
+            } else if self.peek_is_symbol(Symbol::RightBrace) {
+                break;
             }
 
             self.skip_statement_terminators();

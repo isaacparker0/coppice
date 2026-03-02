@@ -1,0 +1,7 @@
+function run() -> nil {
+    x := 1
+    match x {
+        y: int64 =>
+    }
+    return
+}
