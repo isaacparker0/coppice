@@ -1,0 +1,7 @@
+function run() -> int64 {
+    x: int64 | string := 1
+    return match x {
+        int64 => 1
+        string => 2
+    }
+}

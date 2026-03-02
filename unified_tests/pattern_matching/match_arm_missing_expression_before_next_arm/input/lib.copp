@@ -1,0 +1,8 @@
+function run() -> nil {
+    x: int64 | string := 1
+    match x {
+        int64 =>
+        string => "s"
+    }
+    return
+}

@@ -1,0 +1,27 @@
+{
+    "ok": false,
+    "diagnostics": [
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "expected symbol",
+            "span": {
+                "start": 97,
+                "end": 99,
+                "line": 5,
+                "column": 16
+            }
+        },
+        {
+            "phase": "parsing",
+            "path": "lib.copp",
+            "message": "expected declaration",
+            "span": {
+                "start": 114,
+                "end": 120,
+                "line": 7,
+                "column": 5
+            }
+        }
+    ]
+}

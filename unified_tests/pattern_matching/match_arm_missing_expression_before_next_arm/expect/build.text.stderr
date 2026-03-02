@@ -1,0 +1,6 @@
+lib.copp:5:16: error: expected symbol
+          string => "s"
+                 ^
+lib.copp:7:5: error: expected declaration
+      return
+      ^
