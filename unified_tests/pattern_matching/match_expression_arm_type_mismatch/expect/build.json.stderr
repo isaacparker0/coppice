@@ -6,8 +6,8 @@
             "path": "lib.copp",
             "message": "match arm type mismatch: expected int64, got string",
             "span": {
-                "start": 150,
-                "end": 156,
+                "start": 151,
+                "end": 157,
                 "line": 7,
                 "column": 19
             }

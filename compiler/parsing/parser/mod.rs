@@ -47,6 +47,7 @@ pub(super) enum RecoveredKind {
     TypeParameterListMustNotBeEmpty,
     EnumDeclarationMustIncludeAtLeastOneVariant,
     ExpectedCommaOrRightBraceAfterEnumVariant,
+    ExpectedCommaBetweenMatchArms,
     UnexpectedEqualsInExpression,
 }
 
@@ -407,6 +408,9 @@ impl Parser {
                     }
                     RecoveredKind::ExpectedCommaOrRightBraceAfterEnumVariant => {
                         "expected ',' or '}' after enum variant".to_string()
+                    }
+                    RecoveredKind::ExpectedCommaBetweenMatchArms => {
+                        "expected ',' between match arms".to_string()
                     }
                     RecoveredKind::UnexpectedEqualsInExpression => {
                         "unexpected '=' in expression".to_string()

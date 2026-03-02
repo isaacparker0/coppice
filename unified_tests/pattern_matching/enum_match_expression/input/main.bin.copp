@@ -6,7 +6,7 @@ type Direction :: enum {
 function main() -> nil {
     heading: Direction := Direction.North
     label := match heading {
-        Direction.North => "north"
+        Direction.North => "north",
         Direction.South => "south"
     }
     print(label)

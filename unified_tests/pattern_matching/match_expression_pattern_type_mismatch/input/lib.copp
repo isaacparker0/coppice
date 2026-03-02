@@ -3,8 +3,8 @@ type Result :: int64 | string
 function run() -> int64 {
     value: int64 | string := 1
     return match value {
-        boolean => 0
-        int64 => 1
+        boolean => 0,
+        int64 => 1,
         string => 2
     }
 }

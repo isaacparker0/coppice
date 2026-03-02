@@ -7,7 +7,7 @@
             "message": "use 'matches' for single-pattern boolean checks",
             "span": {
                 "start": 60,
-                "end": 125,
+                "end": 126,
                 "line": 2,
                 "column": 12
             }

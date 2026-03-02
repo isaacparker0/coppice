@@ -1,0 +1,3 @@
+lib.copp:5:9: error: expected expression
+          string => "s"
+          ^

@@ -515,14 +515,30 @@ impl Parser {
         }
         loop {
             self.skip_statement_terminators();
-            if let Some(arm) = self.parse_list_item_with_recovery(
-                Symbol::Comma,
-                Symbol::RightBrace,
-                Parser::parse_match_arm,
-            ) {
-                arms.push(arm);
-            } else if self.peek_is_symbol(Symbol::RightBrace) {
-                break;
+            match self.parse_match_arm() {
+                Ok(arm) => arms.push(arm),
+                Err(error) => {
+                    self.report_parse_error(&error);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
+                    if self.peek_is_symbol(Symbol::Comma) {
+                        self.advance();
+                        continue;
+                    }
+                    if self.next_token_starts_match_arm() {
+                        continue;
+                    }
+                    self.synchronize_list_item(Symbol::Comma, Symbol::RightBrace);
+                    if self.peek_is_symbol(Symbol::RightBrace) {
+                        break;
+                    }
+                    if self.peek_is_symbol(Symbol::Comma) {
+                        self.advance();
+                        continue;
+                    }
+                    break;
+                }
             }
 
             self.skip_statement_terminators();
@@ -537,7 +553,11 @@ impl Parser {
             if self.peek_is_symbol(Symbol::RightBrace) {
                 break;
             }
-            if self.peek_is_identifier() || self.peek_is_keyword(Keyword::Nil) {
+            if self.next_token_starts_match_arm() {
+                self.report_parse_error(&ParseError::Recovered {
+                    kind: RecoveredKind::ExpectedCommaBetweenMatchArms,
+                    span: self.peek_span(),
+                });
                 continue;
             }
             break;
@@ -548,6 +568,15 @@ impl Parser {
     pub(super) fn parse_match_arm(&mut self) -> ParseResult<SyntaxMatchArm> {
         let pattern = self.parse_match_pattern()?;
         self.expect_symbol(Symbol::FatArrow)?;
+        if self.peek_is_symbol(Symbol::RightBrace)
+            || self.peek_is_symbol(Symbol::Comma)
+            || self.next_token_starts_match_arm()
+        {
+            return Err(ParseError::UnexpectedToken {
+                kind: UnexpectedTokenKind::ExpectedExpression,
+                span: self.peek_span(),
+            });
+        }
         let value = self.parse_expression()?;
         let span = Span {
             start: pattern.span().start,
@@ -560,6 +589,14 @@ impl Parser {
             value,
             span,
         })
+    }
+
+    fn next_token_starts_match_arm(&mut self) -> bool {
+        let checkpoint = self.checkpoint();
+        let starts_match_arm =
+            self.parse_match_pattern().is_ok() && self.peek_is_symbol(Symbol::FatArrow);
+        self.restore(checkpoint);
+        starts_match_arm
     }
 
     pub(super) fn parse_match_pattern(&mut self) -> ParseResult<SyntaxMatchPattern> {
