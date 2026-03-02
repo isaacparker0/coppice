@@ -1,0 +1,4 @@
+function run() -> nil {
+    _x := [1 + ]
+    return
+}

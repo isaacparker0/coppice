@@ -1,0 +1,8 @@
+function f(a: int64) -> int64 {
+    return a
+}
+
+function run() -> nil {
+    _x := f(1 + )
+    return
+}

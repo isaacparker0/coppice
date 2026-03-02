@@ -1,0 +1,7 @@
+lib.copp:6:17: error: expected expression
+      _x := f(1 + )
+                  ^
+lib.copp:9:1: error: expected symbol
+  
+lib.copp:9:1: error: expected symbol
+  

@@ -1,0 +1,5 @@
+lib.copp:5:5: error: expected expression
+      }
+      ^
+lib.copp:8:1: error: expected symbol
+  

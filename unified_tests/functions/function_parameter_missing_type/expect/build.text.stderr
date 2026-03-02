@@ -1,0 +1,5 @@
+lib.copp:1:16: error: expected identifier
+  function run(x:) -> nil {
+                 ^
+lib.copp:4:1: error: expected symbol
+  
